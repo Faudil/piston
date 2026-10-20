@@ -1,0 +1,22 @@
+{
+  "name": "@piston/prompts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude system prompts, one pure function per feature.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@piston/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vitest": "^5.0.5"
+  }
+}

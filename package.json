@@ -1,0 +1,36 @@
+{
+  "name": "piston",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.13",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --filter=@piston/web",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "bun --cwd packages/db run generate",
+    "db:migrate": "bun --cwd packages/db run migrate",
+    "db:seed": "bun --cwd packages/db run seed",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "^1.17.0",
+    "@types/bun": "^1.4.3",
+    "eslint": "^10.13.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.9",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  },
+  "lint-staged": {
+    "*.{ts,vue,js,mjs,json,md,yml,yaml,css}": "prettier --write"
+  }
+}

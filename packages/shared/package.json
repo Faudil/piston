@@ -1,0 +1,22 @@
+{
+  "name": "@piston/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain types and Zod schemas shared by the Nuxt client, the API routes and the prompts.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vitest": "^5.0.5"
+  }
+}
