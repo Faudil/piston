@@ -20,6 +20,7 @@ Then edit `.env`:
 
 - `ANTHROPIC_API_KEY`: your Anthropic API key.
 - `NUXT_SESSION_PASSWORD`: a random secret of at least 32 characters, used to encrypt session cookies. Generate one with `openssl rand -base64 32`.
+- `TAVILY_API_KEY` (optional): enables job search and importing an offer from a link. Free tier at [tavily.com](https://tavily.com). Without it, those features are hidden.
 - In production, change `POSTGRES_PASSWORD`.
 
 Every variable is documented in [`.env.example`](../.env.example). The `.env` file is git-ignored; never commit it.
@@ -75,7 +76,7 @@ Open the link, choose a name, e-mail and password, and you are in. From then on,
 
 ## 4. First steps in the app
 
-1. **CV**: paste your resume or import a PDF (5 MB max, text-based PDFs only), then click « Critiquer ».
+1. **CV**: paste your resume or import a PDF (5 MB max, text-based PDFs only; the original file is kept and can be downloaded again), then click « Critiquer ». Versions can be renamed, downloaded and deleted. « Mon compte » (user menu) lets you export or delete your data.
 2. **Offres**: paste a job offer. Piston analyzes the fit with your resume, then writes a cover letter you can edit paragraph by paragraph.
 3. **Candidatures**: add the offer to the kanban and move it from « À envoyer » to « Terminée ».
 4. **Pistes**: get adjacent job titles, job-board keywords and company types to target.

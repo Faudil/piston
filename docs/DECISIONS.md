@@ -56,6 +56,14 @@ Choices that the original brief left open, or where the brief had to be adapted 
 
 **pdf-parse is loaded lazily and its runtime files are traced explicitly.** pdf.js loads a native canvas binding (`@napi-rs/canvas`) and its worker script with dynamic imports that Nitro's file tracer cannot follow, so `nuxt.config.ts` lists them in `nitro.externals.traceInclude`. Without this, PDF import works in development and fails in the Docker image. pdf-parse is also imported on first use, so a problem there breaks PDF import only, never the server start.
 
+**The imported PDF is kept.** The extracted text feeds Claude, but users also want their original file back (layout, fonts) to apply with. The bytes are stored in a nullable `bytea` column `resumes.source_pdf`, capped at 5 MB by the import route (`LIMITS.maxPdfBytes`). Postgres rather than disk or object storage: the existing backups cover it, there is no second place to secure, and the row is deleted with the resume or, by cascade, with the user. List queries never select the column (`resumeColumns` in `server/utils/resumes.ts` swaps it for a `hasPdf` boolean), so `GET /api/resumes` stays light. `GET /api/resumes/:id/download` serves the PDF as an attachment, or the pasted text as `.txt` when there is no file; the filename is sent both ASCII-sanitized and as RFC 5987 `filename*`.
+
+**Account export and deletion.** `GET /api/account/export` returns all of a user's rows as JSON, without the password hash and without PDF bytes (the text is there, the files stay downloadable one by one). `DELETE /api/account` requires the exact account e-mail in the body and relies on foreign-key cascades; invites the user created are kept with `created_by` set to null. Changing the password re-verifies the current one.
+
+**Deleting the current resume promotes the newest remaining one**, in the same transaction, so a user with versions always has a current one. Generations keep pointing at the deleted id (history is append-only).
+
+**Letter export is the browser's.** `.txt` is built client-side; the PDF is the print view (`/impression/lettre/:id`, no app chrome, print stylesheet, `window.print()` on load) saved through the browser's « Enregistrer au format PDF », which avoids a server-side PDF renderer.
+
 **Deleting an offer keeps its generations.** The history is append-only; a generation simply loses its link to the offer page.
 
 ## Claude integration
@@ -82,7 +90,21 @@ Choices that the original brief left open, or where the brief had to be adapted 
 
 **Regenerating a paragraph keeps the user's other edits.** The full letter and the single paragraph use two separate `useGeneration` instances; when the paragraph arrives, only that paragraph is replaced on screen. Leaving the page or regenerating the whole letter with unsaved edits asks for confirmation.
 
+**Cover letter templates, corrections and application notes.** The five templates (classique, vous-moi-nous, percutante, reconversion, e-mail) are instructions in the system prompt, not stored texts to fill in: every letter is still written from the resume and the offer, and adding a template is one entry in a map. Their word ranges live in `@piston/shared` (`coverLetterWordTargets`) so the prompt and the editor's counter agree. Corrections asked by the user (« plus court », « mentionne mon stage chez X ») are append-only like paragraph rewrites: the revised letter is a new generation with `parentGenerationId` and `revisionInstructions` in `inputRefs`, so every version can be reopened. The corrections and the current letter go inside `<corrections>` and `<lettre>` tags (closing tags escaped) and are framed as the user's wishes about the letter, which never override the honesty rules: a correction asking to add experience missing from the resume is ignored silently. A letter written from an application gets the application's notes (recruiter's name, referral...) in the request block, inside escaped `<notes>` tags and stated as data; they stay out of the system prompt so it remains cacheable. The application must belong to the user and be the application of the offer (404 / 400). Letters of an application are found with `inputRefs->>'applicationId'`, which avoids a new column for a list that only one page reads.
+
 **Rate limit over a rolling 24 hours.** The limit counts rows in `generations` created in the last 24 hours. It needs no extra storage, survives restarts, and avoids choosing a time zone for "per day".
+
+## Web search (Tavily, optional)
+
+**Tavily through plain `fetch`.** Two endpoints (`/search`, `/extract`) do not justify an SDK dependency. A single `tavilyRequest()` in `server/utils/tavily.ts` handles the key, the 15 s timeout, logging (status and `request_id`) and the mapping of Tavily errors to French messages: missing or invalid key and exhausted quota are 503, rate limit is 429, anything else is 502. The feature is optional: without `TAVILY_API_KEY`, `/api/features` reports `webSearch: false` and the routes answer 503.
+
+**Searches are restricted to French job boards.** A general web search mostly returns career advice articles. `include_domains` lists Welcome to the Jungle, Indeed, HelloWork, APEC, France Travail, LinkedIn, JobTeaser, Cadremploi and Meteojob, with `country: france` and `time_range: month` so results are recent. Basic depth, 10 results: one Tavily credit per search.
+
+**Imported pages are cleaned by Claude.** A page extracted as markdown is full of navigation, cookie banners and other offers. One non-streaming structured call (`messages.parse`, effort `low`) keeps only the ad and says whether the page is an offer at all. The page is capped at 60 000 characters before it is sent, wrapped in `<page>` tags with the closing tag escaped, and treated as data. The result is returned to prefill the form and is not stored, so this call counts toward the Tavily limit and not toward the daily generations.
+
+**In-memory limit of 50 Tavily calls per user and 24 hours.** It only protects the owner's Tavily credits. The counters live in `server/utils/web-limit.ts` and reset on restart, which is acceptable for a single-process app used by about ten friends and avoids a table for a soft guard.
+
+**URLs are checked before import.** Only http(s) URLs with a dotted public-looking hostname are accepted (no localhost, bare hostnames, private IPv4 ranges, IPv6 literals, credentials in the URL). Tavily, not this server, fetches the page, so this is hygiene rather than a full SSRF defence.
 
 ## Frontend
 

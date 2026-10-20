@@ -15,14 +15,15 @@
 
 ## Features
 
-| Feature                  | What you get                                                                                                                                   |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Resume review**        | A score out of 10 for readability, impact, keywords and consistency; 5 strengths and 5 fixes, each quoting your resume; a line-by-line rewrite |
-| **Offer analysis**       | A match score out of 100, matching and missing skills backed by your actual experience, 5 likely interview questions, HR jargon translated     |
-| **Cover letter**         | 250–350 words in three tones (sober, enthusiastic, startup), editable in place, any paragraph can be regenerated on its own                    |
-| **Search leads**         | 5 adjacent jobs you have not held yet, 10 job-board keywords, 5 kinds of companies to target                                                   |
-| **Application tracking** | A five-column kanban with drag-and-drop (and keyboard controls), notes, and the date of every status change                                    |
-| **History**              | Every Claude output is stored and can be reopened                                                                                              |
+| Feature                   | What you get                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Resume review**         | A score out of 10 for readability, impact, keywords and consistency; 5 strengths and 5 fixes, each quoting your resume; a line-by-line rewrite |
+| **Offer analysis**        | A match score out of 100, matching and missing skills backed by your actual experience, 5 likely interview questions, HR jargon translated     |
+| **Cover letter**          | 5 templates × 3 tones, from an application and its notes; edit in place, regenerate a paragraph or ask for corrections; every version kept     |
+| **Search leads**          | 5 adjacent jobs you have not held yet, 10 job-board keywords, 5 kinds of companies to target                                                   |
+| **Application tracking**  | A five-column kanban with drag-and-drop (and keyboard controls), notes, and the date of every status change                                    |
+| **Web search** (optional) | Search live offers on French job boards and import an offer from its link, through [Tavily](https://tavily.com) (needs `TAVILY_API_KEY`)       |
+| **History**               | Every Claude output is stored and can be reopened                                                                                              |
 
 The main flow — paste an offer, read the analysis, generate the letter, tweak it, add it to the kanban — happens on a single page and takes under two minutes on a phone.
 
@@ -36,7 +37,7 @@ cp .env.example .env   # set ANTHROPIC_API_KEY, NUXT_SESSION_PASSWORD and POSTGR
 docker compose up -d --build
 ```
 
-Piston is now on port 3000. There is no public sign-up: get the first invitation link from the logs with `docker compose logs web | grep invite`, then invite your friends from the app. Serve it over HTTPS behind a reverse proxy.
+Optionally set `TAVILY_API_KEY` to enable job search and offer import from a link. Piston is now on port 3000. There is no public sign-up: get the first invitation link from the logs with `docker compose logs web | grep invite`, then invite your friends from the app. Serve it over HTTPS behind a reverse proxy.
 
 See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for local development, configuration and troubleshooting.
 
@@ -71,6 +72,7 @@ The non-obvious choices are documented in [docs/DECISIONS.md](docs/DECISIONS.md)
 | Auth        | [nuxt-auth-utils](https://github.com/atinux/nuxt-auth-utils), invitation links          |
 | Tests       | Vitest, PGlite (in-memory Postgres), mocked Anthropic SDK                               |
 | Quality     | ESLint, Prettier, Husky, GitHub Actions                                                 |
+| Web search  | [Tavily](https://tavily.com) REST API through `fetch`, optional                         |
 | Deployment  | Docker multi-stage image + Docker Compose                                               |
 
 ## Repository layout
