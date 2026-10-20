@@ -10,10 +10,11 @@
     "postinstall": "bun --bun nuxt prepare",
     "lint": "eslint .",
     "typecheck": "bun --bun nuxt typecheck",
-    "test": "vitest run --passWithNoTests"
+    "test": "bun --bun vitest run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
+    "@napi-rs/canvas": "0.1.80",
     "@nuxt/ui": "^4.12.0",
     "@piston/db": "workspace:*",
     "@piston/prompts": "workspace:*",
@@ -23,6 +24,7 @@
     "pdf-parse": "^2.4.5",
     "tailwindcss": "^4.3.3",
     "vue": "latest",
+    "vue-draggable-plus": "^0.6.1",
     "vue-router": "latest",
     "zod": "^4.6.7"
   },

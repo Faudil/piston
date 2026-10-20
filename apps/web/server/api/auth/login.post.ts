@@ -6,7 +6,7 @@ import { LoginBody } from '@piston/shared'
 let dummyHash: string | undefined
 
 export default defineEventHandler(async (event) => {
-  const { email, password } = await readValidatedBody(event, LoginBody.parse)
+  const { email, password } = await readValidatedBody(event, zodValidator(LoginBody))
 
   const user = await useDb().query.users.findFirst({ where: eq(users.email, email) })
   dummyHash ??= await hashPassword(crypto.randomUUID())

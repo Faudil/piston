@@ -4,7 +4,7 @@ import * as z from 'zod'
 export default defineEventHandler(async (event) => {
   const { token } = await getValidatedRouterParams(
     event,
-    z.object({ token: z.string().min(1).max(100) }).parse,
+    zodValidator(z.object({ token: z.string().min(1).max(100) })),
   )
   const invite = await findValidInvite(token)
   return { valid: Boolean(invite), expiresAt: invite?.expiresAt.toISOString() ?? null }

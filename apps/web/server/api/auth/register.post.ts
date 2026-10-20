@@ -3,7 +3,7 @@ import { RegisterBody } from '@piston/shared'
 
 /** Creates an account from an invitation link. There is no other way to sign up. */
 export default defineEventHandler(async (event) => {
-  const body = await readValidatedBody(event, RegisterBody.parse)
+  const body = await readValidatedBody(event, zodValidator(RegisterBody))
   const passwordHash = await hashPassword(body.password)
 
   const user = await useDb().transaction(async (tx) => {

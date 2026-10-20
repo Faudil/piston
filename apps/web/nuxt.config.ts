@@ -1,3 +1,8 @@
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const pdfParseRequire = createRequire(require.resolve('pdf-parse'))
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
@@ -6,6 +11,13 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui', '@nuxt/eslint', 'nuxt-auth-utils'],
 
   css: ['~/assets/css/main.css'],
+
+  app: {
+    head: {
+      titleTemplate: '%s — Piston',
+      meta: [{ name: 'theme-color', content: '#0f172a' }],
+    },
+  },
 
   typescript: {
     strict: true,
@@ -24,6 +36,15 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'bun',
+    externals: {
+      // pdf-parse (pdf.js) loads its native canvas binding and its worker
+      // script dynamically, which Nitro's file tracer cannot see: copy both
+      // into .output, or PDF import fails in production only.
+      traceInclude: [
+        require.resolve('@napi-rs/canvas'),
+        pdfParseRequire.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'),
+      ],
+    },
   },
 
   eslint: {

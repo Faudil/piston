@@ -86,3 +86,13 @@ describe('auth', () => {
     expect(testState.user?.email).toBe('me@example.com')
   })
 })
+
+describe('error responses', () => {
+  it('carry the French message', async () => {
+    const res = await callRoute(createInviteRoute, { method: 'POST', path: '/api/invites' })
+    expect(await res.json()).toMatchObject({
+      statusCode: 401,
+      message: 'Connecte-toi pour continuer.',
+    })
+  })
+})

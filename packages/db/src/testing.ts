@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
+import { sql } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import type { Database } from './client'
 import { migrationsFolder } from './migrate'
@@ -16,4 +17,11 @@ export async function createTestDb(): Promise<Database> {
   await migrate(db, { migrationsFolder })
   // Both drivers expose the same query builder; only the underlying client differs.
   return db as unknown as Database
+}
+
+/** Empties every table, much faster than creating a new database for each test. */
+export async function truncateAll(db: Database) {
+  await db.execute(
+    sql`truncate table applications, generations, job_offers, resumes, invites, users restart identity cascade`,
+  )
 }

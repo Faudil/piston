@@ -1,16 +1,28 @@
-import { createApp, createRouter, toWebHandler, type EventHandler } from 'h3'
+import {
+  createApp,
+  createRouter,
+  send,
+  setResponseStatus,
+  toWebHandler,
+  type EventHandler,
+  type H3Error,
+} from 'h3'
 import { vi } from 'vitest'
 import { resumes, users } from '@piston/db'
-import { createTestDb } from '@piston/db/testing'
+import { createTestDb, truncateAll } from '@piston/db/testing'
 import { sampleResume } from '@piston/db/fixtures'
 import type { GenerationEvent } from '@piston/shared'
 import authMiddleware from '../../server/middleware/auth'
 import rateLimitMiddleware from '../../server/middleware/rate-limit'
 import { testState } from './state'
 
-/** Fresh database, no logged-in user, default config. Call in `beforeEach`. */
+/**
+ * Empty database, no logged-in user, default config. Call in `beforeEach`.
+ * The in-memory database is created once per test file, then emptied.
+ */
 export async function resetTestState() {
-  testState.db = await createTestDb()
+  if (testState.db) await truncateAll(testState.db)
+  else testState.db = await createTestDb()
   testState.user = null
   testState.config.dailyGenerationLimit = 30
   testState.claude = createClaudeMock({ text: '{}' }).client
@@ -46,7 +58,18 @@ export async function callRoute(
 ) {
   const method = options.method ?? 'GET'
   const path = options.path ?? '/api/test'
-  const app = createApp()
+  // Same error body shape as Nitro's error handler, which includes `message`
+  // (plain h3 leaves it out).
+  const app = createApp({
+    onError(error: H3Error, event) {
+      setResponseStatus(event, error.statusCode)
+      return send(
+        event,
+        JSON.stringify({ statusCode: error.statusCode, message: error.message }),
+        'application/json',
+      )
+    },
+  })
   app.use(authMiddleware)
   app.use(rateLimitMiddleware)
   const router = createRouter()

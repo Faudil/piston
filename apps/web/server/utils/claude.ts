@@ -9,7 +9,14 @@ let client: Anthropic | undefined
 export function useClaude(): Anthropic {
   if (!client) {
     const { anthropicApiKey } = useRuntimeConfig()
-    if (!anthropicApiKey) throw new Error('ANTHROPIC_API_KEY is not configured')
+    if (!anthropicApiKey) {
+      console.error('[claude] ANTHROPIC_API_KEY is not configured')
+      throw createError({
+        statusCode: 503,
+        message:
+          "Claude n'est pas configuré sur ce serveur (clé API manquante). Préviens l'administrateur.",
+      })
+    }
     client = new Anthropic({ apiKey: anthropicApiKey })
   }
   return client
