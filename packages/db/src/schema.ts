@@ -118,7 +118,11 @@ export const applications = pgTable(
     notes: text('notes').notNull().default(''),
     statusHistory: jsonb('status_history').$type<StatusChange[]>().notNull().default([]),
   },
-  (t) => [index('applications_user_idx').on(t.userId)],
+  (t) => [
+    index('applications_user_idx').on(t.userId),
+    // One application per offer (an offer already belongs to a single user).
+    uniqueIndex('applications_one_per_offer').on(t.jobOfferId),
+  ],
 )
 
 export type UserRow = typeof users.$inferSelect

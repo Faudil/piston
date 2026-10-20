@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "applications_one_per_offer" ON "applications" USING btree ("job_offer_id");
