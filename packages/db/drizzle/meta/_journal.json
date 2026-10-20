@@ -15,6 +15,13 @@
       "when": 1792510420876,
       "tag": "0001_one_application_per_offer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792514786788,
+      "tag": "0002_store_resume_pdf",
+      "breakpoints": true
     }
   ]
 }

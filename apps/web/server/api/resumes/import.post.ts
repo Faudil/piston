@@ -4,7 +4,8 @@ const MAX_TITLE_LENGTH = 120
 
 /**
  * Creates a resume version from an uploaded PDF (multipart field `file`, plus
- * an optional `title`). Only the extracted text is stored, never the file.
+ * an optional `title`). The extracted text is stored for the AI features, and the original PDF
+ * (max 5 MB, checked above) is kept so it can be downloaded again.
  */
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -43,7 +44,12 @@ export default defineEventHandler(async (event) => {
     .trim()
   const title = (titlePart || sourceFilename.replace(/\.pdf$/i, '')).slice(0, MAX_TITLE_LENGTH)
 
-  const row = await createCurrentResume(user.id, { title, rawText: text, sourceFilename })
+  const row = await createCurrentResume(user.id, {
+    title,
+    rawText: text,
+    sourceFilename,
+    sourcePdf: file.data,
+  })
   setResponseStatus(event, 201)
   return toResume(row)
 })

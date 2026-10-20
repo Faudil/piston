@@ -1,4 +1,4 @@
-import type { GenerationRow, JobOfferRow, ResumeRow } from '@piston/db'
+import type { GenerationRow, JobOfferRow } from '@piston/db'
 import type { Generation, GenerationKind, JobOffer, Resume } from '@piston/shared'
 
 /*
@@ -6,12 +6,22 @@ import type { Generation, GenerationKind, JobOffer, Resume } from '@piston/share
  * dates into ISO strings, so responses match the types in @piston/shared.
  */
 
-export function toResume(row: ResumeRow): Resume {
+export function toResume(row: {
+  id: string
+  title: string
+  rawText: string
+  sourceFilename: string | null
+  hasPdf: boolean
+  isCurrent: boolean
+  createdAt: Date
+  updatedAt: Date
+}): Resume {
   return {
     id: row.id,
     title: row.title,
     rawText: row.rawText,
     sourceFilename: row.sourceFilename,
+    hasPdf: row.hasPdf,
     isCurrent: row.isCurrent,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

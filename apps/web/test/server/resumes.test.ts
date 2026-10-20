@@ -5,6 +5,7 @@ import listRoute from '../../server/api/resumes.get'
 import createRoute from '../../server/api/resumes.post'
 import setCurrentRoute from '../../server/api/resumes/[id]/current.patch'
 import importRoute from '../../server/api/resumes/import.post'
+import downloadRoute from '../../server/api/resumes/[id]/download.get'
 import { extractPdfText } from '../../server/utils/pdf'
 import { callRoute, loginAsNewUser, resetTestState } from './helpers'
 import { testState } from './state'
@@ -117,9 +118,10 @@ describe('resumes', () => {
 })
 
 describe('resume PDF import', () => {
-  it('extracts the text of a PDF and stores only the text', async () => {
+  it('extracts the text of a PDF and keeps the original file', async () => {
     await loginAsNewUser()
-    const res = await importFile(makePdf('Camille Martin - Developpeuse web'), 'cv-camille.pdf')
+    const pdf = makePdf('Camille Martin - Developpeuse web')
+    const res = await importFile(pdf, 'cv-camille.pdf')
     expect(res.status).toBe(201)
     const created = (await res.json()) as Resume
     expect(created).toMatchObject({
@@ -127,7 +129,13 @@ describe('resume PDF import', () => {
       sourceFilename: 'cv-camille.pdf',
       isCurrent: true,
       rawText: 'Camille Martin - Developpeuse web',
+      hasPdf: true,
     })
+    const download = await callRoute(downloadRoute, {
+      path: `/api/resumes/${created.id}/download`,
+      route: '/api/resumes/:id/download',
+    })
+    expect(Buffer.from(await download.arrayBuffer())).toEqual(Buffer.from(await pdf.arrayBuffer()))
   })
 
   it('uses the given title', async () => {

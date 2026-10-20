@@ -4,7 +4,7 @@ import { desc, eq, resumes } from '@piston/db'
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const rows = await useDb()
-    .select()
+    .select(resumeColumns)
     .from(resumes)
     .where(eq(resumes.userId, user.id))
     .orderBy(desc(resumes.createdAt))

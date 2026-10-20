@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -19,6 +20,15 @@ import {
   type GenerationOutputs,
   type StatusChange,
 } from '@piston/shared'
+
+/**
+ * PostgreSQL `bytea`, which Drizzle has no built-in column for. Reads return a
+ * Buffer (postgres.js) or a plain Uint8Array (PGlite in tests): both are
+ * Uint8Array, which is the type exposed. Used to keep the imported CV PDF.
+ */
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => 'bytea',
+})
 
 /** Columns shared by every table: a UUID primary key and two timestamps. */
 const base = {
@@ -59,6 +69,8 @@ export const resumes = pgTable(
     title: text('title').notNull(),
     rawText: text('raw_text').notNull(),
     sourceFilename: text('source_filename'),
+    // Original imported PDF (max 5 MB), null for pasted resumes. Never select it in list queries.
+    sourcePdf: bytea('source_pdf'),
     isCurrent: boolean('is_current').notNull().default(false),
   },
   (t) => [
