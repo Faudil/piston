@@ -19,6 +19,9 @@ export default defineConfig({
           name: 'app',
           include: ['test/app/**/*.test.ts'],
           environment: 'nuxt',
+          // Booting the Nuxt environment can take a while when Turborepo runs
+          // every workspace's tests at the same time.
+          hookTimeout: 60_000,
         },
       }),
     ],

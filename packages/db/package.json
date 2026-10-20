@@ -17,7 +17,7 @@
     "seed": "bun --env-file=../../.env src/seed.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p .",
-    "test": "vitest run --passWithNoTests",
+    "test": "bun --bun vitest run",
     "invite": "bun --env-file=../../.env src/invite-cli.ts"
   },
   "dependencies": {
