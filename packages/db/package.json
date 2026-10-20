@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
-    "./migrate": "./src/migrate.ts"
+    "./migrate": "./src/migrate.ts",
+    "./fixtures": "./src/fixtures/sample-resume.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate",
@@ -15,9 +16,11 @@
     "seed": "bun --env-file=../../.env src/seed.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p .",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "invite": "bun --env-file=../../.env src/invite-cli.ts"
   },
   "dependencies": {
+    "@adonisjs/hash": "^9.1.1",
     "@piston/shared": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "postgres": "^3.4.9"

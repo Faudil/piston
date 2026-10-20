@@ -49,6 +49,7 @@
       "name": "@piston/db",
       "version": "0.1.0",
       "dependencies": {
+        "@adonisjs/hash": "^9.1.1",
         "@piston/shared": "workspace:*",
         "drizzle-orm": "^0.45.4",
         "postgres": "^3.4.9",

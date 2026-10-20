@@ -1,0 +1,94 @@
+import type { ApplicationOutcome, ApplicationStatus, GenerationKind } from './enums'
+import type {
+  CoverLetterOutput,
+  OfferAnalysisOutput,
+  ResumeReviewOutput,
+  SearchLeadsOutput,
+} from './outputs'
+
+/**
+ * Shapes returned by the API, as seen by the client (dates are ISO strings
+ * once serialized to JSON).
+ */
+
+export interface PublicUser {
+  id: string
+  email: string
+  displayName: string
+}
+
+export interface Resume {
+  id: string
+  title: string
+  rawText: string
+  sourceFilename: string | null
+  isCurrent: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface JobOffer {
+  id: string
+  title: string
+  company: string
+  rawText: string
+  url: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Maps each generation kind to the JSON stored in `generations.output`. */
+export interface GenerationOutputs {
+  resume_review: ResumeReviewOutput
+  offer_analysis: OfferAnalysisOutput
+  cover_letter: CoverLetterOutput
+  search_leads: SearchLeadsOutput
+}
+
+/** References to the inputs a generation was produced from. */
+export interface GenerationInputRefs {
+  resumeId?: string
+  offerId?: string
+  tone?: string
+  highlights?: string[]
+  /** Set when the generation rewrote a single paragraph of another letter. */
+  parentGenerationId?: string
+  paragraphIndex?: number
+}
+
+export interface Generation<K extends GenerationKind = GenerationKind> {
+  id: string
+  kind: K
+  inputRefs: GenerationInputRefs
+  output: GenerationOutputs[K]
+  model: string
+  inputTokens: number
+  outputTokens: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StatusChange {
+  status: ApplicationStatus
+  at: string
+}
+
+export interface Application {
+  id: string
+  jobOfferId: string
+  status: ApplicationStatus
+  outcome: ApplicationOutcome | null
+  notes: string
+  statusHistory: StatusChange[]
+  createdAt: string
+  updatedAt: string
+  /** Joined from job_offers for display. */
+  offer: Pick<JobOffer, 'id' | 'title' | 'company'>
+}
+
+export interface Paginated<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  total: number
+}
