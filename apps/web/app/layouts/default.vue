@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 
-const { user, clear } = useUserSession()
-const toast = useToast()
-
 const links: NavigationMenuItem[] = [
   { label: 'Accueil', icon: 'i-lucide-house', to: '/' },
   { label: 'CV', icon: 'i-lucide-file-user', to: '/cv' },
@@ -12,62 +9,53 @@ const links: NavigationMenuItem[] = [
   { label: 'Pistes', icon: 'i-lucide-compass', to: '/pistes' },
   { label: 'Historique', icon: 'i-lucide-history', to: '/historique' },
 ]
-
-async function logout() {
-  await $fetch('/api/auth/logout', { method: 'POST' })
-  await clear()
-  await navigateTo('/login')
-}
-
-async function invite() {
-  try {
-    const { url } = await $fetch('/api/invites', { method: 'POST' })
-    await navigator.clipboard.writeText(url)
-    toast.add({
-      title: "Lien d'invitation copié",
-      description: 'Valable 7 jours, pour une seule personne.',
-      icon: 'i-lucide-link',
-    })
-  } catch (error) {
-    toast.add({ title: apiErrorMessage(error), color: 'error' })
-  }
-}
 </script>
 
 <template>
-  <UDashboardGroup>
-    <UDashboardSidebar collapsible :ui="{ footer: 'flex-col items-stretch gap-1' }">
-      <template #header>
-        <NuxtLink to="/" class="flex items-center gap-2 px-2 font-semibold">
-          <UIcon name="i-lucide-cog" class="size-5 text-primary" />
-          Piston
+  <UDashboardGroup unit="rem">
+    <!-- Sizes in rem: a fixed, readable sidebar width whatever the screen. -->
+    <!-- Desktop only: on phones, AppBottomNav replaces it (hence no toggle button). -->
+    <UDashboardSidebar
+      collapsible
+      :default-size="16"
+      :min-size="14"
+      :max-size="20"
+      :collapsed-size="4.5"
+      :toggle="false"
+      :ui="{
+        root: 'bg-default border-e border-default',
+        header: 'h-20 px-5',
+        body: 'px-3 py-2',
+        footer: 'flex-col items-stretch gap-1 border-t border-default p-3',
+      }"
+    >
+      <template #header="{ collapsed }">
+        <NuxtLink to="/" class="rounded-lg focus-visible:outline-2 focus-visible:outline-primary">
+          <AppLogo :compact="collapsed" />
+          <span class="sr-only">Accueil</span>
         </NuxtLink>
       </template>
 
-      <UNavigationMenu :items="links" orientation="vertical" />
+      <template #default="{ collapsed }">
+        <UNavigationMenu
+          :items="links"
+          orientation="vertical"
+          :collapsed="collapsed"
+          tooltip
+          :ui="{
+            link: 'px-3 py-2 text-[0.9375rem] rounded-lg before:rounded-lg',
+            linkLeadingIcon: 'size-5',
+          }"
+        />
+      </template>
 
-      <template #footer>
-        <UButton
-          label="Inviter un ami"
-          icon="i-lucide-user-plus"
-          color="neutral"
-          variant="ghost"
-          block
-          class="justify-start"
-          @click="invite"
-        />
-        <UButton
-          :label="`Déconnexion (${user?.displayName})`"
-          icon="i-lucide-log-out"
-          color="neutral"
-          variant="ghost"
-          block
-          class="justify-start"
-          @click="logout"
-        />
+      <template #footer="{ collapsed }">
+        <AppUserMenu :collapsed="collapsed" />
       </template>
     </UDashboardSidebar>
 
     <slot />
+
+    <AppBottomNav />
   </UDashboardGroup>
 </template>

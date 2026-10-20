@@ -23,44 +23,52 @@ const lastChange = computed(
 </script>
 
 <template>
-  <UCard :ui="{ body: 'p-3 sm:p-3 space-y-2' }" class="cursor-grab active:cursor-grabbing">
-    <button type="button" class="block w-full text-left" @click="emit('open')">
-      <span class="block font-medium leading-snug">{{ application.offer.title }}</span>
-      <span class="block text-sm text-muted">{{ application.offer.company }}</span>
+  <article
+    class="group cursor-grab rounded-xl border border-default bg-default p-3 shadow-xs transition hover:border-accented hover:shadow-sm active:cursor-grabbing"
+  >
+    <button
+      type="button"
+      class="block w-full rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      @click="emit('open')"
+    >
+      <span class="block leading-snug font-medium text-highlighted">
+        {{ application.offer.title }}
+      </span>
+      <span v-if="application.offer.company" class="mt-0.5 block text-sm text-muted">
+        {{ application.offer.company }}
+      </span>
     </button>
 
-    <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-      <time :datetime="lastChange">{{ formatDateTime(lastChange) }}</time>
-      <UBadge
-        v-if="application.status === 'closed' && application.outcome"
-        :label="outcomeLabels[application.outcome]"
-        :color="application.outcome === 'accepted' ? 'success' : 'error'"
-        variant="subtle"
-        size="sm"
-      />
-    </div>
-
-    <div class="flex justify-between">
+    <div class="mt-3 flex items-center gap-1">
       <UButton
         v-if="previous"
-        icon="i-lucide-arrow-left"
+        icon="i-lucide-chevron-left"
         size="xs"
         color="neutral"
         variant="ghost"
         :aria-label="`Déplacer vers ${applicationStatusLabels[previous]}`"
         @click="emit('move', previous)"
       />
-      <span v-else />
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-xs text-muted">
+        <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
+        <time :datetime="lastChange">{{ formatDateTime(lastChange) }}</time>
+        <UBadge
+          v-if="application.status === 'closed' && application.outcome"
+          :label="outcomeLabels[application.outcome]"
+          :color="application.outcome === 'accepted' ? 'success' : 'error'"
+          variant="subtle"
+          size="sm"
+        />
+      </div>
       <UButton
         v-if="next"
-        icon="i-lucide-arrow-right"
+        icon="i-lucide-chevron-right"
         size="xs"
         color="neutral"
         variant="ghost"
-        trailing
         :aria-label="`Déplacer vers ${applicationStatusLabels[next]}`"
         @click="emit('move', next)"
       />
     </div>
-  </UCard>
+  </article>
 </template>

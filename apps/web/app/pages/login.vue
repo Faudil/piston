@@ -31,24 +31,51 @@ async function onSubmit(event: FormSubmitEvent<LoginBody>) {
 </script>
 
 <template>
-  <UCard>
-    <h1 class="mb-4 text-lg font-semibold">Connexion</h1>
-    <UForm :schema="LoginBody" :state="state" class="space-y-4" @submit="onSubmit">
+  <UCard :ui="{ body: 'p-6 sm:p-8' }">
+    <h1 class="text-3xl font-semibold text-highlighted">Bon retour</h1>
+    <p class="mt-1 mb-6 text-sm text-muted">
+      Connecte-toi pour reprendre là où tu t'étais arrêté·e.
+    </p>
+
+    <UForm :schema="LoginBody" :state="state" class="space-y-5" @submit="onSubmit">
       <UFormField label="E-mail" name="email">
-        <UInput v-model="state.email" type="email" autocomplete="email" class="w-full" />
+        <UInput
+          v-model="state.email"
+          type="email"
+          autocomplete="email"
+          size="lg"
+          icon="i-lucide-mail"
+          class="w-full"
+        />
       </UFormField>
       <UFormField label="Mot de passe" name="password">
         <UInput
           v-model="state.password"
           type="password"
           autocomplete="current-password"
+          size="lg"
+          icon="i-lucide-lock"
           class="w-full"
         />
       </UFormField>
-      <UAlert v-if="error" color="error" variant="subtle" :title="error" />
-      <UButton type="submit" label="Se connecter" block :loading="loading" :disabled="!hydrated" />
+      <UAlert
+        v-if="error"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-alert"
+        :title="error"
+      />
+      <UButton
+        type="submit"
+        label="Se connecter"
+        size="lg"
+        block
+        :loading="loading"
+        :disabled="!hydrated"
+      />
     </UForm>
-    <p class="mt-4 text-center text-sm text-muted">
+
+    <p class="mt-6 border-t border-default pt-5 text-center text-sm text-muted">
       Pas de compte ? Piston fonctionne sur invitation : demande un lien à un membre.
     </p>
   </UCard>

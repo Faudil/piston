@@ -62,30 +62,44 @@ async function onCreated() {
 </script>
 
 <template>
-  <UDashboardPanel>
-    <template #header>
-      <UDashboardNavbar title="CV" />
-    </template>
-    <template #body>
-      <div class="mx-auto w-full max-w-5xl space-y-8">
-        <section aria-labelledby="cv-versions" class="space-y-3">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="cv-versions" class="text-lg font-semibold">Mes versions</h2>
-            <UButton
-              :label="formOpen ? 'Fermer' : 'Ajouter une version'"
-              :icon="formOpen ? 'i-lucide-x' : 'i-lucide-plus'"
-              color="neutral"
-              variant="outline"
-              :aria-expanded="formOpen"
-              aria-controls="cv-form"
-              @click="formOpen = !formOpen"
-            />
-          </div>
+  <AppPage
+    title="CV"
+    description="Garde tes versions de CV au même endroit et fais-les critiquer par Claude, sans langue de bois."
+  >
+    <div class="space-y-12">
+      <section aria-labelledby="cv-versions">
+        <AppSectionHeading
+          id="cv-versions"
+          title="Mes versions"
+          icon="i-lucide-files"
+          description="La version « actuelle » sert à toutes les analyses."
+        >
+          <UButton
+            v-if="resumes.length"
+            :label="formOpen ? 'Fermer' : 'Ajouter une version'"
+            :icon="formOpen ? 'i-lucide-x' : 'i-lucide-plus'"
+            color="neutral"
+            variant="outline"
+            :aria-expanded="formOpen"
+            aria-controls="cv-form"
+            @click="formOpen = !formOpen"
+          />
+        </AppSectionHeading>
 
+        <div class="space-y-4">
           <UCard v-if="formOpen || !resumes.length" id="cv-form">
-            <p v-if="!resumes.length" class="mb-3 text-sm text-muted">
-              Ajoute ton CV pour commencer : toutes les fonctionnalités de Piston s'appuient dessus.
-            </p>
+            <div v-if="!resumes.length" class="mb-5 flex items-start gap-3">
+              <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10">
+                <UIcon name="i-lucide-file-user" class="size-5 text-primary" />
+              </span>
+              <div>
+                <p class="font-semibold text-highlighted">Commence par ton CV</p>
+                <p class="text-sm text-muted">
+                  Toutes les fonctionnalités de Piston s'appuient dessus. Colle son texte ou importe
+                  un PDF.
+                </p>
+              </div>
+            </div>
             <ResumeForm @created="onCreated" />
           </UCard>
 
@@ -95,25 +109,30 @@ async function onCreated() {
             :reviewing-id="pending ? reviewedResumeId : null"
             @review="review"
             @set-current="setCurrent"
+            @changed="refreshResumes()"
           />
-        </section>
+        </div>
+      </section>
 
-        <section aria-labelledby="cv-review" class="space-y-4">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="cv-review" class="text-lg font-semibold">Critique</h2>
-            <UButton
-              v-if="currentResume"
-              label="Critiquer mon CV actuel"
-              icon="i-lucide-sparkles"
-              :loading="pending"
-              @click="review(currentResume)"
-            />
-          </div>
-          <p class="text-sm text-muted">
-            Claude note ton CV, cite ses points forts et ses faiblesses, puis propose une réécriture
-            ligne par ligne. Les chiffres à compléter apparaissent entre crochets.
-          </p>
+      <section aria-labelledby="cv-review">
+        <AppSectionHeading
+          id="cv-review"
+          title="Critique"
+          icon="i-lucide-sparkles"
+          description="Claude note ton CV, cite ses points forts et ses faiblesses, puis propose une réécriture ligne par ligne."
+        >
+          <UButton
+            v-if="currentResume && shown"
+            label="Nouvelle critique"
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="outline"
+            :loading="pending"
+            @click="review(currentResume)"
+          />
+        </AppSectionHeading>
 
+        <div class="space-y-4">
           <UAlert
             v-if="error"
             color="error"
@@ -122,19 +141,43 @@ async function onCreated() {
             :title="error"
           />
 
-          <template v-if="shown">
-            <p v-if="shownResume" class="text-sm text-muted">
+          <div class="flex flex-wrap items-center gap-3">
+            <StreamingIndicator v-if="pending" />
+            <p v-if="shown && shownResume" class="text-sm text-muted">
               Critique de « {{ shownResume.title }} »
               <template v-if="!pending && !generation && saved">
                 du {{ new Date(saved.createdAt).toLocaleDateString('fr-FR') }}
               </template>
             </p>
-            <ResumeReviewResult :output="shown" />
-          </template>
-          <p v-else-if="pending" class="text-sm text-muted">Claude lit ton CV…</p>
-          <p v-else class="text-sm text-muted">Aucune critique pour l'instant.</p>
-        </section>
-      </div>
-    </template>
-  </UDashboardPanel>
+          </div>
+
+          <div aria-live="polite">
+            <ResumeReviewResult v-if="shown" :output="shown" />
+            <ResultSkeleton v-else-if="pending" />
+            <UEmpty
+              v-else
+              icon="i-lucide-file-search"
+              title="Pas encore de critique"
+              :description="
+                currentResume
+                  ? 'Quatre notes sur 10, cinq points forts, cinq points à corriger et une réécriture prête à copier.'
+                  : 'Ajoute d\'abord ton CV ci-dessus, puis lance une critique.'
+              "
+              :actions="
+                currentResume
+                  ? [
+                      {
+                        label: 'Critiquer mon CV actuel',
+                        icon: 'i-lucide-sparkles',
+                        onClick: () => review(currentResume!),
+                      },
+                    ]
+                  : []
+              "
+            />
+          </div>
+        </div>
+      </section>
+    </div>
+  </AppPage>
 </template>

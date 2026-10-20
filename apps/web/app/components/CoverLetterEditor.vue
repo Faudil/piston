@@ -15,6 +15,8 @@ const props = defineProps<{
   offerId: string
   /** The latest letter of this offer, if one was already generated. */
   initial: Generation<'cover_letter'> | null
+  /** File name (no extension) of the .txt export. */
+  filename?: string
 }>()
 
 const toast = useToast()
@@ -134,17 +136,20 @@ const streamed = computed<Partial<CoverLetterOutput>>(() => ({
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="space-y-4">
+  <div class="space-y-8">
+    <div class="space-y-5">
       <URadioGroup
         v-model="tone"
         legend="Ton de la lettre"
         :items="toneItems"
         orientation="horizontal"
         variant="table"
+        :ui="{ legend: 'mb-2 text-sm font-medium text-highlighted', item: 'flex-1' }"
       />
       <fieldset class="space-y-2">
-        <legend class="text-sm font-medium">Points à mettre en avant (facultatif)</legend>
+        <legend class="mb-2 text-sm font-medium text-highlighted">
+          Points à mettre en avant <span class="font-normal text-muted">(facultatif)</span>
+        </legend>
         <UFormField
           v-for="i in MAX_HIGHLIGHTS"
           :key="i"
@@ -162,6 +167,8 @@ const streamed = computed<Partial<CoverLetterOutput>>(() => ({
       <UButton
         :label="paragraphs.length ? 'Régénérer la lettre' : 'Générer la lettre'"
         icon="i-lucide-pen-line"
+        :color="paragraphs.length ? 'neutral' : 'primary'"
+        :variant="paragraphs.length ? 'outline' : 'solid'"
         :loading="letterGen.pending.value"
         :disabled="paragraphGen.pending.value"
         @click="generate"
@@ -176,63 +183,96 @@ const streamed = computed<Partial<CoverLetterOutput>>(() => ({
       :title="letterGen.error.value"
     />
 
-    <div
-      v-if="letterGen.pending.value"
-      aria-live="polite"
-      class="rounded-lg border border-default p-4"
-    >
-      <CoverLetterView :output="streamed" />
+    <div v-if="letterGen.pending.value" class="space-y-4 border-t border-default pt-6">
+      <StreamingIndicator />
+      <div aria-live="polite" class="rounded-xl bg-muted p-5">
+        <CoverLetterView v-if="letterGen.text.value" :output="streamed" />
+        <div v-else class="space-y-2" aria-hidden="true">
+          <USkeleton class="h-4 w-full" />
+          <USkeleton class="h-4 w-11/12" />
+          <USkeleton class="h-4 w-4/5" />
+        </div>
+      </div>
     </div>
 
-    <div v-else-if="paragraphs.length" class="space-y-4">
-      <div v-for="(_, i) in paragraphs" :key="i" class="space-y-1">
-        <UFormField :label="`Paragraphe ${i + 1}`" :ui="{ label: 'text-xs text-muted' }">
-          <UTextarea
-            v-if="regeneratingIndex === i"
-            :model-value="paragraphGen.text.value || 'Réécriture en cours…'"
-            readonly
-            autoresize
-            class="w-full"
-            aria-live="polite"
+    <div v-else-if="paragraphs.length" class="space-y-5 border-t border-default pt-6">
+      <div v-for="(_, i) in paragraphs" :key="i" class="space-y-1.5">
+        <div class="flex items-center justify-between gap-2">
+          <label :for="`paragraph-${i}`" class="text-xs font-medium text-muted">
+            Paragraphe {{ i + 1 }}
+          </label>
+          <UButton
+            label="Régénérer"
+            icon="i-lucide-refresh-cw"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :aria-label="`Régénérer le paragraphe ${i + 1}`"
+            :loading="regeneratingIndex === i"
+            :disabled="paragraphGen.pending.value && regeneratingIndex !== i"
+            @click="regenerate(i)"
           />
-          <UTextarea v-else v-model="paragraphs[i]" autoresize :rows="2" class="w-full" />
-        </UFormField>
-        <UButton
-          label="Régénérer ce paragraphe"
-          icon="i-lucide-refresh-cw"
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          :loading="regeneratingIndex === i"
-          :disabled="paragraphGen.pending.value && regeneratingIndex !== i"
-          @click="regenerate(i)"
+        </div>
+        <UTextarea
+          v-if="regeneratingIndex === i"
+          :id="`paragraph-${i}`"
+          :model-value="paragraphGen.text.value || 'Réécriture en cours…'"
+          readonly
+          autoresize
+          class="w-full animate-pulse"
+          aria-live="polite"
+        />
+        <UTextarea
+          v-else
+          :id="`paragraph-${i}`"
+          v-model="paragraphs[i]"
+          autoresize
+          :rows="2"
+          class="w-full"
+          :ui="{ base: 'leading-relaxed' }"
         />
       </div>
 
-      <p class="text-sm" :class="wordCountOk ? 'text-muted' : 'text-warning'" aria-live="polite">
-        {{ wordCount }} mots
-        <template v-if="!wordCountOk">
-          — vise entre {{ WORD_TARGET.min }} et {{ WORD_TARGET.max }} mots.
-        </template>
-      </p>
-
-      <div class="flex flex-wrap gap-2">
-        <UButton
-          label="Copier"
-          icon="i-lucide-copy"
-          color="neutral"
-          variant="outline"
-          @click="copy"
+      <div
+        class="flex flex-col gap-3 rounded-xl bg-muted p-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p
+          class="flex items-center gap-2 text-sm"
+          :class="wordCountOk ? 'text-muted' : 'text-warning'"
+          aria-live="polite"
+        >
+          <UIcon :name="wordCountOk ? 'i-lucide-check' : 'i-lucide-info'" class="size-4" />
+          {{ wordCount }} mots
+          <template v-if="!wordCountOk">
+            — vise entre {{ WORD_TARGET.min }} et {{ WORD_TARGET.max }} mots.
+          </template>
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <UButton
+            label="Copier"
+            icon="i-lucide-copy"
+            color="neutral"
+            variant="outline"
+            @click="copy"
+          />
+          <UButton
+            label="Enregistrer"
+            icon="i-lucide-save"
+            :loading="saving"
+            :disabled="!dirty || paragraphGen.pending.value"
+            @click="save"
+          />
+        </div>
+      </div>
+      <div class="space-y-1">
+        <DownloadLetterButton
+          :paragraphs="paragraphs"
+          :filename="filename ?? 'lettre-de-motivation'"
+          :generation-id="dirty ? null : letterId"
         />
-        <UButton
-          label="Enregistrer les modifications"
-          icon="i-lucide-save"
-          color="neutral"
-          variant="outline"
-          :loading="saving"
-          :disabled="!dirty || paragraphGen.pending.value"
-          @click="save"
-        />
+        <p v-if="dirty" class="text-xs text-muted">
+          Enregistre tes modifications pour pouvoir imprimer cette version.
+        </p>
       </div>
     </div>
   </div>

@@ -1,149 +1,100 @@
 <script setup lang="ts">
-import type { FormSubmitEvent } from '@nuxt/ui'
-import { CreateOfferBody, LIMITS, type JobOffer } from '@piston/shared'
+import type { JobOffer } from '@piston/shared'
 
 useSeoMeta({ title: 'Offres' })
 
 const route = useRoute()
-const toast = useToast()
+const router = useRouter()
 
 const { data: offers, error } = await useFetch<JobOffer[]>('/api/offers')
 
-// The dashboard links to /offres?new=1 to open the form directly.
+// The dashboard links to /offres?new=1 to open the form directly, and the job
+// search to /offres?new=1&url=... to import an ad.
 const formOpen = ref(route.query.new === '1')
+const importUrl = ref(typeof route.query.url === 'string' ? route.query.url : undefined)
 watch(
-  () => route.query.new,
-  (value) => {
-    if (value === '1') formOpen.value = true
+  () => route.query,
+  (query) => {
+    if (query.new === '1') formOpen.value = true
+    if (typeof query.url === 'string') importUrl.value = query.url
   },
 )
+onMounted(() => {
+  // Drop the URL from the address bar so a reload does not import (and bill) twice.
+  if (route.query.url) void router.replace({ query: { new: '1' } })
+})
 // With no offer yet, the form is the only useful thing on the page.
 const showForm = computed(() => formOpen.value || offers.value?.length === 0)
 
-const state = reactive({ title: '', company: '', url: '', rawText: '' })
-const submitting = ref(false)
-const tooLong = computed(() => state.rawText.length > LIMITS.maxTextLength)
-const numberFormat = new Intl.NumberFormat('fr-FR')
-
-async function onSubmit(event: FormSubmitEvent<CreateOfferBody>) {
-  submitting.value = true
-  try {
-    const offer = await $fetch<JobOffer>('/api/offers', { method: 'POST', body: event.data })
-    // The offer page starts the analysis right away: one less tap on a phone.
-    await navigateTo(`/offres/${offer.id}?analyze=1`)
-  } catch (err) {
-    toast.add({ title: apiErrorMessage(err, "Impossible d'enregistrer l'offre."), color: 'error' })
-  } finally {
-    submitting.value = false
-  }
+function closeForm() {
+  formOpen.value = false
+  importUrl.value = undefined
+  void router.replace({ query: {} })
 }
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
 </script>
 
 <template>
-  <UDashboardPanel>
-    <template #header>
-      <UDashboardNavbar title="Offres">
-        <template #right>
-          <UButton
-            v-if="!showForm"
-            label="Nouvelle offre"
-            icon="i-lucide-plus"
-            @click="formOpen = true"
-          />
-        </template>
-      </UDashboardNavbar>
+  <AppPage
+    title="Offres"
+    description="Les annonces qui t'intéressent. Claude analyse chacune et t'aide à écrire ta lettre."
+  >
+    <template v-if="!showForm" #actions>
+      <UButton label="Nouvelle offre" icon="i-lucide-plus" @click="formOpen = true" />
     </template>
-    <template #body>
-      <div class="mx-auto w-full max-w-3xl space-y-6">
-        <UCard v-if="showForm">
-          <template #header>
-            <h2 class="font-semibold">Nouvelle offre</h2>
-            <p class="text-sm text-muted">
-              Colle le texte de l'annonce : Claude le compare ensuite à ton CV.
-            </p>
-          </template>
-          <UForm :schema="CreateOfferBody" :state="state" class="space-y-4" @submit="onSubmit">
-            <div class="grid gap-4 sm:grid-cols-2">
-              <UFormField label="Intitulé du poste" name="title" required>
-                <UInput v-model="state.title" class="w-full" placeholder="Développeur front" />
-              </UFormField>
-              <UFormField label="Entreprise" name="company">
-                <UInput v-model="state.company" class="w-full" />
-              </UFormField>
-            </div>
-            <UFormField label="Lien de l'annonce" name="url" hint="Facultatif">
-              <UInput
-                v-model="state.url"
-                type="url"
-                inputmode="url"
-                class="w-full"
-                placeholder="https://"
-              />
-            </UFormField>
-            <UFormField label="Texte de l'offre" name="rawText" required>
-              <UTextarea
-                v-model="state.rawText"
-                :rows="10"
-                autoresize
-                :maxrows="20"
-                class="w-full"
-              />
-              <template #help>
-                <span :class="tooLong ? 'text-error' : ''" aria-live="polite">
-                  {{ numberFormat.format(state.rawText.length) }} /
-                  {{ numberFormat.format(LIMITS.maxTextLength) }} caractères
-                </span>
-              </template>
-            </UFormField>
-            <div class="flex flex-wrap gap-2">
-              <UButton
-                type="submit"
-                label="Enregistrer et analyser"
-                icon="i-lucide-sparkles"
-                :loading="submitting"
-                :disabled="tooLong"
-              />
-              <UButton
-                v-if="offers?.length"
-                label="Annuler"
-                color="neutral"
-                variant="ghost"
-                @click="formOpen = false"
-              />
-            </div>
-          </UForm>
-        </UCard>
 
-        <UAlert
-          v-if="error"
-          color="error"
-          variant="subtle"
-          title="Impossible de charger tes offres."
+    <div class="space-y-10">
+      <!-- Keyed on the URL so an import link opened while the form is visible runs again. -->
+      <OfferForm
+        v-if="showForm"
+        :key="importUrl"
+        :import-url="importUrl"
+        :cancellable="Boolean(offers?.length)"
+        @cancel="closeForm"
+      />
+
+      <UAlert
+        v-if="error"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-alert"
+        title="Impossible de charger tes offres."
+      />
+
+      <section v-else-if="offers?.length" aria-labelledby="offers-list">
+        <AppSectionHeading
+          id="offers-list"
+          title="Tes offres"
+          :description="`${offers.length} offre${offers.length > 1 ? 's' : ''} enregistrée${offers.length > 1 ? 's' : ''}`"
         />
-
-        <section v-else-if="offers?.length" aria-labelledby="offers-list" class="space-y-3">
-          <h2 id="offers-list" class="font-semibold">Tes offres</h2>
-          <ul class="divide-y divide-default rounded-lg border border-default">
-            <li v-for="offer in offers" :key="offer.id">
-              <NuxtLink
-                :to="`/offres/${offer.id}`"
-                class="flex items-center justify-between gap-3 p-3 hover:bg-elevated focus-visible:bg-elevated"
+        <ul class="grid gap-3 sm:grid-cols-2">
+          <li v-for="offer in offers" :key="offer.id">
+            <NuxtLink
+              :to="`/offres/${offer.id}`"
+              class="group flex h-full items-center gap-4 rounded-2xl border border-default bg-default p-4 shadow-xs transition hover:border-primary/40 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span
+                class="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 font-display text-lg font-semibold text-primary"
+                aria-hidden="true"
               >
-                <div class="min-w-0">
-                  <p class="truncate font-medium">{{ offer.title }}</p>
-                  <p class="truncate text-sm text-muted">
-                    <template v-if="offer.company">{{ offer.company }} · </template>
-                    {{ dateFormat.format(new Date(offer.createdAt)) }}
-                  </p>
-                </div>
-                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-              </NuxtLink>
-            </li>
-          </ul>
-        </section>
-      </div>
-    </template>
-  </UDashboardPanel>
+                {{ (offer.company || offer.title).charAt(0).toUpperCase() }}
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate font-medium text-highlighted">{{ offer.title }}</span>
+                <span class="block truncate text-sm text-muted">
+                  <template v-if="offer.company">{{ offer.company }} · </template>
+                  {{ dateFormat.format(new Date(offer.createdAt)) }}
+                </span>
+              </span>
+              <UIcon
+                name="i-lucide-chevron-right"
+                class="size-5 shrink-0 text-dimmed transition group-hover:translate-x-0.5 group-hover:text-primary"
+              />
+            </NuxtLink>
+          </li>
+        </ul>
+      </section>
+    </div>
+  </AppPage>
 </template>

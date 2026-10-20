@@ -51,13 +51,24 @@ async function submit() {
 </script>
 
 <template>
-  <UModal v-model:open="open" title="Nouvelle candidature">
+  <UModal
+    v-model:open="open"
+    title="Nouvelle candidature"
+    description="Choisis l'offre à suivre dans ton tableau."
+  >
     <template #body>
-      <p v-if="loading" class="text-muted">Chargement de tes offres…</p>
-      <div v-else-if="!items.length" class="space-y-3">
-        <p class="text-muted">Tu n'as aucune offre disponible à ajouter.</p>
-        <UButton to="/offres?new=1" label="Ajouter une offre" icon="i-lucide-plus" />
+      <div v-if="loading" class="space-y-2" aria-label="Chargement de tes offres…">
+        <USkeleton class="h-4 w-24" />
+        <USkeleton class="h-9 w-full" />
       </div>
+      <UEmpty
+        v-else-if="!items.length"
+        icon="i-lucide-briefcase"
+        title="Aucune offre disponible"
+        description="Toutes tes offres sont déjà suivies. Ajoute une nouvelle offre pour créer une candidature."
+        variant="naked"
+        :actions="[{ label: 'Ajouter une offre', icon: 'i-lucide-plus', to: '/offres?new=1' }]"
+      />
       <UFormField v-else label="Offre">
         <USelect v-model="selected" :items="items" placeholder="Choisis une offre" class="w-full" />
       </UFormField>

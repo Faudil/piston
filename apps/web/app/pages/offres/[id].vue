@@ -38,6 +38,23 @@ onMounted(() => {
   }
 })
 
+async function onDeleted() {
+  toast.add({ title: 'Offre supprimée', icon: 'i-lucide-trash-2' })
+  await navigateTo('/offres')
+}
+
+/** "lettre-acme" for the exported letter file. */
+const letterFilename = computed(() => {
+  const name = offer.value?.company || offer.value?.title || 'motivation'
+  const slug = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  return `lettre-${slug || 'motivation'}`
+})
+
 // --- Application ------------------------------------------------------------
 
 const adding = ref(false)
@@ -69,67 +86,85 @@ async function addToApplications() {
 </script>
 
 <template>
-  <UDashboardPanel>
-    <template #header>
-      <UDashboardNavbar :title="offer?.title ?? 'Offre'">
-        <template #leading>
-          <UButton
-            to="/offres"
-            icon="i-lucide-arrow-left"
-            color="neutral"
-            variant="ghost"
-            aria-label="Retour aux offres"
-          />
-        </template>
-      </UDashboardNavbar>
+  <AppPage :title="offer?.title ?? 'Offre introuvable'" :back="{ to: '/offres', label: 'Offres' }">
+    <template v-if="offer" #description>
+      <span class="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span v-if="offer.company" class="inline-flex items-center gap-1.5 font-medium text-toned">
+          <UIcon name="i-lucide-building-2" class="size-4" />
+          {{ offer.company }}
+        </span>
+        <ULink
+          v-if="offer.url"
+          :to="offer.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1 text-primary hover:underline"
+        >
+          Voir l'annonce <UIcon name="i-lucide-external-link" class="size-3.5" />
+        </ULink>
+      </span>
     </template>
-    <template #body>
-      <div v-if="offerError || !offer" class="mx-auto w-full max-w-3xl space-y-4">
-        <UAlert color="error" variant="subtle" title="Offre introuvable." />
-        <UButton to="/offres" label="Retour aux offres" color="neutral" variant="outline" />
-      </div>
+    <template v-if="offer" #actions>
+      <UButton
+        label="Ajouter aux candidatures"
+        icon="i-lucide-kanban"
+        color="neutral"
+        variant="outline"
+        :loading="adding"
+        @click="addToApplications"
+      />
+      <OfferManageActions :offer="offer" @updated="(o) => (offer = o)" @deleted="onDeleted" />
+    </template>
 
-      <div v-else class="mx-auto w-full max-w-3xl space-y-8">
-        <header class="space-y-2">
-          <h1 class="text-xl font-semibold">{{ offer.title }}</h1>
-          <p v-if="offer.company" class="text-muted">{{ offer.company }}</p>
-          <ULink
-            v-if="offer.url"
-            :to="offer.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1 text-sm text-primary underline"
-          >
-            Voir l'annonce <UIcon name="i-lucide-external-link" class="size-4" />
-          </ULink>
-          <UCollapsible>
-            <UButton
-              label="Texte de l'offre"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              trailing-icon="i-lucide-chevron-down"
-              class="-ml-2.5"
-            />
-            <template #content>
-              <p class="mt-2 whitespace-pre-line rounded-lg bg-elevated p-3 text-sm">
-                {{ offer.rawText }}
-              </p>
-            </template>
-          </UCollapsible>
-        </header>
+    <UEmpty
+      v-if="offerError || !offer"
+      icon="i-lucide-file-question"
+      title="Cette offre n'existe pas ou plus"
+      description="Elle a peut-être été supprimée. Retrouve tes offres dans la liste."
+      :actions="[{ label: 'Retour aux offres', to: '/offres', icon: 'i-lucide-arrow-left' }]"
+    />
 
-        <section aria-labelledby="analysis-title" class="space-y-4">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="analysis-title" class="text-lg font-semibold">Analyse</h2>
-            <UButton
-              :label="shownAnalysis ? 'Relancer' : 'Analyser l\'offre'"
-              :icon="shownAnalysis ? 'i-lucide-refresh-cw' : 'i-lucide-sparkles'"
-              :variant="shownAnalysis ? 'outline' : 'solid'"
-              :loading="analysis.pending.value"
-              @click="analyze"
-            />
-          </div>
+    <div v-else class="space-y-12">
+      <UCollapsible
+        class="rounded-2xl border border-default bg-default"
+        :ui="{ content: 'px-4 pb-4 sm:px-5 sm:pb-5' }"
+      >
+        <UButton
+          label="Texte de l'offre"
+          icon="i-lucide-file-text"
+          color="neutral"
+          variant="ghost"
+          trailing-icon="i-lucide-chevron-down"
+          block
+          class="group rounded-2xl p-4 sm:px-5"
+          :ui="{ trailingIcon: 'ms-auto transition-transform group-data-[state=open]:rotate-180' }"
+        />
+        <template #content>
+          <p class="max-w-prose text-sm leading-relaxed whitespace-pre-line text-toned">
+            {{ offer.rawText }}
+          </p>
+        </template>
+      </UCollapsible>
+
+      <section aria-labelledby="analysis-title">
+        <AppSectionHeading
+          id="analysis-title"
+          title="Analyse"
+          icon="i-lucide-scan-search"
+          description="Claude compare l'offre à ton CV : score, compétences, questions d'entretien."
+        >
+          <UButton
+            v-if="shownAnalysis"
+            label="Relancer"
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="outline"
+            :loading="analysis.pending.value"
+            @click="analyze"
+          />
+        </AppSectionHeading>
+
+        <div class="space-y-4">
           <UAlert
             v-if="analysis.error.value"
             color="error"
@@ -141,35 +176,47 @@ async function addToApplications() {
               <ULink to="/cv" class="underline">Aller à la page CV</ULink>
             </template>
           </UAlert>
+          <StreamingIndicator v-if="analysis.pending.value" />
           <div aria-live="polite">
             <OfferAnalysisResult v-if="shownAnalysis" :output="shownAnalysis" />
-            <p v-else-if="analysis.pending.value" class="text-sm text-muted">
-              Claude lit l'offre et ton CV…
-            </p>
-            <p v-else class="text-sm text-muted">
-              Claude compare l'offre à ton CV : score, compétences, questions d'entretien.
-            </p>
+            <ResultSkeleton v-else-if="analysis.pending.value" />
+            <UEmpty
+              v-else
+              icon="i-lucide-scan-search"
+              title="Pas encore analysée"
+              description="En une minute : ton score de correspondance, tes atouts, ce qui manque et les questions à préparer."
+              :actions="[
+                { label: 'Analyser l\'offre', icon: 'i-lucide-sparkles', onClick: analyze },
+              ]"
+            />
           </div>
-        </section>
+        </div>
+      </section>
 
-        <USeparator />
-
-        <section aria-labelledby="letter-title" class="space-y-4">
-          <h2 id="letter-title" class="text-lg font-semibold">Lettre de motivation</h2>
-          <CoverLetterEditor :offer-id="offerId" :initial="previous?.coverLetter ?? null" />
-        </section>
-
-        <USeparator />
-
-        <UButton
-          label="Ajouter aux candidatures"
-          icon="i-lucide-kanban"
-          size="lg"
-          block
-          :loading="adding"
-          @click="addToApplications"
+      <section aria-labelledby="letter-title">
+        <AppSectionHeading
+          id="letter-title"
+          title="Lettre de motivation"
+          icon="i-lucide-pen-line"
+          description="Choisis un ton, ajoute jusqu'à trois points à mettre en avant, puis retouche chaque paragraphe."
         />
-      </div>
-    </template>
-  </UDashboardPanel>
+        <UCard>
+          <CoverLetterEditor
+            :offer-id="offerId"
+            :filename="letterFilename"
+            :initial="previous?.coverLetter ?? null"
+          />
+        </UCard>
+      </section>
+
+      <UButton
+        label="Ajouter aux candidatures"
+        icon="i-lucide-kanban"
+        size="xl"
+        block
+        :loading="adding"
+        @click="addToApplications"
+      />
+    </div>
+  </AppPage>
 </template>
