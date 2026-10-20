@@ -14,6 +14,7 @@ const { data: invite } = await useFetch(`/api/invites/${encodeURIComponent(token
 const state = reactive({ token, email: '', displayName: '', password: '' })
 const error = ref<string | null>(null)
 const loading = ref(false)
+const hydrated = useHydrated()
 
 async function onSubmit(event: FormSubmitEvent<RegisterBody>) {
   loading.value = true
@@ -51,7 +52,13 @@ async function onSubmit(event: FormSubmitEvent<RegisterBody>) {
           />
         </UFormField>
         <UAlert v-if="error" color="error" variant="subtle" :title="error" />
-        <UButton type="submit" label="Créer mon compte" block :loading="loading" />
+        <UButton
+          type="submit"
+          label="Créer mon compte"
+          block
+          :loading="loading"
+          :disabled="!hydrated"
+        />
       </UForm>
     </template>
     <UAlert

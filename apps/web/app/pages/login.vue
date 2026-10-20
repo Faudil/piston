@@ -11,6 +11,7 @@ const { fetch: refreshSession } = useUserSession()
 const state = reactive({ email: '', password: '' })
 const error = ref<string | null>(null)
 const loading = ref(false)
+const hydrated = useHydrated()
 
 async function onSubmit(event: FormSubmitEvent<LoginBody>) {
   loading.value = true
@@ -45,7 +46,7 @@ async function onSubmit(event: FormSubmitEvent<LoginBody>) {
         />
       </UFormField>
       <UAlert v-if="error" color="error" variant="subtle" :title="error" />
-      <UButton type="submit" label="Se connecter" block :loading="loading" />
+      <UButton type="submit" label="Se connecter" block :loading="loading" :disabled="!hydrated" />
     </UForm>
     <p class="mt-4 text-center text-sm text-muted">
       Pas de compte ? Piston fonctionne sur invitation : demande un lien à un membre.
