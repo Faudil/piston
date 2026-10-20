@@ -1,0 +1,39 @@
+# Production stack: the app and its Postgres. Configuration comes from `.env`
+# (see .env.example). For local development use docker-compose.dev.yml.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - piston-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    # NUXT_-prefixed variables override runtimeConfig at runtime.
+    environment:
+      NUXT_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD}
+      NUXT_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      NUXT_CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5-5}
+      NUXT_DAILY_GENERATION_LIMIT: ${DAILY_GENERATION_LIMIT:-30}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '${PISTON_PORT:-3000}:3000'
+
+volumes:
+  piston-db:
