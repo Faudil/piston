@@ -11,5 +11,6 @@ export const testState = {
     claudeModel: 'claude-sonnet-5-5',
     databaseUrl: '',
     dailyGenerationLimit: 30,
+    tavilyApiKey: 'test-tavily-key',
   },
 }

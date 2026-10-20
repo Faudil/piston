@@ -14,6 +14,7 @@ import { sampleResume } from '@piston/db/fixtures'
 import type { GenerationEvent } from '@piston/shared'
 import authMiddleware from '../../server/middleware/auth'
 import rateLimitMiddleware from '../../server/middleware/rate-limit'
+import { resetWebCalls } from '../../server/utils/web-limit'
 import { testState } from './state'
 
 /**
@@ -25,6 +26,8 @@ export async function resetTestState() {
   else testState.db = await createTestDb()
   testState.user = null
   testState.config.dailyGenerationLimit = 30
+  testState.config.tavilyApiKey = 'test-tavily-key'
+  resetWebCalls()
   testState.claude = createClaudeMock({ text: '{}' }).client
 }
 
@@ -150,8 +153,23 @@ export function createClaudeMock(answer: {
       },
     }
   })
-  const client = { beta: { messages: { stream } } } as unknown as typeof testState.claude
-  return { client, calls, stream }
+  // Non-streaming structured call: `messages.parse()` returns the parsed output directly.
+  const parseCalls: Array<Record<string, unknown>> = []
+  const parse = vi.fn(async (params: Record<string, unknown>) => {
+    parseCalls.push(params)
+    if (answer.error) throw answer.error
+    return {
+      model: params.model,
+      stop_reason: answer.stopReason ?? 'end_turn',
+      content: [{ type: 'text', text: answer.text }],
+      parsed_output: answer.parsed ?? null,
+    }
+  })
+  const client = {
+    beta: { messages: { stream } },
+    messages: { parse },
+  } as unknown as typeof testState.claude
+  return { client, calls, stream, parseCalls, parse }
 }
 
 /** Installs a Claude mock for the next calls and returns its recorder. */

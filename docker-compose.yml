@@ -29,6 +29,7 @@ services:
       NUXT_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       NUXT_CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5-5}
       NUXT_DAILY_GENERATION_LIMIT: ${DAILY_GENERATION_LIMIT:-30}
+      NUXT_TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

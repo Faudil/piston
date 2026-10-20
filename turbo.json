@@ -14,6 +14,7 @@
         "CLAUDE_MODEL",
         "DATABASE_URL",
         "DAILY_GENERATION_LIMIT",
+        "TAVILY_*",
         "NUXT_*"
       ]
     },

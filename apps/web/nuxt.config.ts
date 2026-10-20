@@ -19,7 +19,6 @@ export default defineNuxtConfig({
   app: {
     head: {
       titleTemplate: '%s — Piston',
-      meta: [{ name: 'theme-color', content: '#0f172a' }],
     },
   },
 
@@ -36,6 +35,8 @@ export default defineNuxtConfig({
     claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5',
     databaseUrl: process.env.DATABASE_URL ?? '',
     dailyGenerationLimit: Number(process.env.DAILY_GENERATION_LIMIT || 30),
+    // Optional: enables job search and offer import from a link.
+    tavilyApiKey: process.env.TAVILY_API_KEY ?? '',
   },
 
   nitro: {

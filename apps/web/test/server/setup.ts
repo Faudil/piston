@@ -12,6 +12,7 @@
  */
 import * as h3 from 'h3'
 import { vi } from 'vitest'
+import * as account from '../../server/utils/account'
 import * as applications from '../../server/utils/applications'
 import * as auth from '../../server/utils/auth'
 import * as claude from '../../server/utils/claude'
@@ -19,6 +20,9 @@ import * as coverLetter from '../../server/utils/cover-letter'
 import * as generation from '../../server/utils/generation'
 import * as offers from '../../server/utils/offers'
 import * as pdf from '../../server/utils/pdf'
+import * as importOffer from '../../server/utils/import-offer'
+import * as tavily from '../../server/utils/tavily'
+import * as webLimit from '../../server/utils/web-limit'
 import * as resumes from '../../server/utils/resumes'
 import * as serialize from '../../server/utils/serialize'
 import * as validation from '../../server/utils/validation'
@@ -28,6 +32,7 @@ for (const [name, value] of Object.entries(h3)) vi.stubGlobal(name, value)
 
 for (const util of [
   validation,
+  account,
   applications,
   auth,
   claude,
@@ -37,6 +42,9 @@ for (const util of [
   pdf,
   resumes,
   serialize,
+  importOffer,
+  tavily,
+  webLimit,
 ]) {
   for (const [name, value] of Object.entries(util)) vi.stubGlobal(name, value)
 }
