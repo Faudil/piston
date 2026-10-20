@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** The four Claude-powered features. Also the value of `generations.kind`. */
 export const generationKinds = [

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /**
  * Schemas of the structured JSON that Claude returns for each feature.

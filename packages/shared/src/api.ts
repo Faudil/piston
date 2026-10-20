@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { ApplicationOutcome, ApplicationStatus, CoverLetterTone, GenerationKind } from './enums'
 import { LIMITS } from './limits'
 

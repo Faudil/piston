@@ -1,6 +1,10 @@
 <template>
-  <main class="p-6">
-    <h1 class="text-2xl font-semibold">Piston</h1>
-    <p class="text-muted">Votre copilote de recherche d'emploi.</p>
-  </main>
+  <UDashboardPanel>
+    <template #header>
+      <UDashboardNavbar title="Accueil" />
+    </template>
+    <template #body>
+      <p class="text-muted">Tableau de bord à venir.</p>
+    </template>
+  </UDashboardPanel>
 </template>

@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
     "./migrate": "./src/migrate.ts",
-    "./fixtures": "./src/fixtures/sample-resume.ts"
+    "./fixtures": "./src/fixtures/sample-resume.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate",
@@ -26,6 +27,7 @@
     "postgres": "^3.4.9"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@types/bun": "latest",
     "drizzle-kit": "^0.31.11",
     "vitest": "^5.0.5"

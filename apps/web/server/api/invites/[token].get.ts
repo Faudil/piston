@@ -1,0 +1,11 @@
+import * as z from 'zod'
+
+/** Public: tells the sign-up page whether an invitation link can still be used. */
+export default defineEventHandler(async (event) => {
+  const { token } = await getValidatedRouterParams(
+    event,
+    z.object({ token: z.string().min(1).max(100) }).parse,
+  )
+  const invite = await findValidInvite(token)
+  return { valid: Boolean(invite), expiresAt: invite?.expiresAt.toISOString() ?? null }
+})
