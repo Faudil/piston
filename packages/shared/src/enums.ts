@@ -43,3 +43,43 @@ export const coverLetterToneLabels: Record<CoverLetterTone, string> = {
   enthousiaste: 'Enthousiaste',
   startup: 'Startup',
 }
+
+/**
+ * Structures a cover letter can follow. Each one is a set of instructions in
+ * the system prompt (see @piston/prompts), not a stored text template.
+ */
+export const coverLetterTemplates = [
+  'classique',
+  'vous_moi_nous',
+  'percutante',
+  'reconversion',
+  'email',
+] as const
+export const CoverLetterTemplate = z.enum(coverLetterTemplates)
+export type CoverLetterTemplate = z.infer<typeof CoverLetterTemplate>
+
+export const coverLetterTemplateLabels: Record<CoverLetterTemplate, string> = {
+  classique: 'Classique',
+  vous_moi_nous: 'Vous, moi, nous',
+  percutante: 'Percutante',
+  reconversion: 'Reconversion',
+  email: 'E-mail',
+}
+
+/** One-line explanation shown under each label in the template picker. */
+export const coverLetterTemplateDescriptions: Record<CoverLetterTemplate, string> = {
+  classique: 'Structure classique en 4 paragraphes, de 250 à 350 mots.',
+  vous_moi_nous: "L'entreprise, ce que j'apporte, puis ce qu'on fera ensemble.",
+  percutante: 'Courte (180 à 250 mots), avec une accroche chiffrée.',
+  reconversion: 'Met en avant tes compétences transférables et explique ton changement de cap.',
+  email: "Corps d'e-mail court prêt à coller, avec une ligne d'objet.",
+}
+
+/** Word-count range of each template. Used by the prompt and by the editor's counter. */
+export const coverLetterWordTargets: Record<CoverLetterTemplate, { min: number; max: number }> = {
+  classique: { min: 250, max: 350 },
+  vous_moi_nous: { min: 250, max: 350 },
+  percutante: { min: 180, max: 250 },
+  reconversion: { min: 250, max: 350 },
+  email: { min: 100, max: 180 },
+}

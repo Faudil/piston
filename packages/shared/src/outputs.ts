@@ -120,3 +120,20 @@ export const CoverLetterOutput = z.object({
   paragraphs: z.array(z.string()),
 })
 export type CoverLetterOutput = z.infer<typeof CoverLetterOutput>
+
+/**
+ * Used when importing an offer from a URL: Claude turns the raw text of a web
+ * page (navigation, cookie banners, footers...) into the job ad alone.
+ * Not stored as a generation.
+ */
+export const ImportedOfferOutput = z.object({
+  isJobOffer: z.boolean().describe('False if the page is not a job offer'),
+  title: z.string().describe('Job title, as written in the ad'),
+  company: z.string().describe('Hiring company, or empty string if unknown'),
+  text: z
+    .string()
+    .describe(
+      'The full job ad text, verbatim, without navigation, cookie notices, footers or other offers',
+    ),
+})
+export type ImportedOfferOutput = z.infer<typeof ImportedOfferOutput>

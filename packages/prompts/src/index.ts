@@ -1,5 +1,6 @@
-export { wrapOffer, wrapResume } from './common'
+export { wrapOffer, wrapPage, wrapResume } from './common'
 export * from './cover_letter'
+export * from './import_offer'
 export * from './offer_analysis'
 export * from './resume_review'
 export * from './search_leads'

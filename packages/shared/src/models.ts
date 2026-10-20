@@ -1,4 +1,9 @@
-import type { ApplicationOutcome, ApplicationStatus, GenerationKind } from './enums'
+import type {
+  ApplicationOutcome,
+  ApplicationStatus,
+  CoverLetterTemplate,
+  GenerationKind,
+} from './enums'
 import type {
   CoverLetterOutput,
   OfferAnalysisOutput,
@@ -22,6 +27,8 @@ export interface Resume {
   title: string
   rawText: string
   sourceFilename: string | null
+  /** True when the original PDF was kept and can be downloaded. */
+  hasPdf: boolean
   isCurrent: boolean
   createdAt: string
   updatedAt: string
@@ -54,6 +61,12 @@ export interface GenerationInputRefs {
   /** Set when the generation rewrote a single paragraph of another letter. */
   parentGenerationId?: string
   paragraphIndex?: number
+  /** Cover letters: the structure used (CoverLetterTemplate). Absent on older letters = classique. */
+  template?: CoverLetterTemplate
+  /** Cover letters written from an application (candidature). */
+  applicationId?: string
+  /** Set when the generation revised another letter following the user's corrections. */
+  revisionInstructions?: string
 }
 
 export interface Generation<K extends GenerationKind = GenerationKind> {
@@ -91,4 +104,32 @@ export interface Paginated<T> {
   page: number
   pageSize: number
   total: number
+}
+
+/** Optional features, enabled when their API key is configured on the server. */
+export interface Features {
+  /** Job search and offer import from a URL, powered by Tavily. */
+  webSearch: boolean
+}
+
+export interface JobSearchResult {
+  title: string
+  url: string
+  /** Short excerpt of the page, as returned by the search engine. */
+  snippet: string
+  /** Hostname of the job board, e.g. "www.welcometothejungle.com". */
+  source: string
+  publishedDate: string | null
+}
+
+export interface JobSearchResponse {
+  results: JobSearchResult[]
+}
+
+/** A job ad fetched from a URL, cleaned up, ready to prefill the new-offer form. Not saved yet. */
+export interface ImportedOffer {
+  title: string
+  company: string
+  rawText: string
+  url: string
 }

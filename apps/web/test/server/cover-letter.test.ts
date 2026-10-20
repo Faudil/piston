@@ -145,6 +145,38 @@ describe('POST /api/generate/cover-letter', () => {
       expect(JSON.stringify(claude.calls[0]!.system)).toContain('[PARAGRAPH TO REWRITE]')
     })
 
+    it("keeps the parent letter's template when the request does not repeat it", async () => {
+      const { user } = await loginAsNewUser()
+      const offer = await insertOffer(user.id)
+      const [parent] = await testState.db
+        .insert(generations)
+        .values({
+          userId: user.id,
+          kind: 'cover_letter',
+          inputRefs: { offerId: offer.id, template: 'percutante' },
+          output: { paragraphs: ['A', 'B'] },
+          model: 'test',
+        })
+        .returning()
+      const claude = mockClaude({ text: 'Nouveau B.' })
+
+      await readSse(
+        await call({
+          offerId: offer.id,
+          tone: 'sobre',
+          regenerateParagraph: { generationId: parent!.id, index: 1, paragraphs: ['A', 'B'] },
+        }),
+      )
+
+      expect(JSON.stringify(claude.calls[0]!.system)).toContain('Short and punchy letter')
+      const [row] = await testState.db
+        .select()
+        .from(generations)
+        .orderBy(desc(generations.createdAt))
+        .limit(1)
+      expect(row!.inputRefs).toMatchObject({ template: 'percutante' })
+    })
+
     it('answers 400 for an index outside the letter', async () => {
       const { user } = await loginAsNewUser()
       const offer = await insertOffer(user.id)
