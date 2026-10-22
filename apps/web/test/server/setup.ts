@@ -20,6 +20,7 @@ import * as coverLetter from '../../server/utils/cover-letter'
 import * as generation from '../../server/utils/generation'
 import * as offers from '../../server/utils/offers'
 import * as pdf from '../../server/utils/pdf'
+import * as profiles from '../../server/utils/profiles'
 import * as importOffer from '../../server/utils/import-offer'
 import * as tavily from '../../server/utils/tavily'
 import * as webLimit from '../../server/utils/web-limit'
@@ -40,6 +41,7 @@ for (const util of [
   generation,
   offers,
   pdf,
+  profiles,
   resumes,
   serialize,
   importOffer,

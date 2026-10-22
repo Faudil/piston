@@ -3,10 +3,14 @@ import {
   ChangePasswordBody,
   CoverLetterBody,
   CreateOfferBody,
+  CreateProfileBody,
   LIMITS,
   LoginBody,
+  OfferAnalysisOutput,
+  ResumeReviewOutput,
   UpdateApplicationBody,
   UpdateOfferBody,
+  UpdateProfileBody,
 } from '../src'
 
 describe('request schemas', () => {
@@ -29,6 +33,20 @@ describe('request schemas', () => {
   it('only keeps the given fields when editing an offer', () => {
     expect(UpdateOfferBody.parse({ title: 'Dev' })).toEqual({ title: 'Dev' })
     expect(UpdateOfferBody.safeParse({}).success).toBe(false)
+  })
+
+  it('lets an offer edit clear its resume profile', () => {
+    expect(UpdateOfferBody.parse({ profileId: null })).toEqual({ profileId: null })
+    expect(UpdateOfferBody.safeParse({ profileId: 'abc' }).success).toBe(false)
+  })
+
+  it('bounds resume profile names and refuses an empty profile update', () => {
+    expect(CreateProfileBody.parse({ name: '  Marketing  ' }).name).toBe('Marketing')
+    expect(CreateProfileBody.safeParse({ name: ' ' }).success).toBe(false)
+    expect(CreateProfileBody.safeParse({ name: 'a'.repeat(61) }).success).toBe(false)
+    expect(UpdateProfileBody.safeParse({}).success).toBe(false)
+    expect(UpdateProfileBody.safeParse({ isDefault: false }).success).toBe(false)
+    expect(UpdateProfileBody.safeParse({ isDefault: true }).success).toBe(true)
   })
 
   it('requires a new password of at least 10 characters', () => {
@@ -69,5 +87,56 @@ describe('request schemas', () => {
     expect(UpdateApplicationBody.safeParse({}).success).toBe(false)
     expect(UpdateApplicationBody.safeParse({ status: 'sent' }).success).toBe(true)
     expect(UpdateApplicationBody.safeParse({ status: 'lost' }).success).toBe(false)
+  })
+})
+
+describe('ATS outputs', () => {
+  const review = {
+    scores: { lisibilite: 7, impact: 5, motsCles: 6, coherence: 8 },
+    ats: {
+      score: 72,
+      checks: [
+        { criterion: 'Coordonnées', status: 'ok', detail: 'Présentes dans le corps.', fix: '' },
+        {
+          criterion: 'Colonnes',
+          status: 'problem',
+          detail: 'Lignes mélangées.',
+          fix: 'Une colonne.',
+        },
+      ],
+      summary: 'Correct.',
+    },
+    strengths: [],
+    improvements: [],
+    rewrite: [],
+  }
+
+  it('parses a resume review with an ATS block', () => {
+    expect(ResumeReviewOutput.parse(review).ats.checks).toHaveLength(2)
+  })
+
+  it('rejects an unknown ATS status', () => {
+    const bad = {
+      ...review,
+      ats: { ...review.ats, checks: [{ ...review.ats.checks[0], status: 'maybe' }] },
+    }
+    expect(ResumeReviewOutput.safeParse(bad).success).toBe(false)
+  })
+
+  it('parses an offer analysis with an ATS keyword match', () => {
+    const analysis = OfferAnalysisOutput.parse({
+      matchScore: 70,
+      summary: 'Bon.',
+      atsMatch: {
+        score: 55,
+        foundKeywords: ['Vue.js'],
+        missingKeywords: [{ keyword: 'Go', suggestion: 'À acquérir.' }],
+      },
+      matchingSkills: [],
+      missingSkills: [],
+      interviewQuestions: [],
+      jargon: [],
+    })
+    expect(analysis.atsMatch.missingKeywords[0]?.keyword).toBe('Go')
   })
 })

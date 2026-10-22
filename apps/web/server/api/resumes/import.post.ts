@@ -1,10 +1,11 @@
+import * as z from 'zod'
 import { LIMITS } from '@piston/shared'
 
 const MAX_TITLE_LENGTH = 120
 
 /**
  * Creates a resume version from an uploaded PDF (multipart field `file`, plus
- * an optional `title`). The extracted text is stored for the AI features, and the original PDF
+ * an optional `title` and an optional `profileId`, the default profile otherwise). The extracted text is stored for the AI features, and the original PDF
  * (max 5 MB, checked above) is kept so it can be downloaded again.
  */
 export default defineEventHandler(async (event) => {
@@ -21,6 +22,12 @@ export default defineEventHandler(async (event) => {
   if (!looksLikePdf(file.data)) {
     throw createError({ statusCode: 400, message: "Ce fichier n'est pas un PDF." })
   }
+
+  const profilePart = parts
+    .find((part) => part.name === 'profileId')
+    ?.data.toString('utf8')
+    .trim()
+  const profileId = profilePart ? zodValidator(z.uuid())(profilePart) : undefined
 
   const text = await extractPdfText(file.data)
   if (!text) {
@@ -47,6 +54,7 @@ export default defineEventHandler(async (event) => {
   const row = await createCurrentResume(user.id, {
     title,
     rawText: text,
+    profileId,
     sourceFilename,
     sourcePdf: file.data,
   })

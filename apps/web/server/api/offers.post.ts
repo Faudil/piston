@@ -5,6 +5,7 @@ import { CreateOfferBody } from '@piston/shared'
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const body = await readValidatedBody(event, zodValidator(CreateOfferBody))
+  if (body.profileId) await getUserProfile(user.id, body.profileId)
   const [row] = await useDb()
     .insert(jobOffers)
     .values({
@@ -14,6 +15,7 @@ export default defineEventHandler(async (event) => {
       rawText: body.rawText,
       // The form sends an empty string when the link field is left blank.
       url: body.url || null,
+      profileId: body.profileId ?? null,
     })
     .returning()
   setResponseStatus(event, 201)

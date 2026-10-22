@@ -8,7 +8,7 @@ import {
   type H3Error,
 } from 'h3'
 import { vi } from 'vitest'
-import { resumes, users } from '@piston/db'
+import { resumeProfiles, resumes, users } from '@piston/db'
 import { createTestDb, truncateAll } from '@piston/db/testing'
 import { sampleResume } from '@piston/db/fixtures'
 import type { GenerationEvent } from '@piston/shared'
@@ -31,18 +31,28 @@ export async function resetTestState() {
   testState.claude = createClaudeMock({ text: '{}' }).client
 }
 
-/** Creates a user with a current resume and logs them in. */
+/** Creates a user with a default « Principal » profile holding a current resume, and logs them in. */
 export async function loginAsNewUser(email = 'user@example.com') {
   const [user] = await testState.db
     .insert(users)
     .values({ email, displayName: 'Camille', passwordHash: 'hashed:password123' })
     .returning()
+  const [profile] = await testState.db
+    .insert(resumeProfiles)
+    .values({ userId: user!.id, name: 'Principal', isDefault: true })
+    .returning()
   const [resume] = await testState.db
     .insert(resumes)
-    .values({ userId: user!.id, title: 'CV', rawText: sampleResume, isCurrent: true })
+    .values({
+      userId: user!.id,
+      profileId: profile!.id,
+      title: 'CV',
+      rawText: sampleResume,
+      isCurrent: true,
+    })
     .returning()
   testState.user = { id: user!.id, email: user!.email, displayName: user!.displayName }
-  return { user: user!, resume: resume! }
+  return { user: user!, profile: profile!, resume: resume! }
 }
 
 /**

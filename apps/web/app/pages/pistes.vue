@@ -4,13 +4,27 @@ import type { Generation, Paginated, SearchLeadsOutput } from '@piston/shared'
 useSeoMeta({ title: 'Pistes' })
 
 const { webSearch } = useFeatures()
-const { start, partial, generation, pending, error } = useGeneration('search_leads')
+const { start, reset, partial, generation, pending, error } = useGeneration('search_leads')
 const jobSearch = useTemplateRef('jobSearch')
 
-// The latest saved leads are shown until a new generation starts.
-const { data: latest } = await useFetch<Paginated<Generation<'search_leads'>>>(
-  '/api/generations?kind=search_leads&pageSize=1',
-)
+// Leads are suggested from one resume profile (the default one unless another is picked).
+const { profiles, defaultProfile } = await useResumeProfiles()
+const chosenProfileId = ref<string | null>(null)
+const profileId = computed(() => chosenProfileId.value ?? defaultProfile.value?.id)
+
+// The latest saved leads of that profile are shown until a new generation starts.
+const { data: latest } = await useFetch<Paginated<Generation<'search_leads'>>>('/api/generations', {
+  query: computed(() => ({
+    kind: 'search_leads',
+    pageSize: 1,
+    ...(profileId.value && { profileId: profileId.value }),
+  })),
+})
+
+// Another profile: forget the leads being shown, the saved ones of that profile load.
+watch(profileId, () => reset())
+
+const findLeads = () => start(profileId.value ? { profileId: profileId.value } : {})
 const saved = computed(() => latest.value?.items[0]?.output)
 
 // While streaming, show what has been parsed so far; afterwards the saved result.
@@ -35,7 +49,7 @@ const hasResult = computed(() => Boolean(shown.value) || Boolean(saved.value))
         color="neutral"
         variant="outline"
         :loading="pending"
-        @click="start({})"
+        @click="findLeads"
       />
     </template>
 
@@ -44,6 +58,16 @@ const hasResult = computed(() => Boolean(shown.value) || Boolean(saved.value))
 
       <section aria-labelledby="leads" class="space-y-4">
         <h2 id="leads" class="sr-only">Pistes de recherche</h2>
+
+        <div v-if="profiles.length >= 2" class="max-w-sm">
+          <ResumeProfileSelect
+            :model-value="profileId ?? null"
+            :profiles="profiles"
+            :disabled="pending"
+            description="Les pistes partent de la version actuelle de ce profil."
+            @update:model-value="chosenProfileId = $event"
+          />
+        </div>
 
         <UAlert
           v-if="error"
@@ -73,7 +97,7 @@ const hasResult = computed(() => Boolean(shown.value) || Boolean(saved.value))
             title="Pas encore de pistes"
             description="Claude lit ton CV et te propose des directions auxquelles tu n'as peut-être pas pensé."
             :actions="[
-              { label: 'Trouver des pistes', icon: 'i-lucide-sparkles', onClick: () => start({}) },
+              { label: 'Trouver des pistes', icon: 'i-lucide-sparkles', onClick: findLeads },
             ]"
           />
         </div>

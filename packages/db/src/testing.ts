@@ -22,6 +22,6 @@ export async function createTestDb(): Promise<Database> {
 /** Empties every table, much faster than creating a new database for each test. */
 export async function truncateAll(db: Database) {
   await db.execute(
-    sql`truncate table applications, generations, job_offers, resumes, invites, users restart identity cascade`,
+    sql`truncate table applications, generations, job_offers, resumes, resume_profiles, invites, users restart identity cascade`,
   )
 }

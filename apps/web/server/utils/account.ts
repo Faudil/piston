@@ -1,4 +1,13 @@
-import { applications, eq, generations, jobOffers, resumes, users, type UserRow } from '@piston/db'
+import {
+  applications,
+  eq,
+  generations,
+  jobOffers,
+  resumeProfiles,
+  resumes,
+  users,
+  type UserRow,
+} from '@piston/db'
 
 /** Loads the full user row (with password hash) for the session's user, or throws a 401. */
 export async function getAccountUser(userId: string): Promise<UserRow> {
@@ -16,7 +25,8 @@ export async function getAccountUser(userId: string): Promise<UserRow> {
 export async function buildAccountExport(userId: string) {
   const db = useDb()
   const user = await getAccountUser(userId)
-  const [resumeRows, offerRows, generationRows, applicationRows] = await Promise.all([
+  const [profileRows, resumeRows, offerRows, generationRows, applicationRows] = await Promise.all([
+    db.select().from(resumeProfiles).where(eq(resumeProfiles.userId, userId)),
     db.select(resumeColumns).from(resumes).where(eq(resumes.userId, userId)),
     db.select().from(jobOffers).where(eq(jobOffers.userId, userId)),
     db.select().from(generations).where(eq(generations.userId, userId)),
@@ -31,6 +41,7 @@ export async function buildAccountExport(userId: string) {
       displayName: user.displayName,
       createdAt: user.createdAt.toISOString(),
     },
+    resumeProfiles: profileRows.map(({ userId: _userId, ...row }) => row),
     resumes: resumeRows.map(({ userId: _userId, ...row }) => ({
       ...row,
       createdAt: row.createdAt.toISOString(),

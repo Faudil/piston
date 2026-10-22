@@ -1,11 +1,14 @@
 import { buildUserMessage, searchLeadsPrompt } from '@piston/prompts'
 import { SearchLeadsBody, SearchLeadsOutput } from '@piston/shared'
 
-/** Suggests adjacent jobs, search keywords and target company types from the current resume. */
+/** Suggests adjacent jobs, search keywords and target company types from the current resume of a profile. */
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
-  await readValidatedBody(event, zodValidator(SearchLeadsBody))
-  const resume = await getResumeForGeneration(user.id)
+  // The body is optional: no body means "use the default profile".
+  const { profileId } = await readValidatedBody(event, (raw) =>
+    zodValidator(SearchLeadsBody)(raw ?? {}),
+  )
+  const resume = await getResumeForGeneration(user.id, { profileId })
 
   const { resume: resumeBlock, request } = buildUserMessage({
     resume: resume.rawText,
@@ -18,7 +21,7 @@ export default defineEventHandler(async (event) => {
     system: searchLeadsPrompt({ displayName: user.displayName }),
     resume: resumeBlock,
     request,
-    inputRefs: { resumeId: resume.id },
+    inputRefs: { resumeId: resume.id, profileId: resume.profileId },
     output: { schema: SearchLeadsOutput },
   })
 })

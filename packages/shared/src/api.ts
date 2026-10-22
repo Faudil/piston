@@ -32,11 +32,35 @@ export const RegisterBody = z.object({
 })
 export type RegisterBody = z.infer<typeof RegisterBody>
 
+// --- Resume profiles --------------------------------------------------------
+
+const profileName = z
+  .string()
+  .trim()
+  .min(1, 'Nom du profil requis.')
+  .max(60, 'Le nom du profil ne doit pas dépasser 60 caractères.')
+
+export const CreateProfileBody = z.object({
+  name: profileName,
+})
+export type CreateProfileBody = z.infer<typeof CreateProfileBody>
+
+/** Renaming a profile and/or making it the default one (a default cannot be unset, only moved). */
+export const UpdateProfileBody = z
+  .object({
+    name: profileName.optional(),
+    isDefault: z.literal(true).optional(),
+  })
+  .refine((body) => body.name !== undefined || body.isDefault !== undefined, 'Aucune modification.')
+export type UpdateProfileBody = z.infer<typeof UpdateProfileBody>
+
 // --- Resumes ----------------------------------------------------------------
 
 export const CreateResumeBody = z.object({
   title: z.string().trim().min(1).max(120),
   rawText: longText,
+  /** The profile the version is added to. Default: the default profile, created if needed. */
+  profileId: z.uuid().optional(),
 })
 export type CreateResumeBody = z.infer<typeof CreateResumeBody>
 
@@ -46,6 +70,11 @@ export const UpdateResumeBody = z.object({
 })
 export type UpdateResumeBody = z.infer<typeof UpdateResumeBody>
 
+export const ResumesQuery = z.object({
+  profileId: z.uuid().optional(),
+})
+export type ResumesQuery = z.infer<typeof ResumesQuery>
+
 // --- Offers -----------------------------------------------------------------
 
 export const CreateOfferBody = z.object({
@@ -53,6 +82,8 @@ export const CreateOfferBody = z.object({
   company: z.string().trim().max(200).default(''),
   rawText: longText,
   url: z.url('URL invalide.').max(2000).optional().or(z.literal('')),
+  /** The resume profile the offer is analyzed against. Null or absent: the default profile. */
+  profileId: z.uuid().nullable().optional(),
 })
 export type CreateOfferBody = z.infer<typeof CreateOfferBody>
 
@@ -64,6 +95,7 @@ export const UpdateOfferBody = z
     company: z.string().trim().max(200),
     rawText: CreateOfferBody.shape.rawText,
     url: CreateOfferBody.shape.url,
+    profileId: z.uuid().nullable(),
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Aucune modification.')
@@ -72,7 +104,9 @@ export type UpdateOfferBody = z.infer<typeof UpdateOfferBody>
 // --- Generations ------------------------------------------------------------
 
 export const ResumeReviewBody = z.object({
+  /** A specific version. Otherwise the current version of `profileId`, or of the default profile. */
   resumeId: z.uuid().optional(),
+  profileId: z.uuid().optional(),
 })
 export type ResumeReviewBody = z.infer<typeof ResumeReviewBody>
 
@@ -126,10 +160,18 @@ export const CoverLetterBody = z
   })
 export type CoverLetterBody = z.infer<typeof CoverLetterBody>
 
-export const SearchLeadsBody = z.object({}).strict()
+export const SearchLeadsBody = z
+  .object({
+    /** The profile whose current resume is used. Default: the default profile. */
+    profileId: z.uuid().optional(),
+  })
+  .strict()
+export type SearchLeadsBody = z.infer<typeof SearchLeadsBody>
 
 export const GenerationsQuery = z.object({
   kind: GenerationKind.optional(),
+  /** Only generations made from this resume profile (`inputRefs.profileId`). */
+  profileId: z.uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
 })

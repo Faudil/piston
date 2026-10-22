@@ -36,7 +36,8 @@ export default defineEventHandler(async (event) => {
   const application = applicationId
     ? await getApplicationForLetter(user.id, applicationId, offer.id)
     : null
-  const resume = await getResumeForGeneration(user.id)
+  // The offer chooses the resume profile; null means the default profile.
+  const resume = await getResumeForGeneration(user.id, { profileId: offer.profileId ?? undefined })
   if (revision) await getUserCoverLetter(user.id, revision.generationId)
 
   const ctx = { displayName: user.displayName, tone, template }
@@ -71,6 +72,7 @@ export default defineEventHandler(async (event) => {
     request,
     inputRefs: {
       resumeId: resume.id,
+      profileId: resume.profileId,
       offerId: offer.id,
       tone,
       template,

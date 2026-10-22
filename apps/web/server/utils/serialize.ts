@@ -8,6 +8,7 @@ import type { Generation, GenerationKind, JobOffer, Resume } from '@piston/share
 
 export function toResume(row: {
   id: string
+  profileId: string
   title: string
   rawText: string
   sourceFilename: string | null
@@ -18,6 +19,7 @@ export function toResume(row: {
 }): Resume {
   return {
     id: row.id,
+    profileId: row.profileId,
     title: row.title,
     rawText: row.rawText,
     sourceFilename: row.sourceFilename,
@@ -35,6 +37,7 @@ export function toJobOffer(row: JobOfferRow): JobOffer {
     company: row.company,
     rawText: row.rawText,
     url: row.url,
+    profileId: row.profileId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

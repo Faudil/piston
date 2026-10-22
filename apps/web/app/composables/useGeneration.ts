@@ -88,7 +88,15 @@ export function useGeneration<K extends GenerationKind>(kind: K) {
     controller?.abort()
   }
 
+  /** Stops any stream and forgets its result, e.g. when the page switches to another resume. */
+  function reset() {
+    abort()
+    text.value = ''
+    generation.value = null
+    error.value = null
+  }
+
   onScopeDispose(abort)
 
-  return { start, abort, text, partial, generation, pending, error }
+  return { start, abort, reset, text, partial, generation, pending, error }
 }

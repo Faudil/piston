@@ -59,6 +59,30 @@ export const invites = pgTable('invites', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 })
 
+/**
+ * A resume per specialty (« Communication », « Marketing digital »...). Each
+ * profile has its own versions and its own current version.
+ */
+export const resumeProfiles = pgTable(
+  'resume_profiles',
+  {
+    ...base,
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    // Used when no profile is chosen (offers without a profile, generations without one).
+    isDefault: boolean('is_default').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('resume_profiles_user_name').on(t.userId, t.name),
+    // The database itself guarantees at most one default profile per user.
+    uniqueIndex('resume_profiles_one_default_per_user')
+      .on(t.userId)
+      .where(sql`${t.isDefault}`),
+  ],
+)
+
 export const resumes = pgTable(
   'resumes',
   {
@@ -66,6 +90,9 @@ export const resumes = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => resumeProfiles.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     rawText: text('raw_text').notNull(),
     sourceFilename: text('source_filename'),
@@ -75,9 +102,9 @@ export const resumes = pgTable(
   },
   (t) => [
     index('resumes_user_idx').on(t.userId),
-    // The database itself guarantees at most one current resume per user.
-    uniqueIndex('resumes_one_current_per_user')
-      .on(t.userId)
+    // The database itself guarantees at most one current resume per profile.
+    uniqueIndex('resumes_one_current_per_profile')
+      .on(t.profileId)
       .where(sql`${t.isCurrent}`),
   ],
 )
@@ -93,6 +120,8 @@ export const jobOffers = pgTable(
     company: text('company').notNull().default(''),
     rawText: text('raw_text').notNull(),
     url: text('url'),
+    // The resume profile the offer is analyzed and written against; null = the default profile.
+    profileId: uuid('profile_id').references(() => resumeProfiles.id, { onDelete: 'set null' }),
   },
   (t) => [index('job_offers_user_idx').on(t.userId)],
 )
@@ -139,6 +168,7 @@ export const applications = pgTable(
 
 export type UserRow = typeof users.$inferSelect
 export type InviteRow = typeof invites.$inferSelect
+export type ResumeProfileRow = typeof resumeProfiles.$inferSelect
 export type ResumeRow = typeof resumes.$inferSelect
 export type JobOfferRow = typeof jobOffers.$inferSelect
 export type GenerationRow = typeof generations.$inferSelect

@@ -13,7 +13,15 @@ const emit = defineEmits<{ cancel: [] }>()
 const toast = useToast()
 const { webSearch } = useFeatures()
 
-const state = reactive({ title: '', company: '', url: '', rawText: '' })
+const state = reactive({
+  title: '',
+  company: '',
+  url: '',
+  rawText: '',
+  // null = the default resume profile, whichever it is when the offer is analyzed.
+  profileId: null as string | null,
+})
+const { profiles } = await useResumeProfiles()
 const submitting = ref(false)
 const tooLong = computed(() => state.rawText.length > LIMITS.maxTextLength)
 const numberFormat = new Intl.NumberFormat('fr-FR')
@@ -139,6 +147,13 @@ async function onSubmit(event: FormSubmitEvent<CreateOfferBody>) {
           placeholder="https://"
         />
       </UFormField>
+      <ResumeProfileSelect
+        v-if="profiles.length >= 2"
+        v-model="state.profileId"
+        :profiles="profiles"
+        allow-default
+        description="Le profil de CV comparé à cette offre et utilisé pour la lettre."
+      />
       <UFormField label="Texte de l'offre" name="rawText" required>
         <UTextarea v-model="state.rawText" :rows="10" autoresize :maxrows="20" class="w-full" />
         <template #help>

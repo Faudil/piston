@@ -7,6 +7,7 @@ import {
   type CoverLetterOutput,
   type CoverLetterTemplate,
   type Generation,
+  type JobOffer,
   type Resume,
 } from '@piston/shared'
 
@@ -29,6 +30,16 @@ const { data: letters, refresh: refreshLetters } = await useFetch<Generation<'co
 )
 // Only used to point to the CV page when generation fails for lack of a resume.
 const { data: resumes } = await useFetch<Resume[]>('/api/resumes', { default: () => [] })
+
+// The letter uses the offer's resume profile (the default one if the offer has none).
+const { profiles, defaultProfile } = await useResumeProfiles()
+const { data: offer } = await useFetch<JobOffer>(
+  () => `/api/offers/${application.value?.jobOfferId}`,
+  { immediate: Boolean(application.value) },
+)
+const usedProfile = computed(
+  () => profiles.value.find((p) => p.id === offer.value?.profileId) ?? defaultProfile.value,
+)
 
 useSeoMeta({ title: () => `Lettre — ${application.value?.offer.title ?? 'Candidature'}` })
 
@@ -212,6 +223,25 @@ onBeforeRouteLeave(() => {
           icon="i-lucide-sliders-horizontal"
           description="Les notes de ta candidature (nom du recruteur, recommandation…) sont prises en compte."
         />
+        <p
+          v-if="usedProfile"
+          class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted"
+        >
+          <UIcon name="i-lucide-file-user" class="size-4 text-primary" />
+          <span>
+            CV utilisé : <span class="font-medium text-highlighted">{{ usedProfile.name }}</span>
+            <template v-if="!offer?.profileId && profiles.length > 1">
+              (profil par défaut)</template
+            >
+          </span>
+          <ULink
+            v-if="profiles.length > 1 && application"
+            :to="`/offres/${application.jobOfferId}`"
+            class="text-primary underline"
+          >
+            Changer sur la page de l'offre
+          </ULink>
+        </p>
         <LetterTemplatePicker v-model="template" :disabled="busy" />
         <URadioGroup
           v-model="tone"

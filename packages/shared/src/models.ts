@@ -24,6 +24,7 @@ export interface PublicUser {
 
 export interface Resume {
   id: string
+  profileId: string
   title: string
   rawText: string
   sourceFilename: string | null
@@ -40,8 +41,22 @@ export interface JobOffer {
   company: string
   rawText: string
   url: string | null
+  /** The resume profile used for this offer's analysis and letters; null = the default profile. */
+  profileId: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** A resume per specialty, with its own versions (« Communication », « Marketing digital »...). */
+export interface ResumeProfile {
+  id: string
+  name: string
+  /** Used when nothing else is chosen. Exactly one per user who has profiles. */
+  isDefault: boolean
+  /** The version the AI features use for this profile, if any. */
+  current: Pick<Resume, 'id' | 'title' | 'updatedAt'> | null
+  versionsCount: number
+  createdAt: string
 }
 
 /** Maps each generation kind to the JSON stored in `generations.output`. */
@@ -55,6 +70,8 @@ export interface GenerationOutputs {
 /** References to the inputs a generation was produced from. */
 export interface GenerationInputRefs {
   resumeId?: string
+  /** The resume profile the resume came from (absent on generations made before profiles). */
+  profileId?: string
   offerId?: string
   tone?: string
   highlights?: string[]

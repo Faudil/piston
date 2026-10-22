@@ -1,5 +1,6 @@
 /**
- * Seeds a development database with one demo user and a sample resume.
+ * Seeds a development database with one demo user, a default « Principal »
+ * resume profile and a sample resume.
  * Idempotent: running it twice does not create duplicates.
  *
  *   bun run db:seed
@@ -9,7 +10,7 @@ import { Scrypt } from '@adonisjs/hash/drivers/scrypt'
 import { eq } from 'drizzle-orm'
 import { createDb } from './client'
 import { sampleResume } from './fixtures/sample-resume'
-import { resumes, users } from './schema'
+import { resumeProfiles, resumes, users } from './schema'
 
 const DEMO_EMAIL = 'demo@example.com'
 const DEMO_PASSWORD = 'demo-password'
@@ -33,8 +34,13 @@ if (existing) {
     .values({ email: DEMO_EMAIL, displayName: 'Camille (démo)', passwordHash })
     .returning()
 
+  const [profile] = await db
+    .insert(resumeProfiles)
+    .values({ userId: user!.id, name: 'Principal', isDefault: true })
+    .returning()
   await db.insert(resumes).values({
     userId: user!.id,
+    profileId: profile!.id,
     title: 'CV communication 2026',
     rawText: sampleResume,
     isCurrent: true,

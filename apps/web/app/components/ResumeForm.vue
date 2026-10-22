@@ -2,6 +2,11 @@
 import type { TabsItem } from '@nuxt/ui'
 import { CreateResumeBody, LIMITS, type Resume } from '@piston/shared'
 
+const props = defineProps<{
+  /** The profile the version is added to. Without it, the default profile (created if needed). */
+  profileId?: string
+}>()
+
 const emit = defineEmits<{ created: [resume: Resume] }>()
 
 const toast = useToast()
@@ -19,9 +24,15 @@ const pasting = ref(false)
 async function submitPasted() {
   pasting.value = true
   try {
-    const resume = await $fetch<Resume>('/api/resumes', { method: 'POST', body: pasted })
+    const resume = await $fetch<Resume>('/api/resumes', {
+      method: 'POST',
+      body: { ...pasted, profileId: props.profileId },
+    })
     Object.assign(pasted, { title: '', rawText: '' })
-    toast.add({ title: 'CV enregistré', description: "C'est maintenant ton CV actuel." })
+    toast.add({
+      title: 'CV enregistré',
+      description: "C'est maintenant la version actuelle de ce profil.",
+    })
     emit('created', resume)
   } catch (error) {
     toast.add({ title: apiErrorMessage(error), color: 'error' })
@@ -51,13 +62,17 @@ async function submitPdf() {
   const form = new FormData()
   form.append('file', pdfFile.value)
   if (pdfTitle.value.trim()) form.append('title', pdfTitle.value.trim())
+  if (props.profileId) form.append('profileId', props.profileId)
 
   importing.value = true
   try {
     const resume = await $fetch<Resume>('/api/resumes/import', { method: 'POST', body: form })
     pdfFile.value = null
     pdfTitle.value = ''
-    toast.add({ title: 'CV importé', description: "C'est maintenant ton CV actuel." })
+    toast.add({
+      title: 'CV importé',
+      description: "C'est maintenant la version actuelle de ce profil.",
+    })
     emit('created', resume)
   } catch (error) {
     toast.add({ title: apiErrorMessage(error), color: 'error' })
@@ -116,7 +131,7 @@ async function submitPdf() {
         <UFormField
           label="Fichier PDF"
           name="file"
-          :description="`${maxPdfMegabytes} Mo maximum. Le fichier n'est pas conservé : seul son texte est enregistré.`"
+          :description="`${maxPdfMegabytes} Mo maximum. Le PDF est conservé pour que tu puisses le retélécharger ; Claude en lit le texte.`"
           :error="pdfError"
         >
           <UFileUpload

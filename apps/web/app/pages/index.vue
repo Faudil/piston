@@ -13,13 +13,23 @@ useSeoMeta({ title: 'Accueil' })
 const { user } = useUserSession()
 const { webSearch } = useFeatures()
 
+// The CV card shows the default profile: the one used when nothing else is chosen.
+const { profiles, defaultProfile } = await useResumeProfiles()
+
 // Failed calls fall back to empty data (`default`) so the dashboard never crashes.
 const [{ data: resumes }, { data: reviews }, { data: applications }, { data: offers }] =
   await Promise.all([
-    useFetch<Resume[]>('/api/resumes', { default: () => [] }),
-    useFetch<Paginated<Generation<'resume_review'>>>(
-      '/api/generations?kind=resume_review&pageSize=1',
-    ),
+    useFetch<Resume[]>('/api/resumes', {
+      query: computed(() => ({ profileId: defaultProfile.value?.id })),
+      default: () => [],
+    }),
+    useFetch<Paginated<Generation<'resume_review'>>>('/api/generations', {
+      query: computed(() => ({
+        kind: 'resume_review',
+        pageSize: 1,
+        profileId: defaultProfile.value?.id,
+      })),
+    }),
     useFetch<Application[]>('/api/applications', { default: () => [] }),
     useFetch<JobOffer[]>('/api/offers', { default: () => [] }),
   ])
@@ -27,6 +37,8 @@ const [{ data: resumes }, { data: reviews }, { data: applications }, { data: off
 const firstName = computed(() => user.value?.displayName.trim().split(/\s+/)[0] ?? '')
 const currentResume = computed(() => resumes.value.find((r) => r.isCurrent))
 const lastReview = computed(() => reviews.value?.items[0])
+/** Older reviews have no ATS score: the indicator is hidden for them. */
+const atsScore = computed(() => lastReview.value?.output.ats?.score)
 
 const scoreLabels = {
   lisibilite: 'Lisibilité',
@@ -146,8 +158,19 @@ const formatDate = (iso: string) => dateFormat.format(new Date(iso))
       <div class="grid gap-4 lg:grid-cols-2">
         <UCard :ui="{ body: 'flex h-full flex-col gap-4' }">
           <div class="flex items-center justify-between gap-2">
-            <h2 class="font-semibold text-highlighted">Mon CV</h2>
-            <UButton to="/cv" label="Gérer" color="neutral" variant="link" size="sm" />
+            <h2 class="font-semibold text-highlighted">
+              Mon CV
+              <span v-if="profiles.length > 1 && defaultProfile" class="font-normal text-muted">
+                · {{ defaultProfile.name }}
+              </span>
+            </h2>
+            <UButton
+              :to="defaultProfile ? `/cv?profil=${defaultProfile.id}` : '/cv'"
+              label="Gérer"
+              color="neutral"
+              variant="link"
+              size="sm"
+            />
           </div>
           <template v-if="currentResume">
             <div class="flex items-center gap-4">
@@ -172,13 +195,29 @@ const formatDate = (iso: string) => dateFormat.format(new Date(iso))
                 <p v-if="lastReview" class="text-sm text-muted">
                   Critiqué le {{ formatDate(lastReview.createdAt) }}
                 </p>
+                <p v-if="profiles.length > 1" class="text-sm text-muted">
+                  Profil par défaut parmi
+                  <ULink to="/cv" class="underline">{{ profiles.length }} profils</ULink>
+                </p>
               </div>
             </div>
-            <dl v-if="lastReview" class="grid grid-cols-4 gap-2 border-t border-default pt-4">
+            <dl
+              v-if="lastReview"
+              class="grid gap-2 border-t border-default pt-4"
+              :class="atsScore !== undefined ? 'grid-cols-5' : 'grid-cols-4'"
+            >
               <div v-for="(label, key) in scoreLabels" :key="key" class="text-center">
                 <dt class="truncate text-xs text-muted">{{ label }}</dt>
                 <dd class="font-display text-lg font-semibold text-highlighted">
                   {{ lastReview.output.scores?.[key] ?? '–' }}
+                </dd>
+              </div>
+              <div v-if="atsScore !== undefined" class="text-center">
+                <dt class="truncate text-xs text-muted">
+                  <abbr title="Compatibilité avec les logiciels de tri des candidatures">ATS</abbr>
+                </dt>
+                <dd class="font-display text-lg font-semibold text-highlighted">
+                  {{ atsScore }}<span class="text-xs font-normal text-muted">/100</span>
                 </dd>
               </div>
             </dl>

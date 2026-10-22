@@ -76,7 +76,7 @@ Open the link, choose a name, e-mail and password, and you are in. From then on,
 
 ## 4. First steps in the app
 
-1. **CV**: paste your resume or import a PDF (5 MB max, text-based PDFs only; the original file is kept and can be downloaded again), then click « Critiquer ». Versions can be renamed, downloaded and deleted. « Mon compte » (user menu) lets you export or delete your data.
+1. **CV**: paste your resume or import a PDF (5 MB max, text-based PDFs only; the original file is kept and can be downloaded again), then click « Critiquer ». Versions can be renamed, downloaded and deleted. If you apply in several fields, create one profile per specialty (« Nouveau profil ») and pick the CV each offer uses on its page; the default profile is used otherwise. « Mon compte » (user menu) lets you export or delete your data.
 2. **Offres**: paste a job offer. Piston analyzes the fit with your resume, then writes a cover letter you can edit paragraph by paragraph.
 3. **Candidatures**: add the offer to the kanban and move it from « À envoyer » to « Terminée ».
 4. **Pistes**: get adjacent job titles, job-board keywords and company types to target.

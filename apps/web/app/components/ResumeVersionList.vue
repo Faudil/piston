@@ -181,7 +181,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeSty
     :title="`Supprimer « ${deleting?.title} » ?`"
     :description="
       deleting?.isCurrent && props.resumes.length > 1
-        ? 'Cette version est ton CV actuel : la plus récente des autres le deviendra. Action définitive.'
+        ? 'C\'est la version actuelle de ce profil : la plus récente des autres versions du profil la remplacera. Action définitive.'
         : 'Cette action est définitive.'
     "
   >

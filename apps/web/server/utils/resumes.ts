@@ -1,4 +1,4 @@
-import { and, desc, eq, resumes, sql } from '@piston/db'
+import { and, count, desc, eq, resumes, sql } from '@piston/db'
 
 /**
  * Columns to select for every resume query that is not the PDF download: all
@@ -9,6 +9,7 @@ export const resumeColumns = {
   createdAt: resumes.createdAt,
   updatedAt: resumes.updatedAt,
   userId: resumes.userId,
+  profileId: resumes.profileId,
   title: resumes.title,
   rawText: resumes.rawText,
   sourceFilename: resumes.sourceFilename,
@@ -27,60 +28,90 @@ export async function getUserResume(userId: string, resumeId: string) {
 }
 
 /**
- * Returns the resume a generation should use: the one given by id, or the
- * user's current one. Throws a French 4xx error when there is none.
+ * Returns the resume a generation should use, in this order: the version
+ * `resumeId`; else the current version of `profileId`; else the current
+ * version of the default profile. Throws a French 4xx error when there is none.
  */
-export async function getResumeForGeneration(userId: string, resumeId?: string) {
-  const resume = await useDb().query.resumes.findFirst({
-    columns: { sourcePdf: false },
-    where: resumeId
-      ? and(eq(resumes.id, resumeId), eq(resumes.userId, userId))
-      : and(eq(resumes.userId, userId), eq(resumes.isCurrent, true)),
-    orderBy: desc(resumes.createdAt),
-  })
-  if (!resume) {
-    throw createError({
-      statusCode: resumeId ? 404 : 400,
-      message: resumeId ? 'CV introuvable.' : "Ajoute d'abord ton CV sur la page CV.",
+export async function getResumeForGeneration(
+  userId: string,
+  opts: { resumeId?: string; profileId?: string } = {},
+) {
+  const db = useDb()
+  if (opts.resumeId) {
+    const resume = await db.query.resumes.findFirst({
+      columns: { sourcePdf: false },
+      where: and(eq(resumes.id, opts.resumeId), eq(resumes.userId, userId)),
     })
+    if (!resume) throw createError({ statusCode: 404, message: 'CV introuvable.' })
+    return resume
   }
-  return resume
+
+  const profile = opts.profileId
+    ? await getUserProfile(userId, opts.profileId)
+    : await findDefaultProfile(userId)
+  const resume = profile
+    ? await db.query.resumes.findFirst({
+        columns: { sourcePdf: false },
+        where: and(eq(resumes.profileId, profile.id), eq(resumes.isCurrent, true)),
+      })
+    : undefined
+  if (resume) return resume
+
+  // Distinguish "no resume at all" from "this profile has no version yet".
+  const [versions] = await db
+    .select({ total: count() })
+    .from(resumes)
+    .where(eq(resumes.userId, userId))
+  throw createError({
+    statusCode: 400,
+    message: versions?.total
+      ? "Ce profil de CV n'a pas encore de version."
+      : "Ajoute d'abord ton CV sur la page CV.",
+  })
 }
 
 /**
- * Saves a new resume version and makes it the current one: after pasting or
- * importing a new version, that is the one users expect the features to use.
- * Older versions are kept so they can be switched back to.
+ * Saves a new resume version in a profile (the default one if none is given,
+ * created as « Principal » for a user without profiles) and makes it the
+ * profile's current version: after pasting or importing a new version, that
+ * is the one users expect the features to use. Older versions are kept so
+ * they can be switched back to. Throws a 404 for another user's profile.
  */
 export async function createCurrentResume(
   userId: string,
   input: {
     title: string
     rawText: string
+    profileId?: string
     sourceFilename?: string | null
     sourcePdf?: Uint8Array | null
   },
 ) {
-  // A partial unique index allows a single current resume per user, so the
+  const { profileId, ...values } = input
+  // A partial unique index allows a single current resume per profile, so the
   // previous one must be unset before the new one is inserted, atomically.
   return useDb().transaction(async (tx) => {
+    const profile = await resolveProfileForNewResume(tx, userId, profileId)
     await tx
       .update(resumes)
       .set({ isCurrent: false })
-      .where(and(eq(resumes.userId, userId), eq(resumes.isCurrent, true)))
+      .where(and(eq(resumes.profileId, profile.id), eq(resumes.isCurrent, true)))
     const [row] = await tx
       .insert(resumes)
-      .values({ userId, ...input, isCurrent: true })
+      .values({ userId, profileId: profile.id, ...values, isCurrent: true })
       .returning(resumeColumns)
     return row!
   })
 }
 
-/** Makes an existing version the current one. Throws a 404 if it is not the user's. */
+/**
+ * Makes an existing version the current one of its profile. Throws a 404 if
+ * it is not the user's.
+ */
 export async function setCurrentResume(userId: string, resumeId: string) {
   return useDb().transaction(async (tx) => {
     const target = await tx.query.resumes.findFirst({
-      columns: { id: true },
+      columns: { id: true, profileId: true },
       where: and(eq(resumes.id, resumeId), eq(resumes.userId, userId)),
     })
     if (!target) throw createError({ statusCode: 404, message: 'CV introuvable.' })
@@ -88,7 +119,7 @@ export async function setCurrentResume(userId: string, resumeId: string) {
     await tx
       .update(resumes)
       .set({ isCurrent: false })
-      .where(and(eq(resumes.userId, userId), eq(resumes.isCurrent, true)))
+      .where(and(eq(resumes.profileId, target.profileId), eq(resumes.isCurrent, true)))
     const [row] = await tx
       .update(resumes)
       .set({ isCurrent: true })
@@ -99,16 +130,17 @@ export async function setCurrentResume(userId: string, resumeId: string) {
 }
 
 /**
- * Deletes a resume version. If it was the current one, the most recent
- * remaining version becomes current, so the user is never left with versions
- * but no current one. Throws a 404 if it is not the user's.
+ * Deletes a resume version. If it was the current one of its profile, the
+ * most recent remaining version of that profile becomes current, so a profile
+ * is never left with versions but no current one. Throws a 404 if it is not
+ * the user's.
  */
 export async function deleteResume(userId: string, resumeId: string) {
   await useDb().transaction(async (tx) => {
     const [target] = await tx
       .delete(resumes)
       .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
-      .returning({ id: resumes.id, isCurrent: resumes.isCurrent })
+      .returning({ id: resumes.id, isCurrent: resumes.isCurrent, profileId: resumes.profileId })
     if (!target) throw createError({ statusCode: 404, message: 'CV introuvable.' })
     if (!target.isCurrent) return
 
@@ -116,7 +148,7 @@ export async function deleteResume(userId: string, resumeId: string) {
     const [latest] = await tx
       .select({ id: resumes.id })
       .from(resumes)
-      .where(eq(resumes.userId, userId))
+      .where(eq(resumes.profileId, target.profileId))
       .orderBy(desc(resumes.createdAt))
       .limit(1)
     if (latest) await tx.update(resumes).set({ isCurrent: true }).where(eq(resumes.id, latest.id))

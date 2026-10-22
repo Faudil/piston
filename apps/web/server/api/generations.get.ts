@@ -1,12 +1,25 @@
-import { and, count, desc, eq, generations } from '@piston/db'
+import { and, count, desc, eq, generations, sql } from '@piston/db'
 import { GenerationsQuery, type Generation, type Paginated } from '@piston/shared'
 
 /** Paginated generation history of the current user, newest first. */
 export default defineEventHandler(async (event): Promise<Paginated<Generation>> => {
   const user = await requireUser(event)
-  const { kind, page, pageSize } = await getValidatedQuery(event, zodValidator(GenerationsQuery))
+  const { kind, profileId, page, pageSize } = await getValidatedQuery(
+    event,
+    zodValidator(GenerationsQuery),
+  )
 
-  const where = and(eq(generations.userId, user.id), kind ? eq(generations.kind, kind) : undefined)
+  // Generations reference their resume profile inside the jsonb `input_refs`
+  // column (backfilled by the migration for those made before profiles).
+  const fromProfile = profileId
+    ? sql`${generations.inputRefs}->>'profileId' = ${profileId}`
+    : undefined
+
+  const where = and(
+    eq(generations.userId, user.id),
+    kind ? eq(generations.kind, kind) : undefined,
+    fromProfile,
+  )
 
   const [rows, [totals]] = await Promise.all([
     useDb()

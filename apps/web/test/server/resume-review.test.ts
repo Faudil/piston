@@ -10,6 +10,18 @@ beforeEach(resetTestState)
 
 const output: ResumeReviewOutput = {
   scores: { lisibilite: 7, impact: 5, motsCles: 6, coherence: 8 },
+  ats: {
+    score: 68,
+    checks: [
+      {
+        criterion: 'Intitulés de sections',
+        status: 'warning',
+        detail: 'Section « Parcours » au lieu de « Expérience ».',
+        fix: 'Renomme-la « Expérience professionnelle ».',
+      },
+    ],
+    summary: 'Lisible par un ATS, mais les titres de sections sont atypiques.',
+  },
   strengths: [{ quote: 'Développeuse web', comment: 'Titre clair.' }],
   improvements: [
     { quote: 'Participation à des projets', problem: 'Trop vague.', suggestion: 'Chiffre.' },
@@ -64,10 +76,15 @@ describe('POST /api/generate/resume-review', () => {
   })
 
   it('accepts an older version of the resume by id', async () => {
-    const { user } = await loginAsNewUser()
+    const { user, profile } = await loginAsNewUser()
     const [older] = await testState.db
       .insert(resumes)
-      .values({ userId: user.id, title: 'Ancien', rawText: 'Ancien CV unique' })
+      .values({
+        userId: user.id,
+        profileId: profile.id,
+        title: 'Ancien',
+        rawText: 'Ancien CV unique',
+      })
       .returning()
     const claude = mockClaude({ text: JSON.stringify(output), parsed: output })
 
