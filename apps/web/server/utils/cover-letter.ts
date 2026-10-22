@@ -1,6 +1,6 @@
 import { wrapNotes } from '@piston/prompts'
-import { and, desc, eq, generations, sql } from '@piston/db'
-import type { CoverLetterOutput, Generation } from '@piston/shared'
+import { and, desc, eq, generations, inArray, jobOffers, sql } from '@piston/db'
+import type { CoverLetterOutput, Generation, LetterSummary } from '@piston/shared'
 
 /*
  * Cover letters are stored as a list of paragraphs (see CoverLetterOutput) so
@@ -116,4 +116,58 @@ export async function getUserCoverLetter(userId: string, generationId: string) {
   })
   if (!generation) throw createError({ statusCode: 404, message: 'Lettre introuvable.' })
   return generation
+}
+
+/**
+ * Every cover letter of the user, grouped into one entry per application (or
+ * per offer for letters written from an offer page), newest activity first.
+ * A ~10-user app has at most a few hundred letters: grouping in memory keeps
+ * this readable without a GROUP BY over JSON fields.
+ */
+export async function listLetterSummaries(userId: string): Promise<LetterSummary[]> {
+  const rows = await useDb()
+    .select()
+    .from(generations)
+    .where(and(eq(generations.userId, userId), eq(generations.kind, 'cover_letter')))
+    .orderBy(desc(generations.createdAt))
+
+  // Rows are newest first, so the first row seen for a key is its latest version.
+  const groups = new Map<string, { latest: (typeof rows)[number]; versions: number }>()
+  for (const row of rows) {
+    const { applicationId, offerId } = row.inputRefs
+    if (!offerId) continue
+    const key = applicationId ? `application:${applicationId}` : `offer:${offerId}`
+    const group = groups.get(key)
+    if (group) group.versions++
+    else groups.set(key, { latest: row, versions: 1 })
+  }
+
+  const offerIds = [...new Set([...groups.values()].map((g) => g.latest.inputRefs.offerId!))]
+  const offers = offerIds.length
+    ? await useDb()
+        .select({ id: jobOffers.id, title: jobOffers.title, company: jobOffers.company })
+        .from(jobOffers)
+        .where(and(eq(jobOffers.userId, userId), inArray(jobOffers.id, offerIds)))
+    : []
+  const offersById = new Map(offers.map((offer) => [offer.id, offer]))
+
+  return [...groups.values()].flatMap(({ latest, versions }) => {
+    // Letters of a deleted offer stay in the history but have no page to open.
+    const offer = offersById.get(latest.inputRefs.offerId!)
+    if (!offer) return []
+    const { paragraphs } = latest.output as CoverLetterOutput
+    // Skip the salutation ("Madame, Monsieur,") to show actual content.
+    const body = paragraphs.find((p, i) => i > 0 && p.length > 40) ?? paragraphs[0] ?? ''
+    return [
+      {
+        generationId: latest.id,
+        offer,
+        applicationId: latest.inputRefs.applicationId ?? null,
+        template: latest.inputRefs.template ?? null,
+        versions,
+        excerpt: body.slice(0, 160),
+        updatedAt: latest.createdAt.toISOString(),
+      },
+    ]
+  })
 }

@@ -133,3 +133,21 @@ export interface ImportedOffer {
   rawText: string
   url: string
 }
+
+/**
+ * One entry of the « Lettres » page: every version written for the same
+ * application (or, for letters written from an offer page, the same offer),
+ * summarized by its latest version.
+ */
+export interface LetterSummary {
+  /** Id of the latest version. */
+  generationId: string
+  offer: Pick<JobOffer, 'id' | 'title' | 'company'>
+  /** Set when the letter was written from an application: it opens /candidatures/:id/lettre. */
+  applicationId: string | null
+  template: CoverLetterTemplate | null
+  versions: number
+  /** Start of the first body paragraph, to recognize the letter. */
+  excerpt: string
+  updatedAt: string
+}

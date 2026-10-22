@@ -6,6 +6,7 @@ const links: NavigationMenuItem[] = [
   { label: 'CV', icon: 'i-lucide-file-user', to: '/cv' },
   { label: 'Offres', icon: 'i-lucide-briefcase', to: '/offres' },
   { label: 'Candidatures', icon: 'i-lucide-kanban', to: '/candidatures' },
+  { label: 'Lettres', icon: 'i-lucide-pen-line', to: '/lettres' },
   { label: 'Pistes', icon: 'i-lucide-compass', to: '/pistes' },
   { label: 'Historique', icon: 'i-lucide-history', to: '/historique' },
 ]
