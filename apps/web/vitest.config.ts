@@ -11,6 +11,10 @@ export default defineConfig({
           include: ['test/server/**/*.test.ts'],
           environment: 'node',
           setupFiles: ['test/server/setup.ts'],
+          // The first `resetTestState()` of each file boots an in-memory
+          // Postgres (PGlite) and applies every migration: slow on CI runners.
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
         },
       },
       // Components and composables, run inside a Nuxt environment.
