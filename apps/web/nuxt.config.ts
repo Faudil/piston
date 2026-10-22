@@ -8,8 +8,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
   devtools: { enabled: true },
 
-  // No anonymous usage telemetry. This also skips Nuxt's consent prompt, which
-  // would block `bun dev`: Turborepo does not forward keyboard input to it.
+  // No anonymous usage telemetry. This also skips Nuxt's interactive consent
+  // prompt, which would hang non-interactive runs (CI, Docker builds).
   telemetry: false,
 
   modules: ['@nuxt/ui', '@nuxt/eslint', 'nuxt-auth-utils'],

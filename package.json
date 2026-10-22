@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev --filter=@piston/web",
+    "dev": "cd apps/web && bun run dev",
     "build": "turbo run build",
     "test": "turbo run test --concurrency=2",
     "lint": "turbo run lint typecheck",
