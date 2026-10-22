@@ -50,6 +50,19 @@ describe('system prompts', () => {
     expect(prompt).toMatchSnapshot()
   })
 
+  it('resume review judges ATS compatibility from the extracted text only', () => {
+    const prompt = resumeReviewPrompt(ctx)
+    expect(prompt).toContain('ATS')
+    expect(prompt).toContain('extracted plain text')
+    expect(prompt).toContain('cannot be judged from the text')
+  })
+
+  it('offer analysis keeps the honesty rule for missing ATS keywords', () => {
+    const prompt = offerAnalysisPrompt(ctx)
+    expect(prompt).toContain('ATS')
+    expect(prompt).toContain('Never suggest writing a keyword for a skill the resume does not show')
+  })
+
   it('every prompt treats documents as data and asks for French', () => {
     for (const prompt of [
       resumeReviewPrompt(ctx),

@@ -19,6 +19,29 @@ const scores = computed(() =>
     value: props.output.scores?.[key],
   })),
 )
+
+// Full class names (not built from the status) so Tailwind finds them in the source.
+const atsStatuses = {
+  problem: { rank: 0, icon: 'i-lucide-circle-x', tone: 'text-error', label: 'Problème' },
+  warning: {
+    rank: 1,
+    icon: 'i-lucide-triangle-alert',
+    tone: 'text-warning',
+    label: 'À surveiller',
+  },
+  ok: { rank: 2, icon: 'i-lucide-circle-check', tone: 'text-success', label: 'OK' },
+} as const
+
+// Problems first; the sort is stable, so Claude's order is kept inside a status.
+const atsChecks = computed(() =>
+  (props.output.ats?.checks ?? [])
+    .filter((check) => check)
+    .map((check) => ({
+      ...check,
+      meta: atsStatuses[check.status as keyof typeof atsStatuses] ?? atsStatuses.warning,
+    }))
+    .sort((a, b) => a.meta.rank - b.meta.rank),
+)
 </script>
 
 <template>
@@ -33,6 +56,55 @@ const scores = computed(() =>
           </UCard>
         </li>
       </ul>
+    </section>
+
+    <section
+      v-if="
+        output.ats && (output.ats.score !== undefined || output.ats.summary || atsChecks.length)
+      "
+      aria-labelledby="review-ats"
+    >
+      <AppSectionHeading
+        id="review-ats"
+        title="Filtres ATS"
+        icon="i-lucide-scan-search"
+        description="Les logiciels de tri des candidatures lisent ton CV avant les recruteurs. Analyse faite sur le texte extrait, sans la mise en page."
+      />
+      <UCard :ui="{ body: 'space-y-5' }">
+        <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+          <ScoreRing :value="output.ats.score" :max="100" label="Compatibilité ATS" />
+          <p
+            v-if="output.ats.summary"
+            class="min-w-0 flex-1 text-center text-pretty text-toned sm:text-left"
+          >
+            {{ output.ats.summary }}
+          </p>
+        </div>
+        <ul v-if="atsChecks.length" class="space-y-2">
+          <li
+            v-for="(check, i) in atsChecks"
+            :key="i"
+            class="flex gap-3 rounded-xl border border-default bg-default p-3"
+          >
+            <UIcon
+              :name="check.meta.icon"
+              class="mt-0.5 size-5 shrink-0"
+              :class="check.meta.tone"
+              aria-hidden="true"
+            />
+            <div class="min-w-0 space-y-1">
+              <p class="font-medium text-highlighted">
+                {{ check.criterion }}
+                <span class="sr-only"> : {{ check.meta.label }}</span>
+              </p>
+              <p v-if="check.detail" class="text-sm text-pretty text-muted">{{ check.detail }}</p>
+              <p v-if="check.fix" class="text-sm text-pretty text-toned">
+                <span class="font-medium">À faire :</span> {{ check.fix }}
+              </p>
+            </div>
+          </li>
+        </ul>
+      </UCard>
     </section>
 
     <section v-if="output.strengths?.length" aria-labelledby="review-strengths">

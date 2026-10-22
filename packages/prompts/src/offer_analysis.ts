@@ -17,6 +17,12 @@ export function offerAnalysisPrompt(ctx: OfferAnalysisContext): string {
 3. List the skills required by the offer that are missing from the resume, with practical advice to compensate (transferable experience to highlight, short training, how to address it in an interview).
 4. Write exactly 5 interview questions this recruiter is likely to ask, each with a hint pointing to the resume element to build the answer on.
 5. Translate the HR jargon of the offer into plain language: quote each expression as written in the offer and explain what it means in practice (workload, autonomy, culture, salary signals).
+6. Evaluate the ATS keyword match (Applicant Tracking Systems) in "atsMatch", as described below.
 Every claim about the user must refer to a precise experience from the resume.`,
+    `ATS keyword match:
+Extract the keywords an ATS would filter on in the offer: hard skills, tools and technologies, certifications, variants of the job title, required diplomas, languages and their levels. Ignore soft-skill buzzwords and generic filler. Then check whether each keyword appears in the resume, in the exact form or a close one (acronym and full form, singular and plural, common spelling variants).
+- score: integer from 0 to 100, the share of the offer's important keywords present in the resume, weighted by importance (required keywords count more than nice-to-haves).
+- foundKeywords: the keywords found in the resume, written as in the offer.
+- missingKeywords: each absent keyword, written as in the offer, with a "suggestion". If the resume shows a real experience that matches (under another name), explain how to word it with the offer's term. If the user has no such experience, say honestly that it is to be acquired (training, side project, certification). Never suggest writing a keyword for a skill the resume does not show.`,
   )
 }

@@ -354,7 +354,14 @@ Your task:
 3. List the skills required by the offer that are missing from the resume, with practical advice to compensate (transferable experience to highlight, short training, how to address it in an interview).
 4. Write exactly 5 interview questions this recruiter is likely to ask, each with a hint pointing to the resume element to build the answer on.
 5. Translate the HR jargon of the offer into plain language: quote each expression as written in the offer and explain what it means in practice (workload, autonomy, culture, salary signals).
-Every claim about the user must refer to a precise experience from the resume."
+6. Evaluate the ATS keyword match (Applicant Tracking Systems) in "atsMatch", as described below.
+Every claim about the user must refer to a precise experience from the resume.
+
+ATS keyword match:
+Extract the keywords an ATS would filter on in the offer: hard skills, tools and technologies, certifications, variants of the job title, required diplomas, languages and their levels. Ignore soft-skill buzzwords and generic filler. Then check whether each keyword appears in the resume, in the exact form or a close one (acronym and full form, singular and plural, common spelling variants).
+- score: integer from 0 to 100, the share of the offer's important keywords present in the resume, weighted by importance (required keywords count more than nice-to-haves).
+- foundKeywords: the keywords found in the resume, written as in the offer.
+- missingKeywords: each absent keyword, written as in the offer, with a "suggestion". If the resume shows a real experience that matches (under another name), explain how to word it with the offer's term. If the user has no such experience, say honestly that it is to be acquired (training, side project, certification). Never suggest writing a keyword for a skill the resume does not show."
 `;
 
 exports[`system prompts > resume review 1`] = `
@@ -378,7 +385,16 @@ Your task:
    - coherence: a clear professional story, consistent dates and titles, no unexplained gaps.
    Use the whole scale. A 9 or 10 must be exceptional.
 2. List exactly 5 strengths and exactly 5 things to fix. Each one must quote an exact sentence copied from the resume. Generic remarks such as "add more numbers" without a quote are not allowed.
-3. Rewrite the resume line by line: for each line worth changing, give the original line verbatim and an improved version. Keep the facts; improve wording, structure and impact. Never add an achievement, a number or a skill that the resume does not contain; when a number would help, write a placeholder such as "[X %]" so the user fills it in."
+3. Rewrite the resume line by line: for each line worth changing, give the original line verbatim and an improved version. Keep the facts; improve wording, structure and impact. Never add an achievement, a number or a skill that the resume does not contain; when a number would help, write a placeholder such as "[X %]" so the user fills it in.
+4. Evaluate how well the resume passes ATS filters (Applicant Tracking Systems), as described below.
+
+ATS evaluation:
+You only receive the extracted plain text of the resume, not its visual layout or the original file. Judge ATS compatibility from that text and nothing else. Infer layout problems from their traces in the text: jumbled line order or a section interleaved with another (multi-column layout), isolated fragments or values detached from their label (tables, text boxes), icons or odd glyphs used as bullets or in place of words (pictograms, special characters), contact details or page numbers repeated or stranded at odd places (headers and footers). When a criterion cannot be judged from the text (for example the file format, or a layout that left no trace), say so in "detail" and use the "warning" status instead of guessing; never claim to have seen the layout.
+Produce "ats" with:
+- score: integer from 0 to 100. Use the whole scale; 90 and above means no meaningful risk.
+- checks: 6 to 10 items, each with a short French "criterion", a "status" ("ok", "warning" or "problem"), a "detail" saying what you observed (quote the resume when relevant) and a "fix" that is concrete and actionable (an empty string when the status is "ok"). Cover at least: text parseability (columns, tables, icons, headers and footers, special characters); standard section headings (Expérience, Formation, Compétences...); contact details present and written in the body of the text; consistent date formats; job titles and employer names clearly identifiable; keywords for the target field, spelled as recruiters search for them, with acronyms next to their full forms; length; and a note about the file format when relevant (a text-based PDF or DOCX is safest).
+- summary: one or two sentences.
+Fixes must stay honest: never suggest adding a skill, title or experience the resume does not show. Keep "motsCles" (the 0 to 10 score) and the ATS keyword check consistent with each other."
 `;
 
 exports[`system prompts > search leads 1`] = `

@@ -38,6 +38,62 @@ const level = computed(() =>
       </div>
     </UCard>
 
+    <section
+      v-if="
+        output.atsMatch &&
+        (output.atsMatch.score !== undefined ||
+          output.atsMatch.foundKeywords?.length ||
+          output.atsMatch.missingKeywords?.length)
+      "
+      aria-labelledby="analysis-ats"
+    >
+      <AppSectionHeading
+        id="analysis-ats"
+        title="Compatibilité ATS avec l'offre"
+        icon="i-lucide-scan-search"
+        description="Les mots-clés de l'offre sur lesquels un logiciel de tri filtre les CV."
+      />
+      <UCard :ui="{ body: 'space-y-5' }">
+        <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
+          <ScoreRing
+            :value="output.atsMatch.score"
+            :max="100"
+            label="Compatibilité ATS avec l'offre"
+          />
+          <div v-if="output.atsMatch.foundKeywords?.length" class="min-w-0 flex-1 space-y-2">
+            <p class="text-sm font-semibold text-highlighted">Mots-clés présents dans ton CV</p>
+            <ul class="flex flex-wrap gap-2">
+              <li v-for="(keyword, i) in output.atsMatch.foundKeywords" :key="i">
+                <UBadge color="success" variant="subtle" :label="keyword" icon="i-lucide-check" />
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div v-if="output.atsMatch.missingKeywords?.length" class="space-y-2">
+          <p class="text-sm font-semibold text-highlighted">Mots-clés absents</p>
+          <ul class="space-y-2">
+            <li
+              v-for="(item, i) in output.atsMatch.missingKeywords"
+              :key="i"
+              class="flex gap-3 rounded-xl border border-default bg-default p-3"
+            >
+              <UIcon
+                name="i-lucide-circle-dashed"
+                class="mt-0.5 size-5 shrink-0 text-warning"
+                aria-hidden="true"
+              />
+              <div class="min-w-0">
+                <p class="font-medium text-highlighted">{{ item?.keyword }}</p>
+                <p v-if="item?.suggestion" class="text-sm text-pretty text-muted">
+                  {{ item.suggestion }}
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </UCard>
+    </section>
+
     <div
       v-if="output.matchingSkills?.length || output.missingSkills?.length"
       class="grid gap-8 lg:grid-cols-2"

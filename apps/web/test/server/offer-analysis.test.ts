@@ -10,6 +10,11 @@ beforeEach(resetTestState)
 const output: OfferAnalysisOutput = {
   matchScore: 72,
   summary: 'Bon profil.',
+  atsMatch: {
+    score: 60,
+    foundKeywords: ['Vue.js'],
+    missingKeywords: [{ keyword: 'Go', suggestion: 'À acquérir : suis un tutoriel.' }],
+  },
   matchingSkills: [{ skill: 'Vue.js', evidence: 'Deux ans chez Acme.' }],
   missingSkills: [{ skill: 'Go', advice: 'Suis un tutoriel.' }],
   interviewQuestions: [{ question: 'Pourquoi nous ?', hint: 'Ton projet X.' }],

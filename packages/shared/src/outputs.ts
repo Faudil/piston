@@ -16,6 +16,32 @@ import * as z from 'zod'
 
 const score10 = z.number().describe('Integer score from 0 to 10')
 
+export const atsStatuses = ['ok', 'warning', 'problem'] as const
+export const AtsStatus = z.enum(atsStatuses)
+export type AtsStatus = z.infer<typeof AtsStatus>
+
+/**
+ * How well the resume passes Applicant Tracking System filters. Judged from
+ * the extracted plain text only: the layout itself is not visible to Claude.
+ */
+export const AtsReview = z.object({
+  score: z.number().describe('Integer ATS compatibility score from 0 to 100'),
+  checks: z
+    .array(
+      z.object({
+        criterion: z.string().describe('Short French label of the criterion checked'),
+        status: AtsStatus.describe(
+          'ok: no issue; warning: could hurt or cannot be judged from the text; problem: likely filtered out or misparsed',
+        ),
+        detail: z.string().describe('What was observed, quoting the resume when relevant'),
+        fix: z.string().describe('Concrete fix, or an empty string when the status is ok'),
+      }),
+    )
+    .describe('6 to 10 checks, one per criterion'),
+  summary: z.string().describe('One or two sentences summarizing the ATS compatibility'),
+})
+export type AtsReview = z.infer<typeof AtsReview>
+
 export const ResumeReviewOutput = z.object({
   scores: z
     .object({
@@ -25,6 +51,7 @@ export const ResumeReviewOutput = z.object({
       coherence: score10,
     })
     .describe('One score out of 10 per category'),
+  ats: AtsReview.describe('Compatibility of the resume with ATS filters'),
   strengths: z
     .array(
       z.object({
@@ -56,6 +83,30 @@ export type ResumeReviewOutput = z.infer<typeof ResumeReviewOutput>
 export const OfferAnalysisOutput = z.object({
   matchScore: z.number().describe('Integer match score from 0 to 100'),
   summary: z.string().describe('Two or three sentences summarizing the fit'),
+  atsMatch: z
+    .object({
+      score: z
+        .number()
+        .describe(
+          "Integer score from 0 to 100: share of the offer's important keywords present in the resume, weighted by importance",
+        ),
+      foundKeywords: z
+        .array(z.string())
+        .describe('Offer keywords found in the resume, as written in the offer'),
+      missingKeywords: z
+        .array(
+          z.object({
+            keyword: z.string().describe('Keyword as written in the offer'),
+            suggestion: z
+              .string()
+              .describe(
+                'How to add it honestly if the experience exists, or how to acquire it if not; never suggest claiming an absent skill',
+              ),
+          }),
+        )
+        .describe('Offer keywords absent from the resume'),
+    })
+    .describe('Keyword match between the offer and the resume, as an ATS would filter'),
   matchingSkills: z
     .array(
       z.object({
