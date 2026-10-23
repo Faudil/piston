@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { CvLanguageCode } from './cv'
+import { tintColor } from './cv-colors'
 
 /**
  * Design settings of a CV document (v2), stored as JSON in
@@ -46,8 +47,16 @@ export type CvHeaderStyle = z.infer<typeof CvHeaderStyle>
  * - `block`: title in a filled band of the primary color.
  * - `bar`: vertical bar on the left of the title.
  * - `plain`: uppercase colored title, nothing else.
+ * - `smallcaps`: smaller, spaced capitals over a hairline.
  */
-export const cvSectionTitleStyles = ['rule', 'underline', 'block', 'bar', 'plain'] as const
+export const cvSectionTitleStyles = [
+  'rule',
+  'underline',
+  'block',
+  'bar',
+  'plain',
+  'smallcaps',
+] as const
 export const CvSectionTitleStyle = z.enum(cvSectionTitleStyles)
 export type CvSectionTitleStyle = z.infer<typeof CvSectionTitleStyle>
 
@@ -241,6 +250,49 @@ export const cvAccentPresets = [
   { value: '#334155', label: 'Ardoise' },
 ] as const
 
+/**
+ * Curated palettes of the design panel: a primary color, its light
+ * companion (thin rules, tags) and the side column's background. Applying
+ * one writes the three palette overrides. Every primary reaches 4.5:1 on
+ * white; a dark side column gets white text and a lightened accent from the
+ * renderer.
+ */
+export interface CvPalette {
+  id: string
+  label: string
+  primary: string
+  secondary: string
+  sidebarBg: string
+}
+
+const palette = (
+  id: string,
+  label: string,
+  primary: string,
+  options: { secondary?: string; sidebarBg?: string } = {},
+): CvPalette => ({
+  id,
+  label,
+  primary,
+  secondary: options.secondary ?? tintColor(primary, 0.55),
+  sidebarBg: options.sidebarBg ?? tintColor(primary, 0.9),
+})
+
+export const cvPalettes: readonly CvPalette[] = [
+  palette('terracotta', 'Terracotta', '#c8410b'),
+  palette('ocean', 'Océan', '#1d4ed8'),
+  palette('foret', 'Forêt', '#047857'),
+  palette('sarcelle', 'Sarcelle', '#0f766e'),
+  palette('indigo', 'Indigo', '#4338ca'),
+  palette('aubergine', 'Aubergine', '#6d28d9'),
+  palette('bordeaux', 'Bordeaux', '#9f1239'),
+  palette('rose', 'Rose', '#be185d'),
+  palette('ambre', 'Ambre', '#b45309'),
+  palette('ardoise', 'Ardoise', '#334155'),
+  palette('graphite', 'Graphite', '#27272a', { secondary: '#d4d4d8', sidebarBg: '#f4f4f5' }),
+  palette('nuit', 'Nuit', '#0e7490', { sidebarBg: '#1f2937' }),
+]
+
 /** The palette colors a user can override. */
 export const CvPaletteOverrides = z.object({
   /** Accent: names, section titles, rules, markers. */
@@ -380,6 +432,7 @@ export const cvSectionTitleStyleLabels: Record<CvSectionTitleStyle, string> = {
   block: 'Bandeau coloré',
   bar: 'Barre verticale',
   plain: 'Simple',
+  smallcaps: 'Petites capitales',
 }
 
 export const cvItemStyleLabels: Record<CvItemStyle, string> = {

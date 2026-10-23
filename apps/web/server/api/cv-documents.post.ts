@@ -1,5 +1,12 @@
 import { and, eq, generations } from '@piston/db'
-import { CreateCvDocumentBody, CvDraftOutput, createBlankCv, draftToContent } from '@piston/shared'
+import {
+  CreateCvDocumentBody,
+  CvDraftOutput,
+  applyTemplateSectionOrder,
+  createBlankCv,
+  cvTemplates,
+  draftToContent,
+} from '@piston/shared'
 
 /**
  * Creates a CV document: blank (with the user's name), or from a `cv_draft`
@@ -33,6 +40,9 @@ export default defineEventHandler(async (event) => {
         ? 'Brouillon de l’entretien'
         : 'Import depuis ton CV'
   }
+
+  // The template's recommended section order (« Étudiant »: education first), at creation only.
+  content = applyTemplateSectionOrder(content, cvTemplates[body.templateId ?? 'sobre'])
 
   const row = await createCvDocument(user.id, {
     profileId,

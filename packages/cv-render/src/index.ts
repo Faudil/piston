@@ -23,6 +23,7 @@ export {
   prepareCvPdfMake,
 } from './fonts'
 export { cvContentId, parseCvContentId, type CvContentTarget } from './ids'
+export { formatLetterDate, renderLetter, renderLetterPdf, type CvLetterInput } from './letter'
 export { PAGE_SIZES, computeTokens, type CvTokens } from './engine/tokens'
 export { CV_ICONS, iconSvg, type CvIconName } from './engine/icons'
 export type {

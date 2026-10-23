@@ -7,7 +7,9 @@ const PUBLIC_PAGES = ['/login']
 
 export default defineNuxtRouteMiddleware((to) => {
   const { loggedIn } = useUserSession()
-  const isPublic = PUBLIC_PAGES.includes(to.path) || to.path.startsWith('/invite/')
+  const isGuestPage = PUBLIC_PAGES.includes(to.path) || to.path.startsWith('/invite/')
+  // A shared CV (/partage/:token) is for everyone, signed in or not.
+  const isPublic = isGuestPage || to.path.startsWith('/partage/')
 
   if (!loggedIn.value && !isPublic) {
     return navigateTo({
@@ -15,5 +17,5 @@ export default defineNuxtRouteMiddleware((to) => {
       query: to.fullPath !== '/' ? { redirect: to.fullPath } : {},
     })
   }
-  if (loggedIn.value && isPublic) return navigateTo('/')
+  if (loggedIn.value && isGuestPage) return navigateTo('/')
 })

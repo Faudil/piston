@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import {
-  describeCvOperation,
+  CvDesign,
+  describeCvOperationInDocument,
   diffWords,
   type CvContent,
+  type CvTemplateId,
   type CvEditProposal,
   type CvOperation,
   type CvChangeKind,
@@ -21,6 +23,9 @@ const props = defineProps<{
   proposal: Partial<CvEditProposal>
   /** The document the operations are described against. */
   content: CvContent
+  /** With the template, the design operations can show what they replace. */
+  design?: CvDesign
+  templateId?: CvTemplateId
   pending: boolean
 }>()
 const emit = defineEmits<{ apply: [operations: CvOperation[]]; discard: [] }>()
@@ -34,8 +39,20 @@ const operations = computed(() =>
     Boolean(op && typeof op === 'object' && 'op' in op && op.reason),
   ),
 )
+// Design operations are described against the whole document (template + design).
 const described = computed(() =>
-  operations.value.map((op, index) => ({ op, index, ...describeCvOperation(props.content, op) })),
+  operations.value.map((op, index) => ({
+    op,
+    index,
+    ...describeCvOperationInDocument(
+      {
+        content: props.content,
+        design: props.design ?? CvDesign.parse({}),
+        templateId: props.templateId ?? 'sobre',
+      },
+      op,
+    ),
+  })),
 )
 const applicable = computed(() => described.value.filter((entry) => !entry.problem))
 const accepted = computed(() =>
@@ -76,6 +93,7 @@ const KINDS: Record<
   remove: { label: 'Suppression', color: 'error' },
   move: { label: 'Déplacement', color: 'neutral' },
   section: { label: 'Section', color: 'info' },
+  design: { label: 'Design', color: 'primary' },
 }
 </script>
 
@@ -111,7 +129,39 @@ const KINDS: Record<
           <span class="min-w-0 text-sm font-medium text-highlighted">{{ entry.target }}</span>
         </div>
 
-        <div class="space-y-1 text-sm">
+        <div v-if="entry.design" class="space-y-1.5 text-sm">
+          <p
+            v-for="line in entry.design"
+            :key="line.label"
+            class="flex flex-wrap items-center gap-x-2"
+          >
+            <span class="font-medium text-highlighted">{{ line.label }} :</span>
+            <template v-if="line.before !== null">
+              <span class="inline-flex items-center gap-1.5 text-muted">
+                <span
+                  v-if="line.beforeColor"
+                  class="size-4 rounded border border-default"
+                  :style="{ backgroundColor: line.beforeColor }"
+                  aria-hidden="true"
+                />
+                <del class="decoration-error/60">{{ line.before }}</del>
+              </span>
+              <UIcon name="i-lucide-arrow-right" class="size-4 text-muted" />
+              <span class="sr-only">devient</span>
+            </template>
+            <span class="inline-flex items-center gap-1.5 text-success">
+              <span
+                v-if="line.afterColor"
+                class="size-4 rounded border border-default"
+                :style="{ backgroundColor: line.afterColor }"
+                aria-hidden="true"
+              />
+              {{ line.after }}
+            </span>
+          </p>
+          <p v-if="!entry.design.length" class="text-muted">Aucun réglage ne change.</p>
+        </div>
+        <div v-else class="space-y-1 text-sm">
           <p
             v-if="entry.kind === 'edit' && entry.before !== null && entry.after !== null"
             class="whitespace-pre-line"
@@ -144,6 +194,10 @@ const KINDS: Record<
         <p class="mt-2 flex gap-1.5 text-sm text-muted">
           <UIcon name="i-lucide-sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
           <span>{{ entry.op.reason }}</span>
+        </p>
+        <p v-if="entry.warning" class="mt-2 flex gap-1.5 text-sm text-warning">
+          <UIcon name="i-lucide-scan-text" class="mt-0.5 size-4 shrink-0" />
+          <span>{{ entry.warning }}</span>
         </p>
         <p v-if="entry.problem" class="mt-2 flex gap-1.5 text-sm text-warning">
           <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" />

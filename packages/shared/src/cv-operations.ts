@@ -31,6 +31,22 @@ import {
   type CvSectionConfig,
   type CvSkill,
 } from './cv'
+import {
+  CV_FONT_SIZE_STEPS,
+  CvBulletStyle,
+  CvColor,
+  CvFontPairingId,
+  CvHeaderStyle,
+  CvItemStyle,
+  CvLanguageStyle,
+  CvLayout,
+  CvLineHeight,
+  CvMargins,
+  CvSectionTitleStyle,
+  CvSkillStyle,
+  CvSpacing,
+} from './cv-design'
+import { CvTemplateId } from './cv-templates'
 
 /**
  * Edits that Claude proposes on a CV document, and the pure functions that
@@ -258,6 +274,76 @@ export const MoveCustomItemOperation = z.object({
   reason,
 })
 
+// --- Design operations -------------------------------------------------------------------
+
+/**
+ * The design settings Claude may change (a subset of the design overrides:
+ * not the body text color, the page format or the language). `null` removes
+ * the override, so the template's value applies again.
+ */
+export const cvDesignChangeKeys = [
+  'primary',
+  'secondary',
+  'sidebarBg',
+  'fontPairing',
+  'layout',
+  'headerStyle',
+  'sectionTitleStyle',
+  'itemStyle',
+  'bulletStyle',
+  'skillStyle',
+  'languageStyle',
+  'spacing',
+  'lineHeight',
+  'margins',
+  'fontSize',
+  'showIcons',
+] as const
+export type CvDesignChangeKey = (typeof cvDesignChangeKeys)[number]
+
+export const CvDesignChanges = z
+  .strictObject({
+    primary: CvColor.nullable(),
+    secondary: CvColor.nullable(),
+    sidebarBg: CvColor.nullable(),
+    fontPairing: CvFontPairingId.nullable(),
+    layout: CvLayout.nullable(),
+    headerStyle: CvHeaderStyle.nullable(),
+    sectionTitleStyle: CvSectionTitleStyle.nullable(),
+    itemStyle: CvItemStyle.nullable(),
+    bulletStyle: CvBulletStyle.nullable(),
+    skillStyle: CvSkillStyle.nullable(),
+    languageStyle: CvLanguageStyle.nullable(),
+    spacing: CvSpacing.nullable(),
+    lineHeight: CvLineHeight.nullable(),
+    margins: CvMargins.nullable(),
+    fontSize: z.number().int().min(CV_FONT_SIZE_STEPS.min).max(CV_FONT_SIZE_STEPS.max).nullable(),
+    showIcons: z.boolean().nullable(),
+  })
+  .partial()
+  .refine((changes) => Object.keys(changes).length > 0, 'Aucun réglage.')
+export type CvDesignChanges = z.infer<typeof CvDesignChanges>
+
+export const SetTemplateOperation = z.object({
+  op: z.literal('set_template'),
+  templateId: CvTemplateId,
+  resetDesign: z
+    .boolean()
+    .describe("Also remove the user's design customizations (colors, fonts, styles)"),
+  reason,
+})
+export const SetDesignOperation = z.object({
+  op: z.literal('set_design'),
+  changes: CvDesignChanges,
+  reason,
+})
+
+export type CvDesignOperation = z.infer<typeof SetTemplateOperation | typeof SetDesignOperation>
+/** Design operations change the document's design, not its content. */
+export function isCvDesignOperation(op: { op: string }): op is CvDesignOperation {
+  return op.op === 'set_template' || op.op === 'set_design'
+}
+
 export const CvOperation = z.discriminatedUnion('op', [
   SetHeaderOperation,
   SetSummaryOperation,
@@ -279,6 +365,8 @@ export const CvOperation = z.discriminatedUnion('op', [
   AddCustomItemOperation,
   RemoveCustomItemOperation,
   MoveCustomItemOperation,
+  SetTemplateOperation,
+  SetDesignOperation,
 ])
 export type CvOperation = z.infer<typeof CvOperation>
 export type CvOperationKind = CvOperation['op']
@@ -304,6 +392,8 @@ export const cvOperationKinds = [
   'add_custom_item',
   'remove_custom_item',
   'move_custom_item',
+  'set_template',
+  'set_design',
 ] as const satisfies readonly CvOperationKind[]
 
 /**
@@ -350,7 +440,7 @@ export const CvOperationWire = z.object({
     .string()
     .nullable()
     .describe(
-      'The new text for set_header, set_summary, set_field, set_bullet, add_bullet and set_custom_item. set_section: custom title, empty string for the default title, null to leave it unchanged. add_custom_section: the title of the new section. set_language_cefr: A1, A2, B1, B2, C1, C2, natif, or null',
+      'The new text for set_header, set_summary, set_field, set_bullet, add_bullet and set_custom_item. set_section: custom title, empty string for the default title, null to leave it unchanged. add_custom_section: the title of the new section. set_language_cefr: A1, A2, B1, B2, C1, C2, natif, or null. set_template: the template id',
     ),
   list: z
     .array(z.string())
@@ -362,7 +452,7 @@ export const CvOperationWire = z.object({
     .array(z.object({ name: z.string(), value: z.string() }))
     .nullable()
     .describe(
-      'add_item and add_custom_item: the text fields of the new item. experiences, volunteering: title, organization, location, start, end; education: degree, school, location, start, end, details; skills: name; languages: name, level, cefr; projects: name, role, url, start, end; certifications: name, issuer, date, url; interests: name, details; awards: name, issuer, date, details; publications: title, publisher, date, url; references: name, role, organization, contact; extras: text; custom items: title, subtitle, date, text',
+      'add_item and add_custom_item: the text fields of the new item. experiences, volunteering: title, organization, location, start, end; education: degree, school, location, start, end, details; skills: name; languages: name, level, cefr; projects: name, role, url, start, end; certifications: name, issuer, date, url; interests: name, details; awards: name, issuer, date, details; publications: title, publisher, date, url; references: name, role, organization, contact; extras: text; custom items: title, subtitle, date, text. set_design: the settings to change, by name (primary, secondary, sidebarBg: #rrggbb colors; fontPairing, layout, headerStyle, sectionTitleStyle, itemStyle, bulletStyle, skillStyle, languageStyle, spacing, lineHeight, margins: ids from the design catalog; fontSize: -2 to 2; showIcons: true or false); a value of "default" returns the setting to the template\'s value',
     ),
   index: z
     .number()
@@ -374,7 +464,9 @@ export const CvOperationWire = z.object({
   visible: z
     .boolean()
     .nullable()
-    .describe('set_section: true to show, false to hide, null to leave unchanged'),
+    .describe(
+      'set_section: true to show, false to hide, null to leave unchanged. set_template: true to also reset the design customizations, false to keep them',
+    ),
   column: z
     .string()
     .nullable()
@@ -405,6 +497,48 @@ export interface CvEditProposal {
   summary: string
   operations: CvOperation[]
   dropped: number
+  /**
+   * « Compléter cette section », first step: questions for the user instead
+   * of operations. The answers come back in a second request.
+   */
+  questions?: CvQuestion[]
+}
+
+export interface CvQuestion {
+  question: string
+  /** An example of a good answer, shown under the field. */
+  hint: string
+}
+
+/** The schema of the questions step of « Compléter cette section » (kind `cv_edit`, no operations). */
+export const CvQuestionsOutput = z.object({
+  summary: z
+    .string()
+    .describe(
+      'One French sentence telling the user what is missing in the section and why you ask, addressing them as "tu"',
+    ),
+  questions: z
+    .array(
+      z.object({
+        question: z.string().describe('A short French question about a fact only the user knows'),
+        hint: z
+          .string()
+          .describe('A short French example of a good answer, with made-up-free wording'),
+      }),
+    )
+    .describe('2 or 3 questions, the most useful first'),
+})
+
+/** Lenient parse of the questions step: at most 3 non-empty questions, null if none. */
+export function parseCvQuestionsOutput(value: unknown): CvEditProposal | null {
+  const parsed = CvQuestionsOutput.safeParse(value)
+  if (!parsed.success) return null
+  const questions = parsed.data.questions
+    .map((entry) => ({ question: entry.question.trim(), hint: entry.hint.trim() }))
+    .filter((entry) => entry.question)
+    .slice(0, 3)
+  if (!questions.length) return null
+  return { summary: parsed.data.summary, operations: [], dropped: 0, questions }
 }
 
 /** Converts Claude's flat operation into the typed one; the caller validates it. */
@@ -467,7 +601,25 @@ export function fromWire(wire: CvOperationWire): Record<string, unknown> {
       return { op, customId, itemId, reason }
     case 'move_custom_item':
       return { op, customId, itemId, toIndex: index, reason }
+    case 'set_template':
+      return { op, templateId: value, resetDesign: visible === true, reason }
+    case 'set_design':
+      return { op, changes: designChangesFromWire(fields), reason }
   }
+}
+
+/** The `set_design` fields as a changes object; "default" or an empty value clears a setting. */
+function designChangesFromWire(fields: CvOperationWire['fields']): Record<string, unknown> {
+  const changes: Record<string, unknown> = {}
+  for (const { name, value } of fields ?? []) {
+    const text = value.trim()
+    if (text === '' || text.toLowerCase() === 'default') changes[name] = null
+    else if (name === 'fontSize') changes[name] = Number(text)
+    else if (name === 'showIcons')
+      changes[name] = text === 'true' ? true : text === 'false' ? false : text
+    else changes[name] = text.toLowerCase()
+  }
+  return changes
 }
 
 /** The wire shape with the v2 fields optional, for answers stored or streamed before they existed. */
@@ -827,6 +979,11 @@ export function applyCvOperation(content: CvContent, op: CvOperation): CvApplyRe
       list.splice(clampIndex(op.toIndex, list.length), 0, item!)
       return { ok: true, content: next }
     }
+
+    // Design operations need the whole document: see cv-document-operations.ts.
+    case 'set_template':
+    case 'set_design':
+      return fail('Cette modification concerne le design du CV, pas son contenu.')
   }
 }
 
@@ -861,7 +1018,7 @@ export function applyCvOperations(
 
 // --- Description (proposal review UI) ----------------------------------------------
 
-export type CvChangeKind = 'edit' | 'add' | 'remove' | 'move' | 'section'
+export type CvChangeKind = 'edit' | 'add' | 'remove' | 'move' | 'section' | 'design'
 
 export interface CvOperationDescription {
   kind: CvChangeKind
@@ -873,6 +1030,21 @@ export interface CvOperationDescription {
   after: string | null
   /** Why it cannot apply to this document, or null. */
   problem: string | null
+  /** Design operations: one line per setting that changes (the text above stays null). */
+  design?: CvDesignChangeLine[]
+  /** A trade-off the user should know before accepting (e.g. a template that ATS read badly). */
+  warning?: string | null
+}
+
+/** One setting of a design change: « Modèle : Moderne → Classique », with swatches for colors. */
+export interface CvDesignChangeLine {
+  label: string
+  /** The current value; null when the description has no design to compare with. */
+  before: string | null
+  after: string
+  /** `#rrggbb` of the values that are colors, to draw swatches. */
+  beforeColor?: string
+  afterColor?: string
 }
 
 const SECTION_SINGULAR: Record<CvSectionKey, string> = {
@@ -1156,6 +1328,10 @@ export function describeCvOperation(content: CvContent, op: CvOperation): CvOper
         after: `Position ${to + 1}`,
       }
     }
+    case 'set_template':
+    case 'set_design':
+      // Described against the whole document by describeCvOperationInDocument.
+      return { ...base, kind: 'design', target: 'Design', before: null, after: null }
   }
 }
 

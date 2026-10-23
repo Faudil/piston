@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Export actions of a cover letter: save it as a .txt file, or open the print
- * view (the browser's "Save as PDF" gives a PDF). The print view loads the
+ * Export actions of a cover letter: save it as a .txt file, open the print
+ * view (the browser's "Save as PDF" gives a PDF), or download a PDF in the style
+ * of one of the user's CVs. The print view loads the
  * saved letter, so `generationId` is only needed for that button.
  */
 const props = defineProps<{
@@ -43,5 +44,6 @@ function downloadTxt() {
       :to="`/impression/lettre/${generationId}`"
       target="_blank"
     />
+    <LettersMatchingLetterButton v-if="generationId" :generation-id="generationId" />
   </div>
 </template>

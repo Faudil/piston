@@ -1,5 +1,7 @@
 import {
   cvFontPairings,
+  ensureContrast,
+  readableOn,
   type CvLineHeight,
   type CvMargins,
   type CvPageFormat,
@@ -41,7 +43,11 @@ export interface CvTokens {
   page: { width: number; height: number }
   margins: { x: number; top: number; bottom: number }
   fonts: { heading: string; body: string }
-  colors: ResolvedCvDesign['palette'] & { onPrimary: string }
+  colors: ResolvedCvDesign['palette'] & {
+    onPrimary: string
+    /** The primary color for text on the page background: darkened until it reads (4.5:1). */
+    primaryText: string
+  }
   lineHeight: number
   /** Font sizes in points. */
   size: {
@@ -62,15 +68,7 @@ export interface CvTokens {
 
 const round = (value: number) => Math.round(value * 10) / 10
 
-/** Black or white, whichever reads better on `hex` (WCAG relative luminance). */
-export function readableOn(hex: string): string {
-  const [r, g, b] = [1, 3, 5].map((index) => {
-    const channel = parseInt(hex.slice(index, index + 2), 16) / 255
-    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
-  })
-  const luminance = 0.2126 * r! + 0.7152 * g! + 0.0722 * b!
-  return luminance > 0.4 ? '#1c1917' : '#ffffff'
-}
+export { readableOn }
 
 export function computeTokens(design: ResolvedCvDesign): CvTokens {
   const factor = 1 + FONT_STEP * design.fontSize
@@ -83,7 +81,11 @@ export function computeTokens(design: ResolvedCvDesign): CvTokens {
     page: PAGE_SIZES[design.pageFormat],
     margins: MARGINS[design.margins],
     fonts: { heading: cvFontFamilyName(pairing.heading), body: cvFontFamilyName(pairing.body) },
-    colors: { ...design.palette, onPrimary: readableOn(design.palette.primary) },
+    colors: {
+      ...design.palette,
+      onPrimary: readableOn(design.palette.primary),
+      primaryText: ensureContrast(design.palette.primary, '#ffffff'),
+    },
     lineHeight: LINE_HEIGHTS[design.lineHeight],
     size: {
       base: size(baseSize),

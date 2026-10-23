@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { CvContentBox } from '@piston/cv-render'
 import {
-  applyCvOperations,
+  applyCvOperationsToDocument,
   checkCv,
   cvItemLabel,
   cvSectionTitle,
@@ -34,6 +35,9 @@ const document = initial.value
 const editor = useCvEditor(document)
 const { state, updatedAt, status, errorMessage } = editor
 
+// The header photo: uploads go straight to the server, the preview gets it as a data URL.
+const photo = useCvPhoto(id, () => state.content)
+
 useSeoMeta({ title: () => state.title })
 
 // --- Layout --------------------------------------------------------------------
@@ -48,14 +52,14 @@ const sideTab = computed<Exclude<Tab, 'preview'>>(() =>
 // Phones get text-only tabs: four labels with icons do not fit in 375 px.
 const mobileTabs = [
   { label: 'Contenu', value: 'content' },
-  { label: 'IA', value: 'ai' },
   { label: 'Design', value: 'design' },
+  { label: 'IA', value: 'ai' },
   { label: 'Aperçu', value: 'preview' },
 ]
 const desktopTabs = [
   { label: 'Contenu', value: 'content', icon: 'i-lucide-list' },
-  { label: 'IA', value: 'ai', icon: 'i-lucide-sparkles' },
   { label: 'Design', value: 'design', icon: 'i-lucide-palette' },
+  { label: 'IA', value: 'ai', icon: 'i-lucide-sparkles' },
 ]
 
 /** Classes of a side panel: shown for its tab on phones, for `sideTab` from `lg`. */
@@ -74,11 +78,14 @@ const {
   result: preview,
   status: previewStatus,
   error: previewError,
-} = useCvPreview(() => ({
-  content: state.content,
-  design: state.design,
-  templateId: state.templateId,
-}))
+} = useCvPreview(
+  () => ({
+    content: state.content,
+    design: state.design,
+    templateId: state.templateId,
+  }),
+  () => photo.assets.value,
+)
 const pageCount = computed(() => preview.value?.pageCount)
 
 /** « 2 pages », and how little of the last one is used when it almost fits. */
@@ -103,14 +110,43 @@ async function goToCheck(check: CvCheck) {
   await nextTick()
   const target = check.target
   if (!target) return
-  const selector = target.itemId
-    ? `[data-item-id="${target.itemId}"]`
+  // Open the section (and item) holding the problem, then focus its first field.
+  const contentId = target.itemId
+    ? `item.${target.itemId}`
     : target.section === 'header'
-      ? '#section-title-header'
-      : `#section-${target.section}`
-  const element = window.document.querySelector<HTMLElement>(selector)
-  element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  element?.querySelector<HTMLElement>('button, input, textarea')?.focus({ preventScroll: true })
+      ? 'header.fullName'
+      : `section.${target.section}`
+  await contentEditor.value?.reveal(contentId)
+}
+
+// --- Click-to-edit ---------------------------------------------------------------------
+
+const contentEditor = useTemplateRef<{ reveal: (contentId: string) => Promise<boolean> }>(
+  'contentEditor',
+)
+
+/** The content id of the field being hovered or focused in the editor. */
+const hoveredId = ref<string | null>(null)
+const highlight = computed<CvContentBox[]>(() =>
+  hoveredId.value ? (preview.value?.boxes.filter((box) => box.id === hoveredId.value) ?? []) : [],
+)
+
+/** A click or tap on the preview: edit the smallest content box under the point. */
+async function onPreviewPoint(point: { page: number; x: number; y: number }) {
+  const boxes = (preview.value?.boxes ?? []).filter(
+    (box) =>
+      box.page === point.page &&
+      point.x >= box.x &&
+      point.x <= box.x + box.width &&
+      point.y >= box.y &&
+      point.y <= box.y + box.height,
+  )
+  const smallest = boxes.sort((a, b) => a.width * a.height - b.width * b.height)[0]
+  if (!smallest) return
+  // On phones the preview is its own tab: go back to the editor, then focus the field.
+  tab.value = 'content'
+  await nextTick()
+  await contentEditor.value?.reveal(smallest.id)
 }
 
 // A new template is a visible change worth a restore point.
@@ -139,8 +175,34 @@ function warnBeforeUnload(event: BeforeUnloadEvent) {
     event.preventDefault()
   }
 }
-onMounted(() => window.addEventListener('beforeunload', warnBeforeUnload))
-onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
+
+/**
+ * Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y undo and redo the document. In
+ * dialogs and outside the editor's own fields (the AI instruction box) the
+ * browser's text undo is left alone.
+ */
+function onUndoShortcut(event: KeyboardEvent) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+  const key = event.key.toLowerCase()
+  const redo = (key === 'z' && event.shiftKey) || key === 'y'
+  if (!redo && !(key === 'z' && !event.shiftKey)) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('[role="dialog"]')) return
+  const typing = target?.matches('input, textarea, select, [contenteditable="true"]')
+  if (typing && !target?.closest('[data-cv-editor]')) return
+  event.preventDefault()
+  if (redo) editor.redo()
+  else editor.undo()
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', warnBeforeUnload)
+  window.addEventListener('keydown', onUndoShortcut)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', warnBeforeUnload)
+  window.removeEventListener('keydown', onUndoShortcut)
+})
 
 // --- Claude's proposals ----------------------------------------------------------------------
 
@@ -174,15 +236,31 @@ async function applyProposal(payload: {
   generationId: string
   body: CvEditBody
 }) {
-  const before: CvContent = JSON.parse(JSON.stringify(state.content))
-  const languageBefore = state.design.language
-  const { content, results } = applyCvOperations(state.content, payload.operations)
+  const before = JSON.parse(
+    JSON.stringify({
+      content: state.content,
+      design: state.design,
+      templateId: state.templateId,
+    }),
+  ) as { content: CvContent; design: typeof state.design; templateId: typeof state.templateId }
+  // An accepted proposal is one undo step, whatever was typed just before.
+  editor.breakUndoStep()
+  const { state: next, results } = applyCvOperationsToDocument(
+    {
+      content: JSON.parse(JSON.stringify(state.content)),
+      design: JSON.parse(JSON.stringify(state.design)),
+      templateId: state.templateId,
+    },
+    payload.operations,
+  )
   const applied = results.filter((result) => result.ok).length
   if (!applied) {
     toast.add({ title: 'Aucune modification n’a pu être appliquée.', color: 'warning' })
     return
   }
-  state.content = content
+  state.content = next.content
+  state.design = next.design
+  state.templateId = next.templateId
   const body = payload.body
   if (body.mode === 'action' && body.action === 'translate_en' && !body.scope.section) {
     state.design.language = 'en'
@@ -200,8 +278,10 @@ async function applyProposal(payload: {
       {
         label: 'Annuler',
         onClick: () => {
-          state.content = before
-          state.design.language = languageBefore
+          editor.breakUndoStep()
+          state.content = before.content
+          state.design = before.design
+          state.templateId = before.templateId
           void editor.save({ label: `Annulation : ${payload.label}`, source: 'manual' })
         },
       },
@@ -349,25 +429,8 @@ const moreItems = computed(() => [
     width="wide"
     :back="{ to: `/cv?profil=${document.profileId}`, label: 'CV' }"
   >
-    <template #description>
-      <span class="inline-flex items-center gap-1.5" :class="STATUS[status].class" role="status">
-        <UIcon
-          :name="STATUS[status].icon"
-          class="size-4"
-          :class="{ 'animate-spin': status === 'saving' }"
-        />
-        {{ STATUS[status].label }}
-      </span>
-      <span class="text-muted"> · Modèle « {{ cvTemplates[state.templateId].label }} »</span>
-    </template>
+    <template #description> Modèle « {{ cvTemplates[state.templateId].label }} » </template>
     <template #actions>
-      <UButton
-        label="Télécharger le PDF"
-        icon="i-lucide-download"
-        color="neutral"
-        variant="outline"
-        @click="download(`/api/cv-documents/${id}/pdf?download=1`)"
-      />
       <UButton
         label="Enregistrer comme version"
         icon="i-lucide-file-check"
@@ -405,13 +468,68 @@ const moreItems = computed(() => [
       "
     />
 
-    <UTabs
-      v-model="tab"
-      :items="mobileTabs"
-      :content="false"
-      class="mb-5 lg:hidden"
-      aria-label="Parties de l’éditeur"
-    />
+    <!-- Sticky bar: save status, undo / redo, page count, download; the phone tabs sit under it. -->
+    <div
+      class="sticky top-0 z-30 -mx-4 mb-5 border-b border-default bg-canvas/90 px-4 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10"
+    >
+      <div class="flex items-center gap-2 py-2">
+        <span
+          class="inline-flex min-w-0 items-center gap-1.5 text-sm"
+          :class="STATUS[status].class"
+          role="status"
+          aria-live="polite"
+        >
+          <UIcon
+            :name="STATUS[status].icon"
+            class="size-4 shrink-0"
+            :class="{ 'animate-spin': status === 'saving' }"
+          />
+          <span class="truncate">{{ STATUS[status].label }}</span>
+        </span>
+        <div class="ml-auto flex items-center gap-1">
+          <UTooltip text="Annuler (Ctrl+Z)">
+            <UButton
+              icon="i-lucide-undo-2"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :disabled="!editor.canUndo.value"
+              aria-label="Annuler la dernière modification"
+              @click="editor.undo()"
+            />
+          </UTooltip>
+          <UTooltip text="Rétablir (Ctrl+Maj+Z)">
+            <UButton
+              icon="i-lucide-redo-2"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :disabled="!editor.canRedo.value"
+              aria-label="Rétablir la modification annulée"
+              @click="editor.redo()"
+            />
+          </UTooltip>
+          <UBadge
+            v-if="pageSummary"
+            :label="pageSummary.pages"
+            icon="i-lucide-file"
+            color="neutral"
+            variant="subtle"
+            class="ml-1"
+          />
+          <div class="ml-1">
+            <CvExportMenu :document-id="id" :before-export="editor.flush" />
+          </div>
+        </div>
+      </div>
+      <UTabs
+        v-model="tab"
+        :items="mobileTabs"
+        :content="false"
+        class="pb-2 lg:hidden"
+        aria-label="Parties de l’éditeur"
+      />
+    </div>
 
     <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:items-start">
       <div class="min-w-0">
@@ -425,7 +543,15 @@ const moreItems = computed(() => [
         />
 
         <div :class="panelClass('content')">
-          <CvContentEditor v-model="state.content" :language="state.design.language">
+          <CvContentEditor
+            ref="contentEditor"
+            v-model="state.content"
+            :language="state.design.language"
+            :template-id="state.templateId"
+            :design="state.design"
+            :photo="photo"
+            @highlight="hoveredId = $event"
+          >
             <template #section-actions="{ section }">
               <CvAiMenu :scope="{ section }" :label="sectionLabel(section)" />
             </template>
@@ -447,6 +573,10 @@ const moreItems = computed(() => [
             :document-id="id"
             :content="state.content"
             :offer-id="document.offerId"
+            :design="state.design"
+            :template-id="state.templateId"
+            :page-count="pageCount"
+            :before-copy="() => editor.flush()"
             @apply="applyProposal"
             @tailor-in-copy="tailorInCopy"
           />
@@ -458,22 +588,26 @@ const moreItems = computed(() => [
             v-model:template-id="state.templateId"
             v-model:design="state.design"
             :document-id="id"
+            :content="state.content"
             :version="updatedAt"
           />
         </div>
       </div>
 
       <aside
-        class="min-w-0 space-y-6 lg:sticky lg:top-6 lg:block"
+        class="min-w-0 space-y-6 lg:sticky lg:top-16 lg:block lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto"
         :class="tab === 'preview' ? 'block' : 'hidden'"
         aria-label="Aperçu et vérifications"
       >
         <div>
           <ClientOnly>
             <CvPdfPreview
+              class="[&_canvas]:cursor-pointer"
               :data="preview?.pdf ?? null"
               :busy="previewStatus === 'rendering'"
-              label="Aperçu du CV"
+              :highlight="highlight"
+              label="Aperçu du CV. Touche une zone pour la modifier."
+              @point="onPreviewPoint"
             />
             <template #fallback>
               <div class="aspect-[210/297] animate-pulse rounded-sm bg-elevated" />

@@ -1,12 +1,28 @@
 import { and, desc, eq, generations, sql } from '@piston/db'
 import {
   cvActionRequest,
+  cvBulletsRequest,
+  cvCompleteAnswersRequest,
+  cvCompleteQuestionsRequest,
+  cvFixRequest,
   cvInstructionRequest,
+  cvOnePageRequest,
   cvReviewRequest,
+  cvSummaryRequest,
   cvTailorRequest,
+  cvTranslateRequest,
+  wrapCvDesign,
   wrapOffer,
 } from '@piston/prompts'
-import type { CvContent, CvEditBody, CvEditScope, GenerationInputRefs } from '@piston/shared'
+import type {
+  CvContent,
+  CvDesign,
+  CvEditBody,
+  CvEditScope,
+  CvFixTarget,
+  CvTemplateId,
+  GenerationInputRefs,
+} from '@piston/shared'
 
 /**
  * Checks that an action's scope points at something that exists in the
@@ -63,7 +79,13 @@ async function getReviewForCv(userId: string, profileId: string, reviewGeneratio
  */
 export async function buildCvEditRequest(
   userId: string,
-  document: { id: string; profileId: string; content: CvContent },
+  document: {
+    id: string
+    profileId: string
+    content: CvContent
+    design: CvDesign
+    templateId: CvTemplateId
+  },
   body: CvEditBody,
 ): Promise<{ request: string; inputRefs: GenerationInputRefs }> {
   const base: GenerationInputRefs = {
@@ -71,9 +93,11 @@ export async function buildCvEditRequest(
     profileId: document.profileId,
     cvMode: body.mode,
   }
+  // The look of the CV, for the requests that may change it (design operations).
+  const design = wrapCvDesign(document.design, document.templateId)
   switch (body.mode) {
     case 'instruction':
-      return { request: cvInstructionRequest(body.instruction), inputRefs: base }
+      return { request: `${cvInstructionRequest(body.instruction)}\n\n${design}`, inputRefs: base }
     case 'action':
       assertCvScope(document.content, body.scope)
       return {
@@ -94,5 +118,41 @@ export async function buildCvEditRequest(
         inputRefs: { ...base, reviewGenerationId: review.id },
       }
     }
+    case 'fix':
+      assertCvFixTarget(document.content, body.target)
+      return {
+        request: `${cvFixRequest(body.issue, body.source, body.target)}\n\n${design}`,
+        inputRefs: base,
+      }
+    case 'summary':
+      return { request: cvSummaryRequest(), inputRefs: base }
+    case 'bullets':
+      assertCvScope(document.content, { section: body.section, itemId: body.itemId })
+      return { request: cvBulletsRequest(body.section, body.itemId, body.notes), inputRefs: base }
+    case 'complete':
+      assertCvScope(document.content, { section: body.section, itemId: body.itemId })
+      return {
+        request: body.answers
+          ? cvCompleteAnswersRequest(body.section, body.itemId, body.answers)
+          : cvCompleteQuestionsRequest(body.section, body.itemId),
+        inputRefs: base,
+      }
+    case 'translate':
+      return { request: cvTranslateRequest(), inputRefs: base }
+    case 'one_page':
+      return { request: `${cvOnePageRequest(body)}\n\n${design}`, inputRefs: base }
+  }
+}
+
+/** A coach issue's target must exist in the document (the user may have deleted it since). */
+function assertCvFixTarget(content: CvContent, target: CvFixTarget) {
+  if (target.customId && !content.custom.some((section) => section.id === target.customId)) {
+    throw createError({
+      statusCode: 400,
+      message: 'Cet élément n’existe plus dans ton CV. Recharge la page.',
+    })
+  }
+  if (target.section && target.section !== 'header' && target.section !== 'custom') {
+    assertCvScope(content, { section: target.section, itemId: target.itemId })
   }
 }

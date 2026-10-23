@@ -250,3 +250,7 @@ export function cvToMarkdown(content: CvContent, design: { language: CvLanguageC
   }
   return `${out.join('\n').trim()}\n`
 }
+
+/** The rendered blocks of a section (heading, dates/place line, lines), shared with the Word export. */
+export { sectionBlocks as cvSectionBlocks }
+export type { Block as CvTextBlock }

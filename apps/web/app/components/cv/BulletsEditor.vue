@@ -1,20 +1,25 @@
 <script setup lang="ts">
+import { VueDraggable } from 'vue-draggable-plus'
 import { CV_LIMITS, newCvId, type CvBullet } from '@piston/shared'
 
 /**
- * The bullets of an experience or project: one textarea each, with move
- * up / down and delete buttons (keyboard and screen-reader friendly), and a
- * slot for the AI menu of each bullet.
+ * The bullets of an experience or project: one textarea each, draggable by
+ * a handle, with move up / down and delete buttons (keyboard and
+ * screen-reader friendly), and a slot for the AI menu of each bullet.
  */
 const bullets = defineModel<CvBullet[]>({ required: true })
 const props = defineProps<{ itemLabel: string }>()
 
-const list = ref<HTMLElement | null>(null)
+const model = useInPlaceList(() => bullets.value)
+/** The counter appears when the limit is near, so short bullets stay uncluttered. */
+const nearLimit = (text: string) => text.length >= CV_LIMITS.bullet * 0.7
 
 async function add() {
   bullets.value.push({ id: newCvId(), text: '' })
   await nextTick()
-  list.value?.querySelector<HTMLTextAreaElement>('li:last-child textarea')?.focus()
+  document
+    .querySelector<HTMLElement>(`[data-cv-id="bullet.${bullets.value.at(-1)!.id}"] textarea`)
+    ?.focus()
 }
 
 function move(index: number, delta: number) {
@@ -32,20 +37,33 @@ function remove(index: number) {
 <template>
   <fieldset class="space-y-2">
     <legend class="mb-1 text-sm font-medium text-highlighted">Puces</legend>
-    <ol ref="list" class="space-y-2">
-      <li v-for="(bullet, index) in bullets" :key="bullet.id" class="flex items-start gap-2">
-        <span class="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+    <p v-if="!bullets.length" class="text-sm text-muted">
+      Une puce = une réalisation : un verbe d’action, ce que tu as fait, le résultat.
+    </p>
+    <VueDraggable v-model="model" v-bind="cvDragOptions('inner')" tag="ol" class="space-y-2">
+      <li
+        v-for="(bullet, index) in bullets"
+        :key="bullet.id"
+        class="flex items-start gap-1"
+        :data-cv-id="`bullet.${bullet.id}`"
+      >
+        <CvEditorsDragHandle level="inner" class="mt-0.5" />
         <div class="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-start">
-          <UTextarea
-            v-model="bullet.text"
-            :rows="1"
-            autoresize
-            :maxrows="6"
-            class="min-w-0 flex-1"
-            :maxlength="CV_LIMITS.bullet"
-            :aria-label="`Puce ${index + 1} de « ${props.itemLabel} »`"
-            placeholder="Un verbe d’action, ce que tu as fait, le résultat"
-          />
+          <div class="min-w-0 flex-1">
+            <UTextarea
+              v-model="bullet.text"
+              :rows="1"
+              autoresize
+              :maxrows="6"
+              class="w-full"
+              :maxlength="CV_LIMITS.bullet"
+              :aria-label="`Puce ${index + 1} de « ${props.itemLabel} »`"
+              placeholder="Un verbe d’action, ce que tu as fait, le résultat"
+            />
+            <p v-if="nearLimit(bullet.text)" class="mt-0.5 text-right text-xs text-muted">
+              {{ bullet.text.length }}/{{ CV_LIMITS.bullet }}
+            </p>
+          </div>
           <div class="flex shrink-0 items-center justify-end">
             <slot name="actions" :bullet="bullet" :index="index" />
             <UButton
@@ -77,7 +95,7 @@ function remove(index: number) {
           </div>
         </div>
       </li>
-    </ol>
+    </VueDraggable>
     <UButton
       v-if="bullets.length < CV_LIMITS.bullets"
       label="Ajouter une puce"

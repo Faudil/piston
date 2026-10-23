@@ -1,4 +1,10 @@
-import { renderPdf, type CvAssets, type CvPdfMake, type CvRenderInput } from '@piston/cv-render'
+import {
+  renderPdf,
+  type CvAssets,
+  type CvPdfEngine,
+  type CvPdfMake,
+  type CvRenderInput,
+} from '@piston/cv-render'
 import type { CvContent } from '@piston/shared'
 
 /**
@@ -56,6 +62,29 @@ function releaseRenderSlot() {
   const next = waitingRenders.shift()
   if (next) next()
   else activeRenders--
+}
+
+/**
+ * Runs `render` with the shared pdfmake instance and the fonts, one of
+ * `MAX_CONCURRENT_RENDERS` at a time. For other PDFs drawn with the CV
+ * engine (the matching cover letter).
+ */
+export async function withCvPdfEngine<T>(
+  label: string,
+  render: (engine: CvPdfEngine) => Promise<T>,
+): Promise<T> {
+  await acquireRenderSlot()
+  try {
+    return await render({ pdfmake: await usePdfMake(), loadFont })
+  } catch (error) {
+    console.error(`[cv-pdf] ${label} failed`, error)
+    throw createError({
+      statusCode: 500,
+      message: 'Impossible de générer le PDF. Réessaie dans un instant.',
+    })
+  } finally {
+    releaseRenderSlot()
+  }
 }
 
 /** Renders a CV document to PDF bytes. `assets` holds its photo (see `loadCvRenderAssets`). */

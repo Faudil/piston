@@ -9,9 +9,15 @@ import type { CvIconName } from './icons'
 
 /** Text helpers shared by the blocks: cleaning, links, dates, runs. */
 
-/** Cleans a user string for the PDF: NFC, trimmed, without characters the fonts cannot print. */
+/**
+ * Cleans a user string for the PDF: NFC, trimmed, without characters the
+ * fonts cannot print. Non-breaking spaces become plain spaces: the Carlito
+ * subset has a broken glyph for U+00A0 that makes fontkit throw.
+ */
 export function clean(value: string): string {
-  return stripUnprintable(value).trim()
+  return stripUnprintable(value)
+    .replace(/[\u00a0\u2007\u202f]/g, ' ')
+    .trim()
 }
 
 /**

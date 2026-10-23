@@ -4,23 +4,36 @@ import {
   cvAiActions,
   parseCvEditOutput,
   type CvContent,
+  type CvDesign,
   type CvEditBody,
   type CvEditProposal,
+  type CvTemplateId,
   type CvOperation,
   type JobOffer,
 } from '@piston/shared'
 
 /**
- * Everything Claude can do on the document: the instruction box, actions on
- * the whole CV, tailoring to an offer and applying the latest review. Every
+ * Everything Claude can do on the document: the coach (live checks, latest
+ * review, one-click corrections), the instruction box and quick style
+ * requests, writing help, actions on the whole CV, the one-page version, the
+ * English copy, tailoring to an offer and applying the latest review. Every
  * request ends in a proposal reviewed operation by operation
- * (CvProposalReview); the parent applies what the user accepts.
+ * (CvProposalReview); the parent applies what the user accepts. Design
+ * operations (template, colors, fonts...) are applied by the parent with
+ * `applyCvOperationsToDocument`.
  */
 const props = defineProps<{
   documentId: string
   content: CvContent
   /** The offer the document is dedicated to, preselected for tailoring. */
   offerId: string | null
+  /** The design and template: for the coach's checks and to show design changes as diffs. */
+  design?: CvDesign
+  templateId?: CvTemplateId
+  /** The page count of the preview, when known. */
+  pageCount?: number
+  /** Called before the document is copied (« Traduire en anglais »), e.g. to save pending edits. */
+  beforeCopy?: () => Promise<void>
 }>()
 const emit = defineEmits<{
   apply: [
@@ -44,7 +57,7 @@ const proposal = computed<CvEditProposal | undefined>(() =>
 const panel = ref<HTMLElement | null>(null)
 
 /** Starts a proposal. Also called by the « IA » menus of sections, items and bullets. */
-async function run(body: Omit<CvEditBody, 'documentId'>, label: string) {
+async function run(body: CvEditRequest, label: string) {
   const full = { ...body, documentId: props.documentId } as CvEditBody
   current.value = { body: full, label }
   await nextTick()
@@ -61,7 +74,38 @@ const EXAMPLES = [
   'Mets en avant le management d’équipe',
   'Rends mon accroche plus percutante',
   'Ajoute mon stage chez … en 2023 : …',
+  'Rends-le plus sobre pour une banque',
+  'Plus créatif, je postule en agence',
 ]
+
+/** Quick design requests, sent as instructions: Claude answers with design operations. */
+const STYLES = [
+  {
+    label: 'Plus sobre',
+    icon: 'i-lucide-minus',
+    instruction:
+      'Rends le design de ce CV plus sobre et classique : une colonne, des couleurs discrètes, sans icônes ni éléments décoratifs.',
+  },
+  {
+    label: 'Plus créatif',
+    icon: 'i-lucide-palette',
+    instruction:
+      'Rends le design de ce CV plus créatif et plus marqué (couleur, polices, mise en page), pour une candidature dans une agence ou un secteur créatif.',
+  },
+  {
+    label: 'Lisible par les ATS',
+    icon: 'i-lucide-scan-text',
+    instruction:
+      'Adapte le design de ce CV pour les portails d’emploi et les logiciels de recrutement (ATS) : lecture optimale, une colonne, sans icônes.',
+  },
+]
+
+function sendStyle(style: (typeof STYLES)[number]) {
+  run(
+    { mode: 'instruction', instruction: style.instruction },
+    `IA : design « ${style.label.toLowerCase()} »`,
+  )
+}
 
 function sendInstruction() {
   const text = instruction.value.trim()
@@ -95,6 +139,54 @@ function tailor() {
   )
 }
 
+// --- Questions (« Compléter cette section ») --------------------------------------------
+
+/** The questions Claude asked, while the user has not answered them yet. */
+const questions = computed(() =>
+  !pending.value && current.value?.body.mode === 'complete' && !current.value.body.answers
+    ? generation.value?.output.questions
+    : undefined,
+)
+
+function answerQuestions(answers: Array<{ question: string; answer: string }>) {
+  if (!current.value) return
+  run({ ...current.value.body, answers } as CvEditRequest, current.value.label)
+}
+
+// --- Writing help, one page, English copy ---------------------------------------------
+
+const router = useRouter()
+const route = useRoute()
+const toast = useToast()
+const copying = ref(false)
+
+/** The translation goes to a new document: the copy is created now, translated by a reviewed proposal. */
+async function translateInCopy() {
+  copying.value = true
+  try {
+    await props.beforeCopy?.()
+    const copy = await $fetch<{ id: string }>(`/api/cv-documents/${props.documentId}/translate`, {
+      method: 'POST',
+    })
+    await router.push({ path: `/cv/editeur/${copy.id}`, query: { ia: 'traduire' } })
+  } catch (err) {
+    toast.add({ title: apiErrorMessage(err), color: 'error' })
+  } finally {
+    copying.value = false
+  }
+}
+
+// Opened with ?ia=traduire (the English copy just made): ask for the translation once.
+const requestEdit = inject(CV_AI_REQUEST, null)
+onMounted(async () => {
+  if (route.query.ia !== 'traduire') return
+  await router.replace({ query: {} })
+  await nextTick()
+  const label = 'IA : traduction en anglais'
+  if (requestEdit) requestEdit({ mode: 'translate' }, label)
+  else void run({ mode: 'translate' }, label)
+})
+
 // --- Applying -----------------------------------------------------------------------
 
 function apply(operations: CvOperation[]) {
@@ -117,6 +209,16 @@ function discard() {
 
 <template>
   <div class="space-y-8">
+    <CvAiCoachPanel
+      :document-id="documentId"
+      :content="content"
+      :design="design"
+      :template-id="templateId"
+      :page-count="pageCount"
+      :disabled="pending"
+      @fix="run"
+    />
+
     <section aria-labelledby="ai-instruction" class="space-y-3">
       <h3 id="ai-instruction" class="flex items-center gap-2 font-semibold text-highlighted">
         <UIcon name="i-lucide-message-square-text" class="size-5 text-primary" />
@@ -160,6 +262,29 @@ function discard() {
       </form>
     </section>
 
+    <section aria-labelledby="ai-style" class="space-y-3">
+      <h3 id="ai-style" class="flex items-center gap-2 font-semibold text-highlighted">
+        <UIcon name="i-lucide-palette" class="size-5 text-primary" />
+        Style du CV
+      </h3>
+      <p class="text-sm text-muted">
+        Claude propose un modèle, des couleurs ou des polices ; tu vois le changement avant de
+        l’accepter. Dis aussi le secteur dans ta demande ci-dessus (« pour une banque »).
+      </p>
+      <div class="flex flex-wrap gap-2">
+        <UButton
+          v-for="style in STYLES"
+          :key="style.label"
+          :label="style.label"
+          :icon="style.icon"
+          color="neutral"
+          variant="outline"
+          :disabled="pending"
+          @click="sendStyle(style)"
+        />
+      </div>
+    </section>
+
     <section aria-labelledby="ai-actions" class="space-y-3">
       <h3 id="ai-actions" class="flex items-center gap-2 font-semibold text-highlighted">
         <UIcon name="i-lucide-wand-sparkles" class="size-5 text-primary" />
@@ -171,7 +296,7 @@ function discard() {
       </p>
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <UButton
-          v-for="action in cvAiActions"
+          v-for="action in cvAiActions.filter((action) => action !== 'translate_en')"
           :key="action"
           :label="cvAiActionLabels[action].label"
           :icon="cvAiActionLabels[action].icon"
@@ -185,7 +310,36 @@ function discard() {
             )
           "
         />
+        <UButton
+          label="Générer l’accroche"
+          icon="i-lucide-text-cursor-input"
+          color="neutral"
+          variant="outline"
+          :disabled="pending"
+          @click="run({ mode: 'summary' }, 'IA : accroche générée')"
+        />
+        <UButton
+          label="Version une page"
+          icon="i-lucide-file-minus"
+          color="neutral"
+          variant="outline"
+          :disabled="pending"
+          @click="run({ mode: 'one_page', pageCount }, 'IA : version une page')"
+        />
+        <UButton
+          label="Traduire en anglais"
+          icon="i-lucide-languages"
+          color="neutral"
+          variant="outline"
+          :loading="copying"
+          :disabled="pending || copying"
+          @click="translateInCopy"
+        />
       </div>
+      <p class="text-sm text-muted">
+        « Traduire en anglais » crée une copie de ce CV (même modèle, titres en anglais) et propose
+        la traduction à relire : ton CV d’origine ne change pas.
+      </p>
     </section>
 
     <section aria-labelledby="ai-offer" class="space-y-3">
@@ -267,10 +421,21 @@ function discard() {
         icon="i-lucide-circle-alert"
         :title="error"
       />
+      <CvAiQuestionsForm
+        v-if="questions?.length && generation"
+        :key="generation.id"
+        :questions="questions"
+        :summary="generation.output.summary"
+        :pending="pending"
+        @submit="answerQuestions"
+        @cancel="discard"
+      />
       <CvProposalReview
-        v-if="proposal"
+        v-else-if="proposal"
         :proposal="proposal"
         :content="content"
+        :design="design"
+        :template-id="templateId"
         :pending="pending"
         @apply="apply"
         @discard="discard"

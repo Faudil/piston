@@ -2,6 +2,9 @@ import { statSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   CvContent,
+  applyTemplateSectionOrder,
+  cvSampleContent,
+  cvTemplates,
   createCvItem,
   cvBulletStyles,
   cvFontFamilies,
@@ -24,7 +27,14 @@ import {
   type CvRenderResult,
 } from '../src'
 import { CV_FONTS_DIR } from '../src/node'
-import { PHOTO_DATA_URL, sampleContent, sampleInput } from './fixtures'
+import {
+  PHOTO_DATA_URL,
+  longContent,
+  nearlyEmptyContent,
+  sampleContent,
+  sampleInput,
+  stressContent,
+} from './fixtures'
 import { engine, pdfText } from './helpers'
 
 const PHOTO_ID = '00000000-0000-4000-8000-000000000001'
@@ -33,7 +43,8 @@ const assets = { images: { [PHOTO_ID]: PHOTO_DATA_URL } }
 const raw = (result: CvRenderResult) => Buffer.from(result.pdf).toString('latin1')
 
 /** Text with line breaks and runs of spaces collapsed: wrapping depends on the layout. */
-const flat = async (result: CvRenderResult) => (await pdfText(result.pdf)).replace(/\s+/g, ' ')
+const squash = (text: string) => text.replace(/-\n/g, '-').replace(/\s+/g, ' ')
+const flat = async (result: CvRenderResult) => squash(await pdfText(result.pdf))
 
 function withPhoto(content: CvContent, shape: 'round' | 'rounded' | 'square' = 'round'): CvContent {
   content.header.photo = { assetId: PHOTO_ID, shape, size: 'm', position: 'left', visible: true }
@@ -58,14 +69,15 @@ describe('render', () => {
 })
 
 describe('renderPdf', () => {
-  it('renders the three v1 templates with real, extractable text', async () => {
+  it('renders every template with real, extractable text', async () => {
     for (const templateId of cvTemplateIds) {
       const result = await renderPdf(sampleInput(templateId), {}, engine)
       expect(raw(result).startsWith('%PDF-')).toBe(true)
       expect(raw(result)).toContain('/FontFile2')
-      expect(result.pageCount).toBe(1)
+      expect(result.pageCount).toBeLessThanOrEqual(2)
       expect(result.pageSize).toEqual({ width: 595.28, height: 841.89 })
       const text = await pdfText(result.pdf)
+      const squashed = squash(text)
       for (const expected of [
         'Élodie Wiśniewska-Lefèvre',
         'Besançon',
@@ -74,7 +86,7 @@ describe('renderPdf', () => {
         'd’expérience',
         'Canva',
       ]) {
-        expect(text).toContain(expected)
+        expect(squashed).toContain(expected)
       }
       // The name is what an ATS reads first, whatever the layout.
       expect(text.indexOf('Élodie')).toBe(0)
@@ -311,5 +323,103 @@ describe('fonts', () => {
     for (const pairing of cvFontPairingIds) {
       expect(cvPairingFamilies(pairing).length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('the twelve templates', () => {
+  const photoContent = () => withPhoto(cvSampleContent())
+  const fixturesByName: Record<string, () => CvContent> = {
+    demo: cvSampleContent,
+    long: longContent,
+    empty: nearlyEmptyContent,
+    photo: photoContent,
+    stress: stressContent,
+  }
+
+  it('has twelve templates', () => {
+    expect(cvTemplateIds).toHaveLength(12)
+  })
+
+  for (const templateId of cvTemplateIds) {
+    describe(templateId, () => {
+      it('renders the demo CV on one or two pages, name first, sections in order', async () => {
+        const result = await renderPdf(sampleInput(templateId, {}, cvSampleContent()), {}, engine)
+        expect(result.pageCount).toBeLessThanOrEqual(2)
+        const text = squash(await pdfText(result.pdf))
+        expect(text.indexOf('Léa Marchand')).toBe(0)
+        // The reading order: profile, experience, then the rest, whatever the layout.
+        const at = (needle: string) => text.toUpperCase().indexOf(needle)
+        expect(at('PROFIL')).toBeGreaterThan(-1)
+        expect(at('PROFIL')).toBeLessThan(at('EXPÉRIENCE PROFESSIONNELLE'))
+        expect(at('EXPÉRIENCE PROFESSIONNELLE')).toBeLessThan(at('FORMATION'))
+        for (const expected of [
+          'Cheffe de projet digital',
+          'lea.marchand@exemple.fr',
+          'Atelier Rhône Numérique',
+          'Université Lumière Lyon 2',
+          'Espagnol',
+        ]) {
+          expect(text, expected).toContain(expected)
+        }
+      })
+
+      it('handles a long CV, a nearly empty one, a photo and very long strings', async () => {
+        for (const [name, make] of Object.entries(fixturesByName)) {
+          const result = await renderPdf(sampleInput(templateId, {}, make()), assets, engine)
+          const text = await flat(result)
+          expect(raw(result).startsWith('%PDF-'), name).toBe(true)
+          if (name === 'long') expect(result.pageCount, name).toBeGreaterThanOrEqual(2)
+          if (name === 'empty') {
+            expect(result.pageCount, name).toBe(1)
+            expect(text, name).toContain('Marie Petit')
+          }
+          if (name === 'stress') {
+            expect(text, name).toContain('Zażółć gęślą jaźń')
+            expect(text, name).toContain('Wojciechowska')
+            expect(text, name).toContain('Supercalifragilistic')
+          }
+          if (name === 'photo') expect(raw(result), name).toMatch(/\/Subtype \/Image/)
+        }
+      })
+
+      it('prints accents and typographic characters in every font pairing it can be given', async () => {
+        const content = cvSampleContent()
+        content.summary = 'Œuvre « à l’écoute » — Ça va, être là ; naïve, coûteux !'
+        for (const fontPairing of ['lato', 'eb-garamond'] as const) {
+          const result = await renderPdf(
+            sampleInput(templateId, { fontPairing }, content),
+            {},
+            engine,
+          )
+          expect(await flat(result)).toContain('Œuvre « à l’écoute »')
+        }
+      })
+    })
+  }
+
+  it('puts « Étudiant » sections in the order the template recommends, only at creation', () => {
+    const content = applyTemplateSectionOrder(cvSampleContent(), cvTemplates.etudiant)
+    const keys = content.sections.map((section) => section.key)
+    expect(keys.indexOf('education')).toBeLessThan(keys.indexOf('experiences'))
+    expect(keys.indexOf('projects')).toBeLessThan(keys.indexOf('experiences'))
+  })
+
+  it('draws the timeline, small capitals and tags on a dark column readably', async () => {
+    const result = await renderPdf(
+      sampleInput('chronologie', { sectionTitleStyle: 'smallcaps' }, cvSampleContent()),
+      {},
+      engine,
+    )
+    expect((await flat(result)).toUpperCase()).toContain('EXPÉRIENCE PROFESSIONNELLE')
+    const dark = await renderPdf(
+      sampleInput(
+        'ardoise',
+        { skillStyle: 'tags', palette: { primary: '#ffeb3b' } },
+        cvSampleContent(),
+      ),
+      {},
+      engine,
+    )
+    expect(await flat(dark)).toContain('Scrum et Kanban')
   })
 })

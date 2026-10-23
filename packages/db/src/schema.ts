@@ -253,6 +253,35 @@ export const cvDocumentAssets = pgTable(
   (t) => [index('cv_document_assets_document_idx').on(t.documentId)],
 )
 
+/**
+ * Read-only share links of a CV document (`/partage/<token>`): anyone holding
+ * the link sees the CV as a PDF, without an account. The token is 32 random
+ * bytes in base64url (unguessable, unique); a link can be revoked, expires
+ * (optional) and counts its views. Deleted with the document or the user.
+ */
+export const cvShareLinks = pgTable(
+  'cv_share_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => cvDocuments.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    // Null = never expires.
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    viewCount: integer('view_count').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('cv_share_links_token_unique').on(t.token),
+    index('cv_share_links_document_idx').on(t.documentId),
+  ],
+)
+
 export type UserRow = typeof users.$inferSelect
 export type InviteRow = typeof invites.$inferSelect
 export type ResumeProfileRow = typeof resumeProfiles.$inferSelect
@@ -263,3 +292,4 @@ export type ApplicationRow = typeof applications.$inferSelect
 export type CvDocumentRow = typeof cvDocuments.$inferSelect
 export type CvDocumentRevisionRow = typeof cvDocumentRevisions.$inferSelect
 export type CvDocumentAssetRow = typeof cvDocumentAssets.$inferSelect
+export type CvShareLinkRow = typeof cvShareLinks.$inferSelect

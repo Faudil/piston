@@ -14,6 +14,7 @@ import { bandBlock, bandRegion, headerBlock, sideContactBlock } from './engine/h
 import { keepTitlesWithContent, sectionBlock } from './engine/sections'
 import { clean } from './engine/text'
 import { computeTokens, readableOn, type CvTokens } from './engine/tokens'
+import { ensureContrast, mixColors } from '@piston/shared'
 
 /**
  * The block engine's entry point: a CV document and its design → a pdfmake
@@ -32,6 +33,33 @@ export function render(input: CvRenderInput, assets: CvAssets = {}): TDocumentDe
     resolveCvDesign(cvTemplates[input.templateId], input.design),
     assets,
   )
+}
+
+/**
+ * Tokens for the side column. On a dark background text turns white and the
+ * accent is lightened until it reads (4.5:1) there, as a text color and as
+ * a fill, so titles, bullets and gauges stay visible.
+ */
+function sideColumnTokens(t: CvTokens, background: string, onSide: string): CvTokens {
+  if (onSide !== '#ffffff') {
+    return {
+      ...t,
+      colors: { ...t.colors, primaryText: ensureContrast(t.colors.primary, background) },
+    }
+  }
+  const accent = ensureContrast(t.colors.primary, background)
+  return {
+    ...t,
+    colors: {
+      ...t.colors,
+      text: onSide,
+      muted: mixColors(onSide, background, 0.22),
+      primary: accent,
+      primaryText: accent,
+      onPrimary: readableOn(accent),
+      secondary: mixColors(background, onSide, 0.28),
+    },
+  }
 }
 
 /** Gap between the columns of the `split` layout. */
@@ -83,8 +111,7 @@ export function renderResolved(
 
     // Text on the side column must stay readable whatever its background.
     const onSide = readableOn(design.palette.sidebarBg)
-    const sideTokens: CvTokens =
-      onSide === '#ffffff' ? { ...t, colors: { ...t.colors, text: onSide, muted: onSide } } : t
+    const sideTokens: CvTokens = sideColumnTokens(t, design.palette.sidebarBg, onSide)
     const contactInSide = design.headerStyle === 'sidebar'
     const sideCtx = context(sideRegion, sideTokens)
     const side: Content[] = [

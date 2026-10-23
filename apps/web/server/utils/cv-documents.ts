@@ -18,6 +18,7 @@ import {
   type CvContent,
   type CvDocument,
   type CvDocumentSummary,
+  type CvLanguageCode,
   type CvRevision,
   type CvRevisionSource,
   type CvTemplateId,
@@ -382,7 +383,7 @@ export async function restoreCvRevision(userId: string, documentId: string, revi
 export async function duplicateCvDocument(
   userId: string,
   documentId: string,
-  input: { title?: string; offerId?: string },
+  input: { title?: string; offerId?: string; language?: CvLanguageCode },
 ) {
   const source = await getUserCvDocument(userId, documentId)
   const offer = input.offerId ? await getUserOffer(userId, input.offerId) : null
@@ -395,7 +396,7 @@ export async function duplicateCvDocument(
     title,
     templateId: source.templateId,
     content: source.content,
-    design: source.design,
+    design: input.language ? { ...source.design, language: input.language } : source.design,
     revisionLabel: `Copie de « ${source.title} »`,
   })
   return copyCvPhoto(userId, source.id, copy)

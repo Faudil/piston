@@ -14,6 +14,7 @@ import { sampleResume } from '@piston/db/fixtures'
 import type { GenerationEvent } from '@piston/shared'
 import authMiddleware from '../../server/middleware/auth'
 import rateLimitMiddleware from '../../server/middleware/rate-limit'
+import { resetShareViews } from '../../server/utils/cv-share'
 import { resetWebCalls } from '../../server/utils/web-limit'
 import { testState } from './state'
 
@@ -28,6 +29,7 @@ export async function resetTestState() {
   testState.config.dailyGenerationLimit = 30
   testState.config.tavilyApiKey = 'test-tavily-key'
   resetWebCalls()
+  resetShareViews()
   testState.claude = createClaudeMock({ text: '{}' }).client
 }
 

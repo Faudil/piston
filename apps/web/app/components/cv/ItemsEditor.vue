@@ -1,15 +1,17 @@
 <script setup lang="ts">
+import { VueDraggable } from 'vue-draggable-plus'
 import {
-  CV_LIMITS,
   createCvItem,
+  cvCefrLabels,
+  cvCefrLevels,
   cvFieldLabels,
   cvFieldMaxLength,
   cvItemLabel,
   cvItemTextFields,
   cvSectionMaxItems,
   formatCvDateRange,
-  newCvId,
   type CvBullet,
+  type CvCefr,
   type CvItem,
   type CvListSectionKey,
   type CvSkill,
@@ -17,11 +19,16 @@ import {
 
 /**
  * The items of a list section (experiences, education, skills...): one
- * collapsible card per item with its fields, its bullets or its skills, and
- * buttons to move or delete it. Slots let the parent add AI menus.
+ * collapsible card per item with its fields, its bullets or its skills,
+ * draggable by a handle, with buttons to move or delete it (the keyboard
+ * equivalents of the drag). Slots let the parent add AI menus.
  */
 const items = defineModel<CvItem[]>({ required: true })
-const props = defineProps<{ section: CvListSectionKey }>()
+const props = defineProps<{
+  section: CvListSectionKey
+  /** Whether the skill style in use draws skill levels (bars or dots). */
+  skillLevelsDrawn?: boolean
+}>()
 
 const ADD_LABELS: Record<CvListSectionKey, string> = {
   experiences: 'Ajouter une expérience',
@@ -43,7 +50,7 @@ const PLACEHOLDERS: Record<string, string> = {
   end: 'MM/AAAA ou Aujourd’hui',
   date: 'MM/AAAA',
   url: 'https://…',
-  level: 'Ex. : C1, courant',
+  level: 'Ex. : courant, bilingue',
 }
 
 /** Short fields share a row on phones too. */
@@ -65,20 +72,23 @@ const hasBullets = computed(
 )
 const max = computed(() => cvSectionMaxItems[props.section])
 
+const expansion = useCvExpansion()
 // Only one or two items: show them open; otherwise open on demand.
-const open = ref(new Set<string>(items.value.length <= 2 ? items.value.map((item) => item.id) : []))
+if (items.value.length <= 2) for (const item of items.value) expansion.open(item.id)
 
-function toggle(id: string) {
-  const next = new Set(open.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  open.value = next
-}
+const model = useInPlaceList(() => items.value)
+const root = useTemplateRef<HTMLElement>('root')
 
-function add() {
+async function add() {
   const item = createCvItem(props.section) as CvItem
   items.value.push(item)
-  open.value = new Set([...open.value, item.id])
+  expansion.open(item.id)
+  await nextTick()
+  root.value
+    ?.querySelector<HTMLElement>(
+      `[data-cv-id="item.${item.id}"] input, [data-cv-id="item.${item.id}"] textarea`,
+    )
+    ?.focus()
 }
 
 function move(index: number, delta: number) {
@@ -95,16 +105,15 @@ function remove(index: number) {
 const record = (item: CvItem) => item as unknown as Record<string, string>
 const bulletsOf = (item: CvItem) => (item as unknown as { bullets: CvBullet[] }).bullets
 const skillsOf = (item: CvItem) => item as unknown as { items: CvSkill[] }
+const languageOf = (item: CvItem) => item as unknown as { cefr: CvCefr | null }
 
-/** The skill names, for the tags input. */
-const skillNames = (item: CvItem) => skillsOf(item).items.map((skill) => skill.name)
+const cefrOptions = [
+  { label: 'Niveau non précisé', value: 'none' },
+  ...cvCefrLevels.map((level) => ({ label: cvCefrLabels[level], value: level })),
+]
 
-/** New list of names from the tags input: kept skills keep their id and level. */
-function setSkillNames(item: CvItem, names: string[]) {
-  const previous = new Map(skillsOf(item).items.map((skill) => [skill.name, skill]))
-  skillsOf(item).items = names.map(
-    (name) => previous.get(name) ?? { id: newCvId(), name, level: 0 },
-  )
+function setCefr(item: CvItem, value: string) {
+  languageOf(item).cefr = value === 'none' ? null : (value as CvCefr)
 }
 
 function dates(item: CvItem) {
@@ -114,24 +123,32 @@ function dates(item: CvItem) {
 </script>
 
 <template>
-  <div class="space-y-3">
-    <ul class="space-y-2">
+  <div ref="root" class="space-y-3">
+    <p
+      v-if="!items.length"
+      class="rounded-xl border border-dashed border-default p-4 text-sm text-muted"
+    >
+      {{ cvSectionEmptyHints[section] }}
+    </p>
+    <VueDraggable v-model="model" v-bind="cvDragOptions('item')" tag="ul" class="space-y-2">
       <li
         v-for="(item, index) in items"
         :key="item.id"
         class="rounded-xl border border-default bg-default"
         :data-item-id="item.id"
+        :data-cv-id="`item.${item.id}`"
       >
         <div class="flex items-center gap-1 p-2">
+          <CvEditorsDragHandle level="item" />
           <button
             type="button"
             class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-elevated focus-visible:outline-2 focus-visible:outline-primary"
-            :aria-expanded="open.has(item.id)"
+            :aria-expanded="expansion.isOpen(item.id)"
             :aria-controls="`item-${item.id}`"
-            @click="toggle(item.id)"
+            @click="expansion.toggle(item.id)"
           >
             <UIcon
-              :name="open.has(item.id) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+              :name="expansion.isOpen(item.id) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
               class="size-4 shrink-0 text-muted"
             />
             <span class="min-w-0">
@@ -149,6 +166,7 @@ function dates(item: CvItem) {
             color="neutral"
             variant="ghost"
             size="sm"
+            class="hidden sm:inline-flex"
             :disabled="index === 0"
             :aria-label="`Monter « ${cvItemLabel(section, item)} »`"
             @click="move(index, -1)"
@@ -158,22 +176,60 @@ function dates(item: CvItem) {
             color="neutral"
             variant="ghost"
             size="sm"
+            class="hidden sm:inline-flex"
             :disabled="index === items.length - 1"
             :aria-label="`Descendre « ${cvItemLabel(section, item)} »`"
             @click="move(index, 1)"
           />
+          <UDropdownMenu
+            :items="[
+              [
+                {
+                  label: 'Monter',
+                  icon: 'i-lucide-arrow-up',
+                  disabled: index === 0,
+                  onSelect: () => move(index, -1),
+                },
+                {
+                  label: 'Descendre',
+                  icon: 'i-lucide-arrow-down',
+                  disabled: index === items.length - 1,
+                  onSelect: () => move(index, 1),
+                },
+              ],
+              [
+                {
+                  label: 'Supprimer',
+                  icon: 'i-lucide-trash-2',
+                  color: 'error',
+                  onSelect: () => remove(index),
+                },
+              ],
+            ]"
+            :content="{ align: 'end' }"
+          >
+            <UButton
+              icon="i-lucide-ellipsis"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              class="sm:hidden"
+              :aria-label="`Actions pour « ${cvItemLabel(section, item)} »`"
+            />
+          </UDropdownMenu>
           <UButton
             icon="i-lucide-trash-2"
             color="neutral"
             variant="ghost"
             size="sm"
+            class="hidden sm:inline-flex"
             :aria-label="`Supprimer « ${cvItemLabel(section, item)} »`"
             @click="remove(index)"
           />
         </div>
 
         <div
-          v-if="open.has(item.id)"
+          v-if="expansion.isOpen(item.id)"
           :id="`item-${item.id}`"
           class="space-y-4 border-t border-default p-4"
         >
@@ -182,6 +238,11 @@ function dates(item: CvItem) {
               v-for="entry in fields"
               :key="entry.field"
               :label="entry.label"
+              :hint="
+                entry.textarea && record(item)[entry.field]!.length >= entry.max * 0.7
+                  ? `${record(item)[entry.field]!.length}/${entry.max}`
+                  : undefined
+              "
               :class="HALF_WIDTH.has(entry.field) ? 'col-span-1' : 'col-span-2'"
             >
               <UTextarea
@@ -200,6 +261,20 @@ function dates(item: CvItem) {
                 :placeholder="PLACEHOLDERS[entry.field]"
               />
             </UFormField>
+            <UFormField
+              v-if="section === 'languages'"
+              label="Niveau CECRL"
+              class="col-span-2"
+              help="Sert aux jauges des modèles qui en dessinent. Si le champ « Niveau » est rempli, c’est lui qui est écrit."
+            >
+              <USelect
+                :model-value="languageOf(item).cefr ?? 'none'"
+                :items="cefrOptions"
+                class="w-full"
+                aria-label="Niveau CECRL"
+                @update:model-value="setCefr(item, $event as string)"
+              />
+            </UFormField>
           </div>
 
           <CvBulletsEditor
@@ -212,27 +287,15 @@ function dates(item: CvItem) {
             </template>
           </CvBulletsEditor>
 
-          <UFormField
+          <CvEditorsSkills
             v-if="section === 'skills'"
-            label="Compétences"
-            :hint="`${skillsOf(item).items.length}/${CV_LIMITS.skillItems}`"
-            help="Tape une compétence puis Entrée (ou colle une liste séparée par des virgules)."
-          >
-            <UInputTags
-              :model-value="skillNames(item)"
-              class="w-full"
-              :max-length="CV_LIMITS.skillItem"
-              :max="CV_LIMITS.skillItems"
-              add-on-blur
-              add-on-paste
-              delimiter=","
-              placeholder="Ex. : Canva"
-              @update:model-value="setSkillNames(item, $event)"
-            />
-          </UFormField>
+            :model-value="skillsOf(item).items"
+            :group-label="cvItemLabel(section, item)"
+            :levels-drawn="skillLevelsDrawn ?? false"
+          />
         </div>
       </li>
-    </ul>
+    </VueDraggable>
 
     <UButton
       v-if="items.length < max"

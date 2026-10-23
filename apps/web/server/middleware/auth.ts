@@ -10,7 +10,8 @@ const PUBLIC_API_ROUTES = [
   // Built-in nuxt-auth-utils endpoint used by useUserSession() to read the session.
   '/api/_auth/session',
 ]
-const PUBLIC_API_PREFIXES = ['/api/invites/'] // GET /api/invites/:token checks a link before sign-up
+// GET /api/invites/:token checks a link before sign-up; GET /api/partage/:token[/info] serves a shared CV.
+const PUBLIC_API_PREFIXES = ['/api/invites/', '/api/partage/']
 
 export default defineEventHandler(async (event) => {
   const path = getRequestURL(event).pathname

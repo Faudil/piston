@@ -275,6 +275,18 @@ export type CvEditScope = z.infer<typeof CvEditScope>
 
 const documentId = z.uuid()
 
+/** Where an issue of the coach panel comes from. */
+export const cvFixSources = ['check', 'review', 'ats'] as const
+export type CvFixSource = (typeof cvFixSources)[number]
+
+/** What an issue is about, when the coach knows (live checks do; review points quote text instead). */
+export const CvFixTarget = z.object({
+  section: z.union([CvSectionKey, z.literal('header'), z.literal('custom')]).optional(),
+  itemId: CvId.optional(),
+  customId: CvId.optional(),
+})
+export type CvFixTarget = z.infer<typeof CvFixTarget>
+
 export const CvEditBody = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('instruction'),
@@ -297,6 +309,61 @@ export const CvEditBody = z.discriminatedUnion('mode', [
     documentId,
     /** Default: the latest review of the document's profile. */
     reviewGenerationId: z.uuid().optional(),
+  }),
+  // --- AI v2 ---
+  /** « Proposer une correction » on an issue of the coach panel (a live check, a review point, an ATS check). */
+  z.object({
+    mode: z.literal('fix'),
+    documentId,
+    issue: z
+      .string()
+      .trim()
+      .min(3, 'Décris le problème à corriger.')
+      .max(800, 'Le problème ne doit pas dépasser 800 caractères.'),
+    source: z.enum(cvFixSources).default('check'),
+    target: CvFixTarget.default({}),
+  }),
+  /** « Générer l'accroche » from the document's own content. */
+  z.object({ mode: z.literal('summary'), documentId }),
+  /** « Suggérer des points » for an experience, from the user's own short notes. */
+  z.object({
+    mode: z.literal('bullets'),
+    documentId,
+    section: z.enum(['experiences', 'volunteering', 'projects']),
+    itemId: CvId,
+    notes: z
+      .string()
+      .trim()
+      .min(10, 'Écris au moins une phrase sur ce que tu as fait.')
+      .max(1500, 'Tes notes ne doivent pas dépasser 1500 caractères.'),
+  }),
+  /**
+   * « Compléter cette section »: without `answers`, Claude asks 2 or 3
+   * questions; with them, it turns the answers into a proposal.
+   */
+  z.object({
+    mode: z.literal('complete'),
+    documentId,
+    section: CvSectionKey,
+    itemId: CvId.optional(),
+    answers: z
+      .array(
+        z.object({
+          question: z.string().trim().min(1).max(400),
+          answer: z.string().trim().max(1000),
+        }),
+      )
+      .max(5)
+      .optional(),
+  }),
+  /** The whole CV into English (used on a copy: see `POST /api/cv-documents/:id/translate`). */
+  z.object({ mode: z.literal('translate'), documentId }),
+  /** « Version une page ». The client's page count (from the preview) helps Claude size the cuts. */
+  z.object({
+    mode: z.literal('one_page'),
+    documentId,
+    pageCount: z.number().int().min(1).max(10).optional(),
+    lastPageFill: z.number().min(0).max(1).optional(),
   }),
 ])
 export type CvEditBody = z.infer<typeof CvEditBody>

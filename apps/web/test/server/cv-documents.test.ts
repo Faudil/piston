@@ -113,6 +113,18 @@ describe('POST /api/cv-documents', () => {
     ])
   })
 
+  it('creates the document with the chosen template and its recommended section order', async () => {
+    await loginAsNewUser()
+    const student = await createDocument({ templateId: 'etudiant' })
+    const keys = student.content.sections.map((section) => section.key)
+    expect(student.templateId).toBe('etudiant')
+    expect(keys.indexOf('education')).toBeLessThan(keys.indexOf('experiences'))
+    // A template without a recommended order keeps the usual one.
+    const plain = await createDocument({ templateId: 'classique' })
+    const plainKeys = plain.content.sections.map((section) => section.key)
+    expect(plainKeys.indexOf('experiences')).toBeLessThan(plainKeys.indexOf('education'))
+  })
+
   it('creates the default profile for a user who has none', async () => {
     await loginAsNewUser()
     await testState.db.delete(resumeProfiles)

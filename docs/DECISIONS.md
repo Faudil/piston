@@ -144,6 +144,26 @@ The full design (model, operations, templates, alternatives) is in [docs/design/
 
 **Photos are rows of `cv_document_assets`, not part of the document.** The document refers to an asset id; the bytes (≤ 2 MB, type sniffed from magic bytes) live in Postgres next to the document and are deleted with it, copied with it on duplication, and never sent to Claude. The renderer only embeds PNG and JPEG (pdfkit); the editor should upload JPEG.
 
+**Design changes are proposals too.** `set_template` and `set_design` are operations like the content ones: reviewed one by one, never auto-applied, with readable French diffs and color swatches. They apply to the whole document state (`applyCvOperationToDocument`), not to the content, so the content-only `applyCvOperation` refuses them. They reuse the flat wire (`value`, `visible`, `fields`) instead of new fields: the API already rejected a bigger union once ("compiled grammar is too large"). Claude may only touch a subset of the design (palette primary, secondary and sidebar colors, fonts, styles, spacing, size, icons), not the body text color, the page format or the language.
+
+**The template catalog is in the cached system prompt; the current design is not.** `cvDesignCatalog()` is generated from `cvTemplates`, sorted by id, so it is stable between calls and follows new templates without editing the prompt (the snapshot hides it). The user's design changes more often than their content, so it is sent in the request as `<cv_design>`, after the cached document block.
+
+**Moving to a worse ATS reading is warned about, not forbidden.** A template or a layout with a worse ATS level (or a new second column) shows a warning on the proposal card: fine for a CV sent to a person, to avoid on job portals. The prompt tells Claude to say the same in its reason and to favor « optimal » templates when the user applies through portals.
+
+**Coach issues come from three sources, one entry point.** Live checks (deterministic), the latest review's improvements and its ATS checks (stored generations, no new call) all end in `mode: 'fix'`, with the issue as data (`<probleme>`) and the target ids when the check knows them. A resume review is about a saved text version, linked to the document only through its profile, so the coach says when the review predates the saved version or later edits.
+
+**« Compléter cette section » reuses the `cv_edit` kind.** The first step stores a proposal with `questions` and no operations, the second (with `answers`) a normal proposal. A new kind would need a pg enum migration for no behavior of its own, and both steps are edit proposals that count toward the daily limit.
+
+**The English copy is made before it is translated.** `POST /api/cv-documents/:id/translate` duplicates the document with `language: 'en'`; the translation is then a reviewed proposal on the copy (`mode: 'translate'`, up to 80 operations, one per text). The original never changes and nothing is translated unseen.
+
+**Twelve templates are data; the engine got only what they needed.** Smaller engine additions rather than per-template code: small-capital titles, a table-based timeline, contrast-safe colors and tags. Small capitals are one run of smaller spaced capitals: runs of mixed sizes made pdf.js extract « PROF I L », which an ATS would not read as « Profil ».
+
+**Text colors are made readable, fills are not.** The accent is used as is for rules, bullets and fills, but as text it is darkened (on white) or lightened (on a dark side column) until 4.5:1, so any user color or palette stays legible. Choosing a palette writes three overrides; a custom accent writes the primary only and the template derives the light colors.
+
+**A template's section order is applied at creation only.** « Étudiant » puts education and projects first when a document is created with it; switching template later never reorders the user's sections.
+
+**Gallery thumbnails are rendered in the browser** by the same worker as the preview (first page, pdf.js canvas), with the built-in sample CV first and the user's own content when available; the sample thumbnails are cached in IndexedDB under a key that includes the template's data, so editing a template invalidates them.
+
 ## Web search (Tavily, optional)
 
 **Tavily through plain `fetch`.** Two endpoints (`/search`, `/extract`) do not justify an SDK dependency. A single `tavilyRequest()` in `server/utils/tavily.ts` handles the key, the 15 s timeout, logging (status and `request_id`) and the mapping of Tavily errors to French messages: missing or invalid key and exhausted quota are 503, rate limit is 429, anything else is 502. The feature is optional: without `TAVILY_API_KEY`, `/api/features` reports `webSearch: false` and the routes answer 503.
@@ -177,3 +197,11 @@ The full design (model, operations, templates, alternatives) is in [docs/design/
 **PDF import is tested with real pdf-parse** on tiny PDFs built by hand in the test, including one without a text layer.
 
 **Password hashing is stubbed in route tests.** scrypt is deliberately slow and is nuxt-auth-utils' responsibility; route tests use a reversible fake to test our logic only.
+
+## CV exports and sharing (v2)
+
+**Share links serve the PDF only, behind an unguessable, revocable token.** The URL carries 32 random bytes (base64url, 256 bits), unique in the database; the token is the only credential, so a link works for whoever holds it (the trade-off of any « anyone with the link » feature). Limits: the owner can revoke at once, links can expire (7 / 30 days or never), the page and the API are `noindex`, responses are `no-store`, the endpoint never returns the JSON document (no structured data to scrape, no way to read other data), and a per-token cap of 20 renders per minute keeps a leaked link from burning CPU. The PDF is rendered on the fly from the current saved document, so the link always shows the latest version; the number of views is counted per PDF render. Deleting the document or the account deletes its links.
+
+**Word export is structure-faithful, not pixel-perfect, and says so.** The `docx` package (pure JS, no native code) builds headings, bullets, palette, fonts by name and, for sidebar layouts only, a two-column table. Header styles, gauges and the photo are not reproduced: promising a copy of the PDF in Word would be false, since Word has no equivalent of the layout engine. The menu entry reads « Word (modifiable) ».
+
+**The matching cover letter reuses the CV engine's header block instead of a second header.** The letter is drawn with `headerBlock` and the same tokens, so any new header style applies to letters for free. The letter text already holds its greeting and signature, so the renderer adds only the date and the recipient.

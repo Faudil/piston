@@ -91,7 +91,19 @@ export interface GenerationInputRefs {
   /** CV builder: the document a proposal was made for (`cv_edit`). */
   cvDocumentId?: string
   /** CV builder: how the draft or the proposal was asked for. */
-  cvMode?: 'import' | 'interview' | 'instruction' | 'action' | 'tailor' | 'review'
+  cvMode?:
+    | 'import'
+    | 'interview'
+    | 'instruction'
+    | 'action'
+    | 'tailor'
+    | 'review'
+    | 'fix'
+    | 'summary'
+    | 'bullets'
+    | 'complete'
+    | 'translate'
+    | 'one_page'
   /** CV builder: the inline action (`cv_edit` with mode `action`). */
   cvAction?: string
   /** CV builder: the review turned into edits (`cv_edit` with mode `review`). */

@@ -1,4 +1,4 @@
-import { and, cvDocumentAssets, eq, type CvDocumentAssetRow } from '@piston/db'
+import { and, cvDocumentAssets, desc, eq, inArray, type CvDocumentAssetRow } from '@piston/db'
 import type { CvAssets } from '@piston/cv-render'
 import {
   CV_ASSET_MAX_BYTES,
@@ -167,4 +167,61 @@ export async function loadCvRenderAssets(
   if (!photo?.visible) return {}
   const row = await getCvAsset(userId, documentId, photo.assetId)
   return row ? { images: { [row.id]: cvAssetDataUrl(row) } } : {}
+}
+
+/** Cap on the declared request size of a photo upload (the file plus multipart framing). */
+export const CV_PHOTO_REQUEST_MAX_BYTES = CV_ASSET_MAX_BYTES + 64 * 1024
+
+/**
+ * Stores the photo of a document and deletes the previous one: a document
+ * has at most one photo. Only JPEG and PNG are accepted, because the PDF
+ * renderer cannot embed WebP (the editor converts to JPEG in the browser).
+ * The document's `header.photo` is updated by the editor, which saves it
+ * like any other change.
+ */
+export async function replaceCvPhoto(
+  userId: string,
+  documentId: string,
+  bytes: Uint8Array,
+): Promise<CvAsset> {
+  await getUserCvDocument(userId, documentId)
+  if (sniffImage(bytes)?.mimeType === 'image/webp') {
+    throw createError({
+      statusCode: 400,
+      message: 'Les photos WebP ne sont pas prises en charge : utilise une image JPEG ou PNG.',
+    })
+  }
+  const asset = await saveCvAsset(userId, documentId, bytes)
+  await deleteCvAssets(userId, documentId, { except: asset.id })
+  return asset
+}
+
+/** The newest asset of one of the user's documents (its photo), bytes included, or null. */
+export async function getCvPhotoAsset(
+  userId: string,
+  documentId: string,
+): Promise<CvDocumentAssetRow | null> {
+  const [row] = await useDb()
+    .select()
+    .from(cvDocumentAssets)
+    .where(and(eq(cvDocumentAssets.documentId, documentId), eq(cvDocumentAssets.userId, userId)))
+    .orderBy(desc(cvDocumentAssets.createdAt))
+    .limit(1)
+  return row ?? null
+}
+
+/** Deletes the document's assets (all but `except`), scoped to the user. */
+export async function deleteCvAssets(
+  userId: string,
+  documentId: string,
+  options: { except?: string } = {},
+): Promise<number> {
+  const db = useDb()
+  const rows = await db
+    .select({ id: cvDocumentAssets.id })
+    .from(cvDocumentAssets)
+    .where(and(eq(cvDocumentAssets.documentId, documentId), eq(cvDocumentAssets.userId, userId)))
+  const ids = rows.map((row) => row.id).filter((id) => id !== options.except)
+  if (ids.length) await db.delete(cvDocumentAssets).where(inArray(cvDocumentAssets.id, ids))
+  return ids.length
 }

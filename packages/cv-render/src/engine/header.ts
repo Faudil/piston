@@ -225,9 +225,9 @@ export function headerBlock(
       }
     : {
         name: t.colors.text,
-        title: t.colors.primary,
+        title: t.colors.primaryText,
         contact: t.colors.muted,
-        icon: t.colors.primary,
+        icon: t.colors.primaryText,
       }
   const centered = style === 'centered' ? 'center' : undefined
 
@@ -285,9 +285,9 @@ export function sideContactBlock(ctx: BlockContext, contactTitle: string): Conte
   const { t } = ctx
   const colors: HeaderColors = {
     name: t.colors.text,
-    title: t.colors.primary,
+    title: t.colors.primaryText,
     contact: t.colors.text,
-    icon: t.colors.primary,
+    icon: t.colors.primaryText,
   }
   const photo = photoBlock(ctx, 'center')
   const contact = contactStack(ctx, colors)

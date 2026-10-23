@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { CV_LIMITS, newCvId, type CvHeader } from '@piston/shared'
+import type { CvPhotoController } from '~/composables/useCvPhoto'
 
 /** The CV header: name, target title, contact details and links. Edits `header` in place. */
 const header = defineModel<CvHeader>({ required: true })
+defineProps<{ photo: CvPhotoController }>()
 
 function addLink() {
   header.value.links.push({ id: newCvId(), label: '', url: '' })
@@ -15,8 +17,10 @@ function removeLink(index: number) {
 
 <template>
   <div class="space-y-4">
+    <CvEditorsPhoto :photo="photo" />
+
     <div class="grid gap-4 sm:grid-cols-2">
-      <UFormField label="Nom complet" required>
+      <UFormField label="Nom complet" required data-cv-id="header.fullName">
         <UInput
           v-model="header.fullName"
           class="w-full"
@@ -24,7 +28,7 @@ function removeLink(index: number) {
           autocomplete="name"
         />
       </UFormField>
-      <UFormField label="Titre visé" hint="Sous ton nom">
+      <UFormField label="Titre visé" hint="Sous ton nom" data-cv-id="header.title">
         <UInput
           v-model="header.title"
           class="w-full"
@@ -32,7 +36,7 @@ function removeLink(index: number) {
           placeholder="Ex. : Chargée de communication"
         />
       </UFormField>
-      <UFormField label="E-mail">
+      <UFormField label="E-mail" data-cv-id="header.contact">
         <UInput
           v-model="header.email"
           type="email"
@@ -41,7 +45,7 @@ function removeLink(index: number) {
           autocomplete="email"
         />
       </UFormField>
-      <UFormField label="Téléphone">
+      <UFormField label="Téléphone" data-cv-id="header.contact">
         <UInput
           v-model="header.phone"
           type="tel"
@@ -50,7 +54,7 @@ function removeLink(index: number) {
           autocomplete="tel"
         />
       </UFormField>
-      <UFormField label="Ville" class="sm:col-span-2">
+      <UFormField label="Ville" class="sm:col-span-2" data-cv-id="header.contact">
         <UInput
           v-model="header.city"
           class="w-full"
@@ -69,6 +73,7 @@ function removeLink(index: number) {
       <div
         v-for="(link, index) in header.links"
         :key="link.id"
+        :data-cv-id="`header.link.${link.id}`"
         class="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[10rem_minmax(0,1fr)_auto]"
       >
         <UFormField :label="`Nom du lien ${index + 1}`" class="col-span-2 sm:col-span-1">

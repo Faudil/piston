@@ -94,3 +94,60 @@ export function sampleInput(
 /** A 2×2 red PNG, as the photo of the tests. */
 export const PHOTO_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg=='
+
+// --- Stress fixtures for the template tests and the visual checks -------------------
+
+/** A recognizable 120 × 120 JPEG-like photo is not needed: a PNG data URL is enough to lay out. */
+const longText =
+  'Responsable de la conduite du changement sur un périmètre de plusieurs sites, avec un budget annuel de plusieurs millions d’euros et une équipe de dix personnes'
+
+/** Two full pages: many experiences, long bullets, every common section. */
+export function longContent(): CvContent {
+  const experiences = Array.from({ length: 7 }, (_, index) => ({
+    id: `x${index}`,
+    title: `Responsable de projet ${index + 1}`,
+    organization: `Entreprise Exemple ${index + 1}`,
+    location: 'Lyon',
+    start: `0${(index % 9) + 1}/20${10 + index}`,
+    end: `0${(index % 9) + 1}/20${11 + index}`,
+    bullets: Array.from({ length: 4 }, (_, bullet) => ({
+      id: `xb${index}${bullet}`,
+      text: `${longText} (mission ${bullet + 1}).`,
+    })),
+  }))
+  return CvContent.parse({
+    ...sampleRaw,
+    experiences,
+    skills: sampleRaw.skills,
+    sections: [],
+  })
+}
+
+/** Only a name and a title: every template must still look intentional. */
+export function nearlyEmptyContent(): CvContent {
+  return CvContent.parse({
+    header: { fullName: 'Marie Petit', title: 'Développeuse', email: 'marie@example.com' },
+  })
+}
+
+/** Very long names, URLs and unbreakable words, Latin Extended text. */
+export function stressContent(): CvContent {
+  const content = sampleContent()
+  content.header.fullName = 'Anne-Sophie Wojciechowska-Montmorency de la Roche-Guyon'
+  content.header.title =
+    'Directrice des opérations et de la transformation numérique internationale'
+  content.header.email =
+    'anne-sophie.wojciechowska-montmorency@tres-longue-entreprise-exemple.example.com'
+  content.header.links = [
+    {
+      id: 'l1',
+      label: 'Portfolio',
+      url: 'https://www.exemple-portfolio-tres-long.example.com/projets/realisations/2024/etude-de-cas-numero-un',
+    },
+  ]
+  content.experiences[0]!.bullets[0]!.text =
+    'Zażółć gęślą jaźń · Şişli Çağdaş · Dvořák Příbram · Őrség Győr · Ångström Łódź — Supercalifragilisticexpialidocious-Pneumonoultramicroscopicsilicovolcanoconiosis'
+  content.experiences[0]!.title =
+    'Directrice adjointe des opérations, de la transformation et du développement durable'
+  return content
+}

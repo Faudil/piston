@@ -6,7 +6,8 @@
   "description": "CV renderer: turns a CV document and its design into a pdfmake document definition, in the browser (Web Worker) and on the server.",
   "exports": {
     ".": "./src/index.ts",
-    "./node": "./src/node.ts"
+    "./node": "./src/node.ts",
+    "./docx": "./src/docx/index.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -14,11 +15,13 @@
     "test": "bun --bun vitest run"
   },
   "dependencies": {
-    "@piston/shared": "workspace:*"
+    "@piston/shared": "workspace:*",
+    "docx": "^9.14.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/pdfmake": "^0.3.3",
+    "jszip": "^3.10.2",
     "pdfjs-dist": "5.4.296",
     "pdfmake": "^0.3.12",
     "vitest": "^5.0.5"

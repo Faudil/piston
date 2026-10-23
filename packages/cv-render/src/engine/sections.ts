@@ -8,6 +8,8 @@ import {
   cvSectionRef,
   cvSectionTitle,
   findCvCustomSection,
+  mixColors,
+  readableOn,
   tintColor,
   type CvBullet,
   type CvLanguage,
@@ -60,18 +62,21 @@ export function sectionTitleBlock(
 ): Content {
   const { t, region } = ctx
   const style = t.design.sectionTitleStyle
-  const fontSize = region.side ? t.size.sideSectionTitle : t.size.sectionTitle
+  // « Small capitals »: capitals set smaller and spaced, in one run so the text stays extractable.
+  const fontSize =
+    (region.side ? t.size.sideSectionTitle : t.size.sectionTitle) *
+    (style === 'smallcaps' ? 0.88 : 1)
   const width = regionWidth(region)
   const upper = style !== 'bar'
   const onBlock = style === 'block'
-  const color = onBlock ? t.colors.onPrimary : t.colors.primary
+  const color = onBlock ? t.colors.onPrimary : t.colors.primaryText
   const label: ContentText = {
     text: upper ? clean(title).toUpperCase() : clean(title),
     bold: true,
     color,
     font: t.fonts.heading,
     fontSize,
-    characterSpacing: upper ? (style === 'underline' ? 0.8 : 0.6) : 0,
+    characterSpacing: style === 'smallcaps' ? 0.9 : upper ? (style === 'underline' ? 0.8 : 0.6) : 0,
   }
   const line: Content = t.design.showIcons
     ? {
@@ -85,6 +90,7 @@ export function sectionTitleBlock(
   let block: Content
   switch (style) {
     case 'rule':
+    case 'smallcaps':
       block = {
         stack: [
           line,
@@ -96,8 +102,8 @@ export function sectionTitleBlock(
                 y1: 0,
                 x2: width,
                 y2: 0,
-                lineWidth: 0.6,
-                lineColor: t.colors.secondary,
+                lineWidth: style === 'smallcaps' ? 0.4 : 0.6,
+                lineColor: style === 'smallcaps' ? t.colors.muted : t.colors.secondary,
               },
             ],
             margin: [0, t.space(2), 0, t.space(6)],
@@ -160,7 +166,7 @@ export function sectionTitleBlock(
       break
   }
   // With a rule under the title, the last position recorded is the rule's: the box ends there.
-  const ruled = style === 'rule' || style === 'underline'
+  const ruled = style === 'rule' || style === 'underline' || style === 'smallcaps'
   return tagBox(block, id, region, { lastLine: ruled ? 2 : lineBox(ctx, fontSize) })
 }
 
@@ -225,7 +231,15 @@ interface Entry {
   gap: number
 }
 
+const TIMELINE_DATES = 90
+const TIMELINE_MARKER = 6
+
 function entryBlock(ctx: BlockContext, entry: Entry): Content {
+  // A blank item (just added in the editor) draws nothing, not a lone timeline dot.
+  const texts = [entry.title, entry.subtitle, entry.place, entry.dates, entry.details, entry.link]
+  if (!texts.some((text) => clean(text)) && !entry.bullets.some((bullet) => clean(bullet.text))) {
+    return { text: '' }
+  }
   const { t, region } = ctx
   const base = region.side ? t.size.side : t.size.base
   // Side columns are too narrow for dates beside the title.
@@ -234,7 +248,9 @@ function entryBlock(ctx: BlockContext, entry: Entry): Content {
   const linkLine: Content[] = clean(entry.link)
     ? [
         {
-          text: [linked(displayUrl(entry.link), linkTarget('url', entry.link), t.colors.primary)],
+          text: [
+            linked(displayUrl(entry.link), linkTarget('url', entry.link), t.colors.primaryText),
+          ],
           fontSize: t.size.small,
           margin: [0, 1, 0, 0],
         },
@@ -250,6 +266,8 @@ function entryBlock(ctx: BlockContext, entry: Entry): Content {
     color: muted,
     fontSize: t.size.meta,
     alignment: 'right',
+    // A range never wraps: the title wraps instead.
+    noWrap: true,
     margin: margin(left, 1, 0, 0),
   })
 
@@ -297,7 +315,7 @@ function entryBlock(ctx: BlockContext, entry: Entry): Content {
       if (clean(entry.link)) {
         runs.push(
           { text: ' · ' },
-          linked(displayUrl(entry.link), linkTarget('url', entry.link), t.colors.primary),
+          linked(displayUrl(entry.link), linkTarget('url', entry.link), t.colors.primaryText),
         )
       }
       stack = [
@@ -310,41 +328,68 @@ function entryBlock(ctx: BlockContext, entry: Entry): Content {
       break
     }
     case 'timeline': {
+      // Dates | a vertical line with a dot | the item. The line is the
+      // border of the middle column, so it runs through the gap below the
+      // item (padding of the content cell) and joins the next item's line.
       const sub = clean(entry.place)
-      stack = [
+      const content: Content = {
+        stack: [
+          { text: headingRuns(entry.title, entry.subtitle), fontSize: t.size.itemTitle },
+          ...(sub
+            ? [{ text: sub, color: muted, fontSize: t.size.small, margin: [0, 1, 0, 0] } as Content]
+            : []),
+          ...linkLine,
+          ...details,
+          ...bullets,
+        ],
+        margin: margin(0, 0, 0, t.space(entry.gap)),
+      }
+      const dot: Content = {
+        canvas: [
+          {
+            type: 'ellipse',
+            x: 0,
+            y: t.size.itemTitle * 0.62,
+            r1: 3,
+            r2: 3,
+            color: t.colors.primary,
+            lineColor: '#ffffff',
+            lineWidth: 1.5,
+          },
+        ],
+      }
+      return tagBox(
         {
-          columns: [
-            {
-              width: 74,
-              text: entry.dates,
-              color: muted,
-              fontSize: t.size.meta,
-              margin: [0, 1, 0, 0],
-            },
-            {
-              width: '*',
-              stack: [
-                { text: headingRuns(entry.title, entry.subtitle), fontSize: t.size.itemTitle },
-                ...(sub
-                  ? [
-                      {
-                        text: sub,
-                        color: muted,
-                        fontSize: t.size.small,
-                        margin: [0, 1, 0, 0],
-                      } as Content,
-                    ]
-                  : []),
-                ...linkLine,
-                ...details,
-                ...bullets,
+          table: {
+            widths: [TIMELINE_DATES, TIMELINE_MARKER, '*'],
+            body: [
+              [
+                {
+                  text: entry.dates,
+                  color: muted,
+                  fontSize: t.size.meta,
+                  alignment: 'right',
+                  margin: margin(0, 1, 8, 0),
+                },
+                dot,
+                { ...content, margin: margin(8, 0, 0, t.space(entry.gap)) },
               ],
-            },
-          ],
-          columnGap: 10,
+            ],
+          },
+          layout: {
+            hLineWidth: () => 0,
+            vLineWidth: (index: number) => (index === 1 ? 0.9 : 0),
+            vLineColor: () => t.colors.secondary,
+            paddingLeft: () => 0,
+            paddingRight: () => 0,
+            paddingTop: () => 0,
+            paddingBottom: () => 0,
+          },
         },
-      ]
-      break
+        cvContentId.item(entry.id),
+        region,
+        { lastLine: lineBox(ctx, base) },
+      )
     }
   }
   return tagBox(
@@ -419,7 +464,7 @@ function lineBlocks(ctx: BlockContext, lines: Line[]): Content[] {
                 ...(link
                   ? [
                       { text: ' · ' },
-                      linked(displayUrl(link), linkTarget('url', link), t.colors.primary),
+                      linked(displayUrl(link), linkTarget('url', link), t.colors.primaryText),
                     ]
                   : []),
               ],
@@ -539,15 +584,20 @@ function skillBlocks(ctx: BlockContext, groups: CvSkillGroup[]): Content[] {
         }
         break
       case 'tags': {
-        const background = tintColor(t.colors.primary, 0.86)
+        // On a dark side column the tags are a lighter shade of the column, with light text.
+        const dark = region.side && readableOn(t.design.palette.sidebarBg) === '#ffffff'
+        const background = dark
+          ? mixColors(t.design.palette.sidebarBg, '#ffffff', 0.16)
+          : tintColor(t.colors.primary, 0.86)
+        const tagColor = dark ? '#ffffff' : readableOn(background)
         node = {
           stack: [
             ...groupTitle(group),
             {
-              // Non-breaking spaces pad each tag; a plain space separates them.
+              // Spaces pad each tag; a plain space separates them (U+00A0 is missing from some subsets).
               text: names(group).flatMap((name, index) => [
                 ...(index ? [{ text: '  ' }] : []),
-                { text: `\u00a0${name}\u00a0`, background },
+                { text: ` ${name} `, background, color: tagColor },
               ]),
               fontSize: t.size.small,
               lineHeight: t.lineHeight + 0.25,

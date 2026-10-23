@@ -81,9 +81,32 @@ Each package lists the files it owns. Packages run in parallel only when they ow
 
 ### WP1 — Templates and design studio (after WP0)
 
-- 12 templates on the engine, categories, ATS level badge.
-- Gallery with real thumbnails: first page rendered by the worker from a sample CV (and from the user's own content on hover), cached.
-- Design panel: curated palettes + custom color, 10 font pairings, size/line-height/spacing/margin steps, header / section-title / skill / language styles, icons toggle, photo options, page format, language. « Réinitialiser au modèle ».
+Status: done (integration notes below).
+
+**Twelve templates**, all data in `cv-templates.ts` (no code of their own), drawn by the same engine. Every one was rendered with the demo CV, a two-page CV, a nearly empty CV, a CV with a photo, and long names and URLs with Latin Extended text, then looked at (page breaks, alignment, contrast) and tested (`packages/cv-render/test/render.test.ts`: renders, extractable text, accents, name first, sections in order).
+
+| Template    | Category  | Layout · header · titles · items                            | Fonts                  | ATS     | Character                                                |
+| ----------- | --------- | ----------------------------------------------------------- | ---------------------- | ------- | -------------------------------------------------------- |
+| Sobre       | Sobre/ATS | one column · left · rule · dates right                      | Inter                  | optimal | The safe default                                         |
+| Classique   | Sobre/ATS | one column · centered · rule                                | Source Serif           | optimal | Serif, centered header, navy                             |
+| Exécutif    | Sobre/ATS | one column · name left, contact right · small caps · dashes | Playfair + Source Sans | optimal | Restrained, wide margins, burgundy                       |
+| Minimal     | Sobre/ATS | one column · plain titles · dates below                     | Inter                  | optimal | Lots of white space, grey accent, airy spacing           |
+| Moderne     | Moderne   | light side column                                           | Inter                  | limite  | v1's two-column template                                 |
+| Ardoise     | Moderne   | dark side column, light text, level dots, icons             | Poppins + Inter        | limite  | Accent lightened automatically on the dark column        |
+| Chronologie | Moderne   | one column · timeline (dates, line, dot)                    | Lora + Source Sans     | bon     | Dates column joined by a vertical line                   |
+| Duo         | Moderne   | two equal columns · centered header                         | Source Serif + Sans    | limite  | Path on the left, skills and languages on the right      |
+| Horizon     | Créatif   | color banner header · bar titles · tags                     | Montserrat + Open Sans | bon     | Banner, then one airy column                             |
+| Créatif     | Créatif   | right side column · banner · block titles · tags · icons    | Poppins + Inter        | limite  | Bold color blocks                                        |
+| Compact     | Une page  | one column, dense · one-line items                          | Inter                  | optimal | Built to fit one page                                    |
+| Étudiant    | Une page  | one column · underline titles · tags                        | Lato (Carlito)         | bon     | Education and projects first (section order at creation) |
+
+**Engine additions** (`packages/cv-render/src/engine`): `smallcaps` section titles (smaller spaced capitals in one run; mixed-size runs broke text extraction); a real timeline item (dates, vertical line, dot) built on a table border so the line is continuous; accessible colors (`ensureContrast`, `readableOn` best-of-two, `primaryText`: the accent is darkened on white, lightened on a dark side column until 4.5:1; side column tokens derive from its background); tags with readable text on any background; dates never wrap (`noWrap`); non-breaking spaces become plain spaces (the Carlito subset crashes fontkit on U+00A0, a latent bug for the « Lato » pairing). `CvTemplateMeta.sectionOrder` + `applyTemplateSectionOrder()`: a recommended section order applied **at document creation only** (`POST /api/cv-documents` with `templateId`), never when switching template.
+
+**Gallery** (`components/cv/gallery/`): `Grid` (category chips, ATS badge, one « Utiliser ce modèle » control per card), `Thumbnail` (worker channel `thumb:<id>`, pdf.js on a canvas, sample CV first then the user's own content, lazy when scrolled into view), `Picker` (the grid in a dialog). `useCvThumbnails()`: one render queue, memory cache (80 images) and IndexedDB for the sample thumbnails (key = cache version + template data hash + design hash; every IDB call is in try/catch). The sample is `cvSampleContent()` (`@piston/shared`, fictional, French). Used by the design tab (« Changer de modèle », thumbnails with the document's own overrides and content) and by `/cv/nouveau` (template step before import/interview; `templateId` is sent to the create route).
+
+**Design studio** (`DesignPanel.vue`, `components/cv/design/`): accordion groups (Couleurs, Polices, Texte et espacement, Mise en page et styles, Page et langue) with a count of modified settings; 12 curated palettes (`cvPalettes`) + custom accent (color input + hex field + contrast hint); the 10 pairings with a live sample in their real fonts (`useCvFontSamples()`, FontFace API on `/cv-fonts/`); font size, line height, spacing, margins; layout, header, section title, item, bullet, skill, language styles, icons; page format, language. Each control shows the resolved value, « Modifié » when overridden, « Rétablir » per control; choosing the template's own value clears the override; « Réinitialiser au modèle » resets all.
+
+**For the integration**: the editor page may pass `:content="state.content"` to `CvDesignPanel` (thumbnails of the user's CV without an extra fetch; without it the panel fetches the document when the gallery opens). The `version` prop is no longer used.
 
 ### WP2 — Editor UX (after WP0, parallel to WP1)
 
@@ -93,19 +116,37 @@ Each package lists the files it owns. Packages run in parallel only when they ow
 - Undo/redo stack (Ctrl+Z / Ctrl+Shift+Z) on top of autosave; revisions stay the long-term history.
 - Click-to-edit wiring with the worker's map; mobile editor polish.
 
+Status: done. Delivered:
+
+- **Drag and drop** (sections, items, bullets, skills, extras, custom items) from a handle only, 120 ms delay on touch, auto-scroll; one handle class per nesting level (`cv-drag-section|item|inner`, `utils/cv-drag.ts`). Reorders mutate the editor state in place, so autosave, undo and the preview follow. Up / down buttons stay (and are in each card's « … » menu on phones).
+- **Sections**: « Ajouter une section » lists hidden empty standard sections plus « Section personnalisée… »; hidden sections that hold content (or were hidden in this visit) stay listed. Rename, hide / show, column (auto / main / side, only when the resolved layout is two-column), delete custom section with confirmation. Cards collapse to a summary line (`utils/cv-editor.ts`).
+- **Field editors** (`components/cv/editors/`): skills with a 0–5 radio-group rating (arrows, Home / End), shown always with a note when the skill style does not draw levels; languages with a CECRL select plus the free level; references toggle; extras as lines; custom items.
+- **Photo**: JPEG / PNG / WebP picked, decoded with EXIF orientation, cropped to a square on a canvas (drag, pinch, wheel, slider, keyboard), re-encoded as JPEG ≤ 800 px and ≤ 2 MB. Routes `POST|GET|DELETE /api/cv-documents/[id]/photo` (`replaceCvPhoto`, `getCvPhotoAsset`, `deleteCvAssets` in `cv-assets.ts`): POST sniffs, refuses WebP, replaces the previous asset; GET is `private, no-cache` with the asset id as ETag. The preview receives the photo as a data URL (`useCvPhoto`).
+- **Undo / redo**: bounded history (100 steps) of template, design and content snapshots, keystrokes coalesced within 800 ms (burst capped at 8 s), pure logic in `utils/cv-history.ts`. The header photo is excluded (upload and removal are immediate server actions). Disabled after a 409 conflict. Accepted AI proposals are separate steps.
+- **Click-to-edit**: `point` + `result.boxes` → smallest box → `reveal(contentId)` opens the section and item and focuses the field; hovering or focusing a field highlights its box (`data-cv-id` attributes, event delegation). On phones, tapping the « Aperçu » tab switches back to « Contenu ».
+- **Polish**: sticky toolbar (aria-live save status, undo / redo, page count, PDF), sticky phone tabs, counters near limits, empty-state hints.
+- Not covered: undoing a photo upload or removal; Playwright drag-and-drop was checked with the mouse only (touch dragging relies on SortableJS).
+
 ### WP3 — AI v2 (after WP0, parallel to WP1/WP2)
 
-- **Design operations** in the proposal system (`set_design`, `set_template`): « Rends-le plus sobre », « Adapte le style au secteur bancaire » → a proposal the user reviews like content edits.
-- **Coach panel** in the editor: live checks + the latest review/ATS results for this document, each with a one-click « Proposer une correction » that opens an edit proposal.
-- **Writing help per section**: generate the « accroche » from the content, suggest bullets for an experience from the user's own notes (shown as suggestions to confirm, with placeholders, never auto-applied), « Compléter cette section » prompts that ask the user questions instead of inventing.
-- **« Traduire en anglais »** into a new document (copy), and « Version courte » (one page) as a proposal.
-- Prompt snapshot tests; honesty rules unchanged.
+Status: done (integration into the editor page pending, see « Integration » below).
+
+- **Design operations** `set_template { templateId, resetDesign }` and `set_design { changes }` (`cv-operations.ts`; `changes` is a strict object of colors `primary`/`secondary`/`sidebarBg`, `fontPairing`, `layout`, `headerStyle`, `sectionTitleStyle`, `itemStyle`, `bulletStyle`, `skillStyle`, `languageStyle`, `spacing`, `lineHeight`, `margins`, `fontSize`, `showIcons`; `null` = back to the template's value). They ride on the existing flat wire (`value`, `visible`, `fields`), so the grammar did not grow. They change the document, not the content: `cv-document-operations.ts` has `CvDocumentState` (content + design + templateId), `applyCvOperationToDocument(s)` and `describeCvOperationInDocument` (French diff lines « Modèle : Sobre → Moderne », swatches, ATS warning when the template or the layout reads worse for applicant tracking systems). `applyCvOperation` (content only) refuses them.
+- **Prompts** (`packages/prompts/src/cv_builder.ts`): the edit system prompt now carries the design catalog (`cvDesignCatalog()`: templates sorted by id with category, ATS reading, layout, fonts; the enum values of every setting) and the design rules (ATS trade-off, sober vs creative sectors, contrast, keep the user's customizations). The current look goes in the request as `<cv_design>` (customizations + resolved values), not in the cached document block.
+- **Coach panel** (`components/cv/ai/CoachPanel.vue`, first block of `AiPanel`): completeness score (`cvCompleteness`, deterministic), ATS level of the template, last review score; issues grouped by severity from the live checks and from the latest review of the document's profile (`GET /api/cv-documents/:id/coach`, no Claude call; flags a review older than the saved version or than later edits). « Proposer une correction » sends `mode: 'fix'` (issue wrapped in `<probleme>`, source `check|review|ats`, target ids).
+- **Writing help** (`AiMenu`): `mode: 'summary'` (« Générer l'accroche », from the document only), `mode: 'bullets'` (« Suggérer des points » from notes typed in a small modal, phrased from the notes with `[placeholders]`), `mode: 'complete'` (« Compléter cette section/cet élément »): a first call returns 2–3 questions (stored as a `cv_edit` generation whose proposal has `questions` and no operations), `components/cv/ai/QuestionsForm.vue` collects the answers, a second call (`answers`) returns the edits.
+- **« Traduire en anglais »**: `POST /api/cv-documents/:id/translate` creates a copy (title « … (English) », same template and design, `language: 'en'`); the editor of the copy then asks `mode: 'translate'` (up to 80 operations) from `?ia=traduire`, reviewed like any proposal. **« Version une page »**: `mode: 'one_page'` (+ the preview's page count): tighter design, shorter bullets, hidden low-value sections; the summary lists what changed and what was given up.
+- Kinds are unchanged (`cv_edit`, `cv_draft`): every flow is an edit proposal, so no migration; the daily limit counts them all.
+- **Integration** (editor page, WP2's file): pass `design`, `templateId`, `pageCount` and `beforeCopy` (flush the autosave) to `CvAiPanel`; apply proposals with `applyCvOperationsToDocument({ content, design, templateId }, operations)` instead of `applyCvOperations` (and undo both parts); the translate-in-English hack on `design.language` becomes unnecessary (the copy already is English).
+- Real-Claude validation: see the WP3 report (six flows).
 
 ### WP4 — Exports and extras (after WP0)
 
-- **Lettre assortie**: cover letters exported as PDF with the CV's template header, palette and fonts (from `/lettres` and the letter pages).
-- **Word export** (`.docx`, with the `docx` package, pure JS): structure and styles, not pixel-perfect, documented as such.
-- **Share link**: read-only, unguessable token, revocable, optional expiry, `noindex`; shows the PDF in the browser viewer.
+Status: done (editor mounting: `CvExportMenu` is in the sticky bar of the editor page).
+
+- **Lettre assortie**: `renderLetter` / `renderLetterPdf` (`packages/cv-render/src/letter`) draw a letter with the engine's own `headerBlock` (all header styles, band, photo), tokens and fonts, always in one column (the `sidebar` header style falls back to `left`). Date line (`Ville, le 3 mars 2026`) and recipient (the offer's company) above the paragraphs; the paragraphs already carry the greeting, closing and signature (the letter prompts write them), so none is added. `GET /api/generations/:id/letter-pdf?cvDocumentId=&download=1` (user-scoped, 404 otherwise): the chosen CV, else the latest CV of the offer's profile, else a neutral `sobre` design with the account name. UI: `LettersMatchingLetterButton` in `DownloadLetterButton` (a picker when the user has several CVs).
+- **Word export**: `renderCvDocx` (`@piston/cv-render/docx`, `docx` 9, pure JS). Same section order and titles as the text exports (`cvSectionBlocks`), real Heading 2 titles, Word bullets, palette and fonts by name (Word substitutes a missing font; Carlito is named Calibri), page format and margins; a two-column table with a shaded side column only for the sidebar layouts. Not pixel-perfect: no photo, no header styles, no skill gauges. Labelled « Word (modifiable) » with a description in the menu. `GET /api/cv-documents/:id/docx`.
+- **Share link**: table `cv_share_links` (migration `0007_cv_share_links`). Owner routes `GET|POST /api/cv-documents/:id/share`, `DELETE .../share/:linkId` (revoke, idempotent); public `GET /api/partage/:token` (PDF rendered on the fly, counts a view, capped at 20 renders per token and minute) and `GET /api/partage/:token/info` (title only, no view). 404 for an unknown or malformed token, 410 (French message) for a revoked or expired one. Page `/partage/:token` (no layout, `noindex`, `X-Robots-Tag` on the API). UI: `CvExportMenu` (PDF, Word, share) and `CvExportShareDialog` (create with 7 / 30 days / no expiry, copy, views, revoke).
 
 ### WP5 — Integration and QA (last, coordinator)
 

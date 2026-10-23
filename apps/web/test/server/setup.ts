@@ -20,8 +20,12 @@ import * as auth from '../../server/utils/auth'
 import * as claude from '../../server/utils/claude'
 import * as coverLetter from '../../server/utils/cover-letter'
 import * as cvAi from '../../server/utils/cv-ai'
+import * as cvCoach from '../../server/utils/cv-coach'
 import * as cvAssets from '../../server/utils/cv-assets'
 import * as cvDocuments from '../../server/utils/cv-documents'
+import * as cvDocx from '../../server/utils/cv-docx'
+import * as cvShare from '../../server/utils/cv-share'
+import * as letterPdf from '../../server/utils/letter-pdf'
 import * as cvPdf from '../../server/utils/cv-pdf'
 import * as generation from '../../server/utils/generation'
 import * as offers from '../../server/utils/offers'
@@ -45,8 +49,12 @@ for (const util of [
   claude,
   coverLetter,
   cvAi,
+  cvCoach,
   cvAssets,
   cvDocuments,
+  cvDocx,
+  cvShare,
+  letterPdf,
   cvPdf,
   generation,
   offers,

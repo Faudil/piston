@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import {
+  CvDesign,
   CvInterviewAnswers,
   cvInterviewQuestions,
+  cvTemplates,
+  type CvTemplateId,
   type CvDocument,
   type CvDraftOutput,
   type Resume,
@@ -31,6 +34,14 @@ const profileId = ref<string | null>(
     ? route.query.profil
     : defaultProfile.value?.id) ?? null,
 )
+
+// --- Template ----------------------------------------------------------------------
+
+// Chosen before the draft: the document is created with it (and its recommended
+// section order). It can be changed later in the editor's design tab.
+const templateId = ref<CvTemplateId>('sobre')
+const templateOpen = ref(false)
+const defaultDesign = CvDesign.parse({})
 
 // --- Import -----------------------------------------------------------------------
 
@@ -101,6 +112,7 @@ async function run() {
       method: 'POST',
       body: {
         fromGenerationId: generation.id,
+        templateId: templateId.value,
         ...(profileId.value && { profileId: profileId.value }),
       },
     })
@@ -145,6 +157,44 @@ const canRun = computed(() =>
         label="Profil de CV"
         description="Le nouveau CV sera rangé dans ce profil."
       />
+
+      <UCard>
+        <div class="flex items-center gap-4">
+          <div class="w-20 shrink-0 sm:w-24">
+            <ClientOnly>
+              <CvGalleryThumbnail
+                :template-id="templateId"
+                :design="defaultDesign"
+                :label="`Aperçu du modèle ${cvTemplates[templateId].label}`"
+                :lazy="false"
+              />
+            </ClientOnly>
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm text-muted">Modèle</p>
+            <p class="font-display text-lg font-semibold text-highlighted">
+              {{ cvTemplates[templateId].label }}
+            </p>
+            <p class="text-sm text-muted">{{ cvTemplates[templateId].description }}</p>
+            <UButton
+              label="Choisir un autre modèle"
+              icon="i-lucide-layout-grid"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              class="mt-2"
+              @click="templateOpen = true"
+            />
+          </div>
+        </div>
+      </UCard>
+      <ClientOnly>
+        <CvGalleryPicker
+          v-model:open="templateOpen"
+          v-model:template-id="templateId"
+          :design="defaultDesign"
+        />
+      </ClientOnly>
 
       <UCard v-if="mode === 'import'">
         <div class="space-y-4">

@@ -111,7 +111,7 @@ describe('GET /api/cv-documents/:id/pdf', () => {
       const res = await getPdf(document.id, `?templateId=${templateId}`)
       expect(res.status).toBe(200)
       const text = await extractPdfText(new Uint8Array(await res.arrayBuffer()))
-      expect(text).toContain('Théâtre du Châtelet')
+      expect(text.replace(/\s+/g, ' ')).toContain('Théâtre du Châtelet')
       expect(text).toContain('Anglais')
     }
     expect((await getPdf(document.id, '?templateId=inconnu')).status).toBe(400)
