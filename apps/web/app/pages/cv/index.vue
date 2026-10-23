@@ -74,6 +74,7 @@ async function setCurrent(resume: Resume) {
 }
 
 const formOpen = ref(false)
+const documentList = useTemplateRef<{ openCreate: () => void }>('documentList')
 
 async function onCreated(resume: Resume) {
   formOpen.value = false
@@ -349,6 +350,29 @@ const deleteDescription = computed(() => {
             @changed="refreshAll()"
           />
         </div>
+      </section>
+
+      <section aria-labelledby="cv-builder">
+        <AppSectionHeading
+          id="cv-builder"
+          title="Créer mon CV"
+          icon="i-lucide-file-pen-line"
+          description="Un CV mis en page et structuré, que Claude t’aide à améliorer. Enregistre-le comme version pour que les critiques, analyses et lettres l’utilisent."
+        >
+          <UButton
+            label="Nouveau CV"
+            icon="i-lucide-plus"
+            color="neutral"
+            variant="outline"
+            @click="documentList?.openCreate()"
+          />
+        </AppSectionHeading>
+        <CvDocumentList
+          ref="documentList"
+          :key="selectedId"
+          :profile-id="selectedId"
+          :current-resume="currentResume"
+        />
       </section>
 
       <section aria-labelledby="cv-review">

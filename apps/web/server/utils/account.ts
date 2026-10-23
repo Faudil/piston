@@ -1,5 +1,7 @@
 import {
   applications,
+  cvDocumentRevisions,
+  cvDocuments,
   eq,
   generations,
   jobOffers,
@@ -25,12 +27,22 @@ export async function getAccountUser(userId: string): Promise<UserRow> {
 export async function buildAccountExport(userId: string) {
   const db = useDb()
   const user = await getAccountUser(userId)
-  const [profileRows, resumeRows, offerRows, generationRows, applicationRows] = await Promise.all([
+  const [
+    profileRows,
+    resumeRows,
+    offerRows,
+    generationRows,
+    applicationRows,
+    cvDocumentRows,
+    cvRevisionRows,
+  ] = await Promise.all([
     db.select().from(resumeProfiles).where(eq(resumeProfiles.userId, userId)),
     db.select(resumeColumns).from(resumes).where(eq(resumes.userId, userId)),
     db.select().from(jobOffers).where(eq(jobOffers.userId, userId)),
     db.select().from(generations).where(eq(generations.userId, userId)),
     db.select().from(applications).where(eq(applications.userId, userId)),
+    db.select().from(cvDocuments).where(eq(cvDocuments.userId, userId)),
+    db.select().from(cvDocumentRevisions).where(eq(cvDocumentRevisions.userId, userId)),
   ])
 
   return {
@@ -50,5 +62,7 @@ export async function buildAccountExport(userId: string) {
     offers: offerRows.map(({ userId: _userId, ...row }) => row),
     generations: generationRows.map(({ userId: _userId, ...row }) => row),
     applications: applicationRows.map(({ userId: _userId, ...row }) => row),
+    cvDocuments: cvDocumentRows.map(({ userId: _userId, ...row }) => row),
+    cvDocumentRevisions: cvRevisionRows.map(({ userId: _userId, ...row }) => row),
   }
 }

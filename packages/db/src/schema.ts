@@ -16,6 +16,10 @@ import {
   applicationStatuses,
   generationKinds,
   type ApplicationOutcome,
+  type CvContent,
+  type CvDesign,
+  type CvRevisionSource,
+  type CvTemplateId,
   type GenerationInputRefs,
   type GenerationOutputs,
   type StatusChange,
@@ -166,6 +170,58 @@ export const applications = pgTable(
   ],
 )
 
+/**
+ * A structured CV built in Piston (« Créer mon CV »), one per specialty or
+ * per offer. Its content and design are validated by `CvContent` and
+ * `CvDesign` (@piston/shared) on every write. See docs/design/cv-builder.md.
+ */
+export const cvDocuments = pgTable(
+  'cv_documents',
+  {
+    ...base,
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => resumeProfiles.id, { onDelete: 'cascade' }),
+    // Set when the document is a copy tailored to an offer.
+    offerId: uuid('offer_id').references(() => jobOffers.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    templateId: text('template_id').$type<CvTemplateId>().notNull().default('sobre'),
+    content: jsonb('content').$type<CvContent>().notNull(),
+    design: jsonb('design').$type<CvDesign>().notNull(),
+  },
+  (t) => [index('cv_documents_user_idx').on(t.userId, t.profileId)],
+)
+
+/** Full snapshots of a CV document, so the user can go back (capped per document). */
+export const cvDocumentRevisions = pgTable(
+  'cv_document_revisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Insertion order. created_at is not enough: Postgres' now() is the start
+    // of the transaction, so a save that records the manual changes and then
+    // an AI snapshot gives both revisions the exact same timestamp.
+    seq: integer('seq').generatedAlwaysAsIdentity(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => cvDocuments.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    source: text('source').$type<CvRevisionSource>().notNull(),
+    // The Claude proposal whose edits were accepted, for AI revisions.
+    generationId: uuid('generation_id').references(() => generations.id, { onDelete: 'set null' }),
+    templateId: text('template_id').$type<CvTemplateId>().notNull(),
+    content: jsonb('content').$type<CvContent>().notNull(),
+    design: jsonb('design').$type<CvDesign>().notNull(),
+  },
+  (t) => [index('cv_document_revisions_document_idx').on(t.documentId, t.seq)],
+)
+
 export type UserRow = typeof users.$inferSelect
 export type InviteRow = typeof invites.$inferSelect
 export type ResumeProfileRow = typeof resumeProfiles.$inferSelect
@@ -173,3 +229,5 @@ export type ResumeRow = typeof resumes.$inferSelect
 export type JobOfferRow = typeof jobOffers.$inferSelect
 export type GenerationRow = typeof generations.$inferSelect
 export type ApplicationRow = typeof applications.$inferSelect
+export type CvDocumentRow = typeof cvDocuments.$inferSelect
+export type CvDocumentRevisionRow = typeof cvDocumentRevisions.$inferSelect

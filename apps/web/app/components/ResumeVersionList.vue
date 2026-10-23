@@ -82,6 +82,16 @@ function menuItems(resume: Resume) {
     ],
     [
       {
+        label: 'Créer un CV depuis cette version',
+        icon: 'i-lucide-file-pen-line',
+        to: {
+          path: '/cv/nouveau',
+          query: { mode: 'import', version: resume.id, profil: resume.profileId },
+        },
+      },
+    ],
+    [
+      {
         label: 'Supprimer',
         icon: 'i-lucide-trash-2',
         color: 'error' as const,

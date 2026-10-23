@@ -5,6 +5,8 @@ const ROUTES: Record<GenerationKind, string> = {
   offer_analysis: '/api/generate/offer-analysis',
   cover_letter: '/api/generate/cover-letter',
   search_leads: '/api/generate/search-leads',
+  cv_draft: '/api/generate/cv-draft',
+  cv_edit: '/api/generate/cv-edit',
 }
 
 /**

@@ -1,11 +1,16 @@
 import * as z from 'zod'
 
-/** The four Claude-powered features. Also the value of `generations.kind`. */
+/**
+ * The Claude-powered features. Also the value of `generations.kind`.
+ * `cv_draft` and `cv_edit` are the CV builder's first drafts and edit proposals.
+ */
 export const generationKinds = [
   'resume_review',
   'offer_analysis',
   'cover_letter',
   'search_leads',
+  'cv_draft',
+  'cv_edit',
 ] as const
 export const GenerationKind = z.enum(generationKinds)
 export type GenerationKind = z.infer<typeof GenerationKind>
@@ -28,6 +33,8 @@ export const generationKindLabels: Record<GenerationKind, string> = {
   offer_analysis: "Analyse d'offre",
   cover_letter: 'Lettre de motivation',
   search_leads: 'Pistes de recherche',
+  cv_draft: 'Brouillon de CV',
+  cv_edit: 'Modifications de CV',
 }
 
 export const applicationStatusLabels: Record<ApplicationStatus, string> = {

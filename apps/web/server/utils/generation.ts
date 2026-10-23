@@ -16,18 +16,29 @@ export interface GenerationSpec<K extends GenerationKind> {
   userId: string
   /** System prompt from @piston/prompts. Identical across calls, so it is cached. */
   system: string
-  /** The resume wrapped in <cv> tags. Identical across calls of a user, so it is cached. */
+  /**
+   * The document the request is about, wrapped in its tags: the resume in
+   * <cv>, or for the CV builder the CV document or the interview answers.
+   * Identical across calls of a user, so it is cached.
+   */
   resume: string
   /** The variable part of the request: offer, options, instruction. */
   request: string
   inputRefs: GenerationInputRefs
   /**
-   * How to turn Claude's answer into the stored output: either a Zod schema
-   * (structured output, JSON constrained by the API) or a function that
-   * post-processes free text.
+   * How to turn Claude's answer into the stored output:
+   * - `schema`: structured output, JSON constrained by the API and validated
+   *   as a whole by the SDK;
+   * - `format` + `fromJson`: structured output whose JSON is validated by
+   *   `fromJson` instead, which may keep the valid parts of an answer (CV
+   *   edit proposals drop an invalid operation rather than the proposal) and
+   *   returns null when the answer is unusable;
+   * - `fromText`: free text, post-processed.
    */
   output:
-    { schema: ZodType<GenerationOutputs[K]> } | { fromText: (text: string) => GenerationOutputs[K] }
+    | { schema: ZodType<GenerationOutputs[K]> }
+    | { format: ZodType; fromJson: (value: unknown) => GenerationOutputs[K] | null }
+    | { fromText: (text: string) => GenerationOutputs[K] }
 }
 
 /**
@@ -46,7 +57,15 @@ export function streamGeneration<K extends GenerationKind>(
     eventStream.push({ event: payload.type, data: JSON.stringify(payload) })
 
   const { claudeModel } = useRuntimeConfig(event)
-  const structured = 'schema' in spec.output
+  const { output: outputSpec } = spec
+  // The lenient mode sends the schema as plain JSON Schema, so the SDK does
+  // not reject the whole answer when one part of it fails validation.
+  const format =
+    'schema' in outputSpec
+      ? betaZodOutputFormat(outputSpec.schema)
+      : 'format' in outputSpec
+        ? { type: 'json_schema' as const, schema: betaZodOutputFormat(outputSpec.format).schema }
+        : undefined
 
   const claudeStream = useClaude().beta.messages.stream({
     model: claudeModel,
@@ -57,7 +76,7 @@ export function streamGeneration<K extends GenerationKind>(
     fallbacks: 'default',
     output_config: {
       effort: 'medium',
-      ...('schema' in spec.output && { format: betaZodOutputFormat(spec.output.schema) }),
+      ...(format && { format }),
     },
     // Cache breakpoints: the system prompt, then the resume. Only `request`
     // changes between two calls of the same user.
@@ -95,19 +114,25 @@ export function streamGeneration<K extends GenerationKind>(
         )
       }
 
-      let output: GenerationOutputs[K]
-      if (structured) {
-        if (!message.parsed_output) {
-          throw new UnusableAnswerError("La réponse de Claude n'a pas le format attendu. Réessaie.")
+      const text = message.content
+        .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        .join('')
+      let output: GenerationOutputs[K] | null
+      if ('schema' in outputSpec) {
+        output = (message.parsed_output as GenerationOutputs[K] | null) ?? null
+      } else if ('fromJson' in outputSpec) {
+        let value: unknown = null
+        try {
+          value = JSON.parse(text)
+        } catch {
+          // Not JSON at all: reported below as an unusable answer.
         }
-        output = message.parsed_output as GenerationOutputs[K]
+        output = outputSpec.fromJson(value)
       } else {
-        const text = message.content
-          .flatMap((block) => (block.type === 'text' ? [block.text] : []))
-          .join('')
-        output = (spec.output as { fromText: (text: string) => GenerationOutputs[K] }).fromText(
-          text,
-        )
+        output = outputSpec.fromText(text)
+      }
+      if (!output) {
+        throw new UnusableAnswerError("La réponse de Claude n'a pas le format attendu. Réessaie.")
       }
 
       const { usage } = message

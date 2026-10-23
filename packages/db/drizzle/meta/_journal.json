@@ -29,6 +29,20 @@
       "when": 1792696111304,
       "tag": "0003_resume_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792758222047,
+      "tag": "0004_cv_builder",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792760631568,
+      "tag": "0005_cv_revision_order",
+      "breakpoints": true
     }
   ]
 }

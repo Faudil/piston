@@ -7,7 +7,15 @@ import { migrate } from 'drizzle-orm/pglite/migrator'
 import { afterAll, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
 import { migrationsFolder } from '../src/migrate'
-import { generations, jobOffers, resumeProfiles, resumes, users } from '../src/schema'
+import {
+  cvDocumentRevisions,
+  cvDocuments,
+  generations,
+  jobOffers,
+  resumeProfiles,
+  resumes,
+  users,
+} from '../src/schema'
 import { createTestDb } from '../src/testing'
 
 describe('schema', () => {
@@ -56,26 +64,26 @@ describe('schema', () => {
   })
 })
 
-describe('migration 0003_resume_profiles', () => {
-  const folders: string[] = []
-  afterAll(() => folders.forEach((folder) => rmSync(folder, { recursive: true, force: true })))
+const folders: string[] = []
+afterAll(() => folders.forEach((folder) => rmSync(folder, { recursive: true, force: true })))
 
-  /** A copy of the migrations folder whose journal stops before `tag`. */
-  function migrationsBefore(tag: string) {
-    const folder = mkdtempSync(join(tmpdir(), 'piston-migrations-'))
-    folders.push(folder)
-    cpSync(migrationsFolder, folder, { recursive: true })
-    const journalPath = join(folder, 'meta', '_journal.json')
-    const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
-      entries: Array<{ tag: string }>
-    }
-    const index = journal.entries.findIndex((entry) => entry.tag === tag)
-    expect(index).toBeGreaterThan(0)
-    journal.entries = journal.entries.slice(0, index)
-    writeFileSync(journalPath, JSON.stringify(journal))
-    return folder
+/** A copy of the migrations folder whose journal stops before `tag`. */
+function migrationsBefore(tag: string) {
+  const folder = mkdtempSync(join(tmpdir(), 'piston-migrations-'))
+  folders.push(folder)
+  cpSync(migrationsFolder, folder, { recursive: true })
+  const journalPath = join(folder, 'meta', '_journal.json')
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
+    entries: Array<{ tag: string }>
   }
+  const index = journal.entries.findIndex((entry) => entry.tag === tag)
+  expect(index).toBeGreaterThan(0)
+  journal.entries = journal.entries.slice(0, index)
+  writeFileSync(journalPath, JSON.stringify(journal))
+  return folder
+}
 
+describe('migration 0003_resume_profiles', () => {
   it('moves existing resumes into a default « Principal » profile', async () => {
     const db = drizzle(new PGlite(), { casing: 'snake_case' })
     await migrate(db, { migrationsFolder: migrationsBefore('0003_resume_profiles') })
@@ -117,5 +125,68 @@ describe('migration 0003_resume_profiles', () => {
     const refs = (await db.select().from(generations)).map((g) => g.inputRefs)
     expect(refs.filter((r) => r.profileId === profiles[0]!.id)).toHaveLength(2)
     expect(refs.filter((r) => !r.resumeId)).toEqual([{}])
+  })
+})
+
+describe('migration 0004_cv_builder', () => {
+  it('keeps existing data and adds the CV builder tables and generation kinds', async () => {
+    const db = drizzle(new PGlite(), { casing: 'snake_case' })
+    await migrate(db, { migrationsFolder: migrationsBefore('0004_cv_builder') })
+
+    const inserted = await db.execute<{ id: string }>(sql`
+      insert into users (email, display_name, password_hash) values ('a@example.com', 'A', 'x')
+      returning id`)
+    const userId = inserted.rows[0]!.id
+    const profile = await db.execute<{ id: string }>(sql`
+      insert into resume_profiles (user_id, name, is_default) values (${userId}, 'Principal', true)
+      returning id`)
+    const profileId = profile.rows[0]!.id
+    await db.execute(sql`
+      insert into resumes (user_id, profile_id, title, raw_text, is_current)
+      values (${userId}, ${profileId}, 'v1', 'cv', true)`)
+    await db.execute(sql`
+      insert into generations (user_id, kind, output, model) values (${userId}, 'resume_review', '{}', 'm')`)
+
+    await migrate(db, { migrationsFolder })
+
+    expect(await db.select().from(resumes)).toHaveLength(1)
+    expect(await db.select().from(generations)).toHaveLength(1)
+
+    // The new kinds are usable, and a document with its revision can be stored and cascades.
+    const [generation] = await db
+      .insert(generations)
+      .values({
+        userId,
+        kind: 'cv_edit',
+        output: { summary: '', operations: [], dropped: 0 },
+        model: 'm',
+      })
+      .returning()
+    const content = { header: { fullName: 'A' } } as never
+    const design = {
+      accentColor: '#c8410b',
+      font: 'inter',
+      density: 'normal',
+      language: 'fr',
+    } as const
+    const [document] = await db
+      .insert(cvDocuments)
+      .values({ userId, profileId, title: 'Mon CV', content, design })
+      .returning()
+    expect(document!.templateId).toBe('sobre')
+    await db.insert(cvDocumentRevisions).values({
+      documentId: document!.id,
+      userId,
+      label: 'Création',
+      source: 'created',
+      generationId: generation!.id,
+      templateId: 'sobre',
+      content,
+      design,
+    })
+
+    await db.delete(resumeProfiles).where(eq(resumeProfiles.id, profileId))
+    expect(await db.select().from(cvDocuments)).toHaveLength(0)
+    expect(await db.select().from(cvDocumentRevisions)).toHaveLength(0)
   })
 })

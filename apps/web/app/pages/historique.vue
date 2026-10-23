@@ -36,7 +36,12 @@ const kindIcons: Record<string, string> = {
   offer_analysis: 'i-lucide-scan-search',
   cover_letter: 'i-lucide-pen-line',
   search_leads: 'i-lucide-compass',
+  cv_draft: 'i-lucide-file-input',
+  cv_edit: 'i-lucide-file-pen-line',
 }
+
+/** The two CV builder kinds share one summary view. */
+const asCvGeneration = (item: Generation) => item as Generation<'cv_draft'> | Generation<'cv_edit'>
 
 function toggle(id: string) {
   expanded.value = expanded.value === id ? null : id
@@ -46,7 +51,7 @@ function toggle(id: string) {
 <template>
   <AppPage
     title="Historique"
-    description="Tout ce que Claude a écrit pour toi : critiques, analyses, lettres et pistes."
+    description="Tout ce que Claude a écrit pour toi : critiques, analyses, lettres, pistes et propositions pour tes CV."
     width="narrow"
   >
     <div class="space-y-5">
@@ -116,6 +121,10 @@ function toggle(id: string) {
                 :output="item.output"
               />
               <CoverLetterView v-else-if="item.kind === 'cover_letter'" :output="item.output" />
+              <CvGenerationSummary
+                v-else-if="item.kind === 'cv_draft' || item.kind === 'cv_edit'"
+                :generation="asCvGeneration(item)"
+              />
               <SearchLeadsResult v-else :output="item.output" />
               <p class="mt-5 text-xs text-dimmed">
                 {{ item.model }} · {{ item.inputTokens }} tokens en entrée ·

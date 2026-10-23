@@ -4,6 +4,8 @@ import type {
   CoverLetterTemplate,
   GenerationKind,
 } from './enums'
+import type { CvDraftOutput } from './cv-draft'
+import type { CvEditProposal } from './cv-operations'
 import type {
   CoverLetterOutput,
   OfferAnalysisOutput,
@@ -65,6 +67,8 @@ export interface GenerationOutputs {
   offer_analysis: OfferAnalysisOutput
   cover_letter: CoverLetterOutput
   search_leads: SearchLeadsOutput
+  cv_draft: CvDraftOutput
+  cv_edit: CvEditProposal
 }
 
 /** References to the inputs a generation was produced from. */
@@ -84,6 +88,14 @@ export interface GenerationInputRefs {
   applicationId?: string
   /** Set when the generation revised another letter following the user's corrections. */
   revisionInstructions?: string
+  /** CV builder: the document a proposal was made for (`cv_edit`). */
+  cvDocumentId?: string
+  /** CV builder: how the draft or the proposal was asked for. */
+  cvMode?: 'import' | 'interview' | 'instruction' | 'action' | 'tailor' | 'review'
+  /** CV builder: the inline action (`cv_edit` with mode `action`). */
+  cvAction?: string
+  /** CV builder: the review turned into edits (`cv_edit` with mode `review`). */
+  reviewGenerationId?: string
 }
 
 export interface Generation<K extends GenerationKind = GenerationKind> {

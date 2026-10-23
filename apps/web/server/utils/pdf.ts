@@ -17,7 +17,9 @@ export async function extractPdfText(data: Uint8Array): Promise<string> {
   // Loaded on first use: pdf.js is heavy and needs a native canvas module, so a
   // problem there must break PDF import only, not the whole server at startup.
   const { PDFParse } = await import('pdf-parse')
-  const parser = new PDFParse({ data })
+  // pdf.js takes ownership of (detaches) the buffer it is given: pass a copy so
+  // the caller can still store the original bytes afterwards.
+  const parser = new PDFParse({ data: new Uint8Array(data) })
   try {
     const { text } = await parser.getText()
     return normalizeExtractedText(text)
