@@ -8,6 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
 import { migrationsFolder } from '../src/migrate'
 import {
+  cvDocumentAssets,
   cvDocumentRevisions,
   cvDocuments,
   generations,
@@ -163,12 +164,13 @@ describe('migration 0004_cv_builder', () => {
       })
       .returning()
     const content = { header: { fullName: 'A' } } as never
+    // A v1 design, as stored before v2 (read through upgradeCvDocument).
     const design = {
       accentColor: '#c8410b',
       font: 'inter',
       density: 'normal',
       language: 'fr',
-    } as const
+    } as never
     const [document] = await db
       .insert(cvDocuments)
       .values({ userId, profileId, title: 'Mon CV', content, design })
@@ -188,5 +190,43 @@ describe('migration 0004_cv_builder', () => {
     await db.delete(resumeProfiles).where(eq(resumeProfiles.id, profileId))
     expect(await db.select().from(cvDocuments)).toHaveLength(0)
     expect(await db.select().from(cvDocumentRevisions)).toHaveLength(0)
+  })
+})
+
+describe('migration 0006_cv_document_assets', () => {
+  it('stores a document’s photo and deletes it with the document', async () => {
+    const db = await createTestDb()
+    const [user] = await db
+      .insert(users)
+      .values({ email: 'a@example.com', displayName: 'A', passwordHash: 'x' })
+      .returning()
+    const [profile] = await db
+      .insert(resumeProfiles)
+      .values({ userId: user!.id, name: 'Principal', isDefault: true })
+      .returning()
+    const [document] = await db
+      .insert(cvDocuments)
+      .values({
+        userId: user!.id,
+        profileId: profile!.id,
+        title: 'Mon CV',
+        content: {} as never,
+        design: {} as never,
+      })
+      .returning()
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
+    await db.insert(cvDocumentAssets).values({
+      documentId: document!.id,
+      userId: user!.id,
+      mimeType: 'image/png',
+      bytes,
+      width: 400,
+      height: 400,
+    })
+    const [stored] = await db.select().from(cvDocumentAssets)
+    expect(Array.from(stored!.bytes)).toEqual(Array.from(bytes))
+
+    await db.delete(cvDocuments).where(eq(cvDocuments.id, document!.id))
+    expect(await db.select().from(cvDocumentAssets)).toHaveLength(0)
   })
 })

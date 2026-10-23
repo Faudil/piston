@@ -3,8 +3,8 @@ import {
   CV_LIMITS,
   CvContent,
   createCvItem,
-  cvListSectionKeys,
   cvSectionKeys,
+  cvSectionMaxItems,
   newCvId,
   type CvSectionConfig,
 } from './cv'
@@ -95,6 +95,16 @@ export type CvDraftOutput = z.infer<typeof CvDraftOutput>
 
 const cut = (value: string, max: number) => value.trim().slice(0, max)
 
+const DRAFT_SECTIONS = [
+  'experiences',
+  'education',
+  'skills',
+  'languages',
+  'projects',
+  'certifications',
+  'interests',
+] as const
+
 /**
  * Turns a draft into a document: ids everywhere, values cut to the limits,
  * counts capped, and only the sections that have content made visible
@@ -117,19 +127,11 @@ export function draftToContent(draft: CvDraftOutput): CvContent {
       })),
   }
 
+  // Drafts have the v1 sections only; the others stay empty (and hidden).
   const lists: Record<string, unknown[]> = {}
-  for (const section of cvListSectionKeys) {
-    const max = {
-      experiences: CV_LIMITS.experiences,
-      education: CV_LIMITS.education,
-      skills: CV_LIMITS.skills,
-      languages: CV_LIMITS.languages,
-      projects: CV_LIMITS.projects,
-      certifications: CV_LIMITS.certifications,
-      interests: CV_LIMITS.interests,
-    }[section]
+  for (const section of DRAFT_SECTIONS) {
     lists[section] = (draft[section] as Array<Record<string, unknown>>)
-      .slice(0, max)
+      .slice(0, cvSectionMaxItems[section])
       .map((values) =>
         createCvItem(
           section,
@@ -148,6 +150,7 @@ export function draftToContent(draft: CvDraftOutput): CvContent {
     key,
     title: '',
     visible: key === 'summary' ? Boolean(summary) : (lists[key]?.length ?? 0) > 0,
+    column: 'auto',
   }))
 
   return CvContent.parse({ header, summary, ...lists, sections })

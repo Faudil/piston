@@ -4,6 +4,7 @@ import {
   CvContent,
   applyCvOperation,
   applyCvOperations,
+  cvSectionKeys,
   describeCvOperation,
   diffWords,
   parseCvEditOutput,
@@ -153,7 +154,7 @@ describe('applyCvOperation', () => {
           reason,
         }),
       )
-      expect(cv.skills[0]!.items).toEqual(['Canva', 'Figma'])
+      expect(cv.skills[0]!.items.map((skill) => skill.name)).toEqual(['Canva', 'Figma'])
     })
 
     it('refuses too many or too long items and unknown groups', () => {
@@ -409,6 +410,7 @@ describe('applyCvOperation', () => {
         id: `g${i + 10}`,
         name: 'L',
         level: '',
+        cefr: null,
       }))
       expect(
         failure(
@@ -472,6 +474,7 @@ describe('applyCvOperation', () => {
         key: 'languages',
         title: '',
         visible: false,
+        column: 'auto',
       })
       const renamed = applied(
         applyCvOperation(hidden, {
@@ -486,6 +489,7 @@ describe('applyCvOperation', () => {
         key: 'languages',
         title: 'Langues parlées',
         visible: false,
+        column: 'auto',
       })
     })
 
@@ -499,7 +503,7 @@ describe('applyCvOperation', () => {
         }),
       )
       expect(cv.sections[0]!.key).toBe('skills')
-      expect(cv.sections).toHaveLength(8)
+      expect(cv.sections).toHaveLength(cvSectionKeys.length)
     })
   })
 })
@@ -544,6 +548,7 @@ describe('applyCvOperations', () => {
 function wire(fields: Partial<CvOperationWire> & Pick<CvOperationWire, 'op'>): CvOperationWire {
   return {
     section: null,
+    customId: null,
     itemId: null,
     bulletId: null,
     field: null,
@@ -551,7 +556,9 @@ function wire(fields: Partial<CvOperationWire> & Pick<CvOperationWire, 'op'>): C
     list: null,
     fields: null,
     index: null,
+    level: null,
     visible: null,
+    column: null,
     reason,
     ...fields,
   }
@@ -638,8 +645,16 @@ describe('parseCvEditOutput', () => {
         reason,
       },
       { op: 'move_item', section: 'experiences', itemId: 'e2', toIndex: 0, reason },
-      { op: 'set_section', section: 'languages', visible: false, title: null, reason },
-      { op: 'move_section', section: 'skills', toIndex: 1, reason },
+      {
+        op: 'set_section',
+        section: 'languages',
+        customId: null,
+        visible: false,
+        title: null,
+        column: null,
+        reason,
+      },
+      { op: 'move_section', section: 'skills', customId: null, toIndex: 1, reason },
     ])
     // And they apply to the document.
     const { results } = applyCvOperations(sampleCv(), proposal!.operations)

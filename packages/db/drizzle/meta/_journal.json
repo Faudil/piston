@@ -43,6 +43,13 @@
       "when": 1792760631568,
       "tag": "0005_cv_revision_order",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792771075160,
+      "tag": "0006_cv_document_assets",
+      "breakpoints": true
     }
   ]
 }

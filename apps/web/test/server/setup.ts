@@ -11,8 +11,8 @@
  * `callRoute` in ./helpers.ts).
  */
 import { readFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
 import * as h3 from 'h3'
+import { CV_FONTS_DIR } from '@piston/cv-render/node'
 import { vi } from 'vitest'
 import * as account from '../../server/utils/account'
 import * as applications from '../../server/utils/applications'
@@ -20,6 +20,7 @@ import * as auth from '../../server/utils/auth'
 import * as claude from '../../server/utils/claude'
 import * as coverLetter from '../../server/utils/cover-letter'
 import * as cvAi from '../../server/utils/cv-ai'
+import * as cvAssets from '../../server/utils/cv-assets'
 import * as cvDocuments from '../../server/utils/cv-documents'
 import * as cvPdf from '../../server/utils/cv-pdf'
 import * as generation from '../../server/utils/generation'
@@ -44,6 +45,7 @@ for (const util of [
   claude,
   coverLetter,
   cvAi,
+  cvAssets,
   cvDocuments,
   cvPdf,
   generation,
@@ -63,12 +65,12 @@ vi.stubGlobal('useRuntimeConfig', () => testState.config)
 vi.stubGlobal('useDb', () => testState.db)
 vi.stubGlobal('useClaude', () => testState.claude)
 
-// Nitro server assets (server/assets), read from disk like `nuxt dev` does.
-const serverAssets = fileURLToPath(new URL('../../server/assets/', import.meta.url))
+// Nitro server assets (see nitro.serverAssets in nuxt.config.ts), read from
+// disk like `nuxt dev` does: `assets:cv-fonts` is packages/cv-render/fonts.
 vi.stubGlobal('useStorage', (base: string) => ({
   async getItemRaw(key: string) {
-    if (base !== 'assets:server') throw new Error(`useStorage(${base}) is not stubbed`)
-    return new Uint8Array(await readFile(serverAssets + key.replaceAll(':', '/')))
+    if (base !== 'assets:cv-fonts') throw new Error(`useStorage(${base}) is not stubbed`)
+    return new Uint8Array(await readFile(CV_FONTS_DIR + key.replaceAll(':', '/')))
   },
 }))
 

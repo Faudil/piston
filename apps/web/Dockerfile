@@ -11,6 +11,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/web/package.json apps/web/
 COPY packages/db/package.json packages/db/
+COPY packages/cv-render/package.json packages/cv-render/
 COPY packages/prompts/package.json packages/prompts/
 COPY packages/shared/package.json packages/shared/
 # --ignore-scripts: skip husky (`prepare`) and the web `postinstall`, which

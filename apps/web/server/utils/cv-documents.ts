@@ -1,5 +1,6 @@
 import {
   and,
+  cvDocumentAssets,
   cvDocumentRevisions,
   cvDocuments,
   desc,
@@ -13,6 +14,7 @@ import {
   CvDesign,
   LIMITS,
   cvToText,
+  upgradeCvDocument,
   type CvContent,
   type CvDocument,
   type CvDocumentSummary,
@@ -34,7 +36,17 @@ function notFound() {
   return createError({ statusCode: 404, message: 'CV introuvable.' })
 }
 
+/**
+ * A stored row with its content and design upgraded to the current schema
+ * (v1 documents not saved since v2 are still v1 in the database). Every
+ * read goes through this; the next save writes the upgraded JSON back.
+ */
+export function readCvRow<T extends Pick<CvDocumentRow, 'content' | 'design'>>(row: T): T {
+  return { ...row, ...upgradeCvDocument(row) }
+}
+
 export function toCvDocument(row: CvDocumentRow): CvDocument {
+  row = readCvRow(row)
   return {
     id: row.id,
     profileId: row.profileId,
@@ -71,7 +83,7 @@ export async function getUserCvDocument(userId: string, documentId: string) {
     .from(cvDocuments)
     .where(and(eq(cvDocuments.id, documentId), eq(cvDocuments.userId, userId)))
   if (!row) throw notFound()
-  return row
+  return readCvRow(row)
 }
 
 /** The user's documents, most recently edited first, optionally for one profile. */
@@ -240,12 +252,13 @@ export async function updateCvDocument(
   },
 ) {
   return useDb().transaction(async (tx) => {
-    const [current] = await tx
+    const [found] = await tx
       .select()
       .from(cvDocuments)
       .where(and(eq(cvDocuments.id, documentId), eq(cvDocuments.userId, userId)))
       .for('update')
-    if (!current) throw notFound()
+    if (!found) throw notFound()
+    const current = readCvRow(found)
     if (body.baseUpdatedAt && current.updatedAt.toISOString() !== body.baseUpdatedAt) {
       throw createError({
         statusCode: 409,
@@ -278,12 +291,14 @@ export async function updateCvDocument(
       .where(eq(cvDocuments.id, current.id))
       .returning()
 
-    const [latest] = await tx
+    const [latestRow] = await tx
       .select()
       .from(cvDocumentRevisions)
       .where(eq(cvDocumentRevisions.documentId, current.id))
       .orderBy(desc(cvDocumentRevisions.seq))
       .limit(1)
+    // Compared once upgraded: a v1 revision equal to the upgraded document is the same state.
+    const latest = latestRow && readCvRow(latestRow)
 
     if (body.snapshot) {
       if (latest && !sameState(latest, before)) {
@@ -348,6 +363,7 @@ export async function restoreCvRevision(userId: string, documentId: string, revi
     )
   if (!revision)
     throw createError({ statusCode: 404, message: 'Version de l’historique introuvable.' })
+  const restored = readCvRow(revision)
 
   const date = new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'short',
@@ -355,9 +371,9 @@ export async function restoreCvRevision(userId: string, documentId: string, revi
     timeZone: 'Europe/Paris',
   }).format(revision.createdAt)
   return updateCvDocument(userId, documentId, {
-    templateId: revision.templateId,
-    content: revision.content,
-    design: revision.design,
+    templateId: restored.templateId,
+    content: restored.content,
+    design: restored.design,
     snapshot: { label: `Restauration : ${revision.label} (${date})`, source: 'restore' },
   })
 }
@@ -373,7 +389,7 @@ export async function duplicateCvDocument(
   const title =
     input.title ??
     (offer ? `${source.title} — ${offer.title}` : `${source.title} (copie)`).slice(0, 120)
-  return createCvDocument(userId, {
+  const copy = await createCvDocument(userId, {
     profileId: source.profileId,
     offerId: offer?.id ?? source.offerId,
     title,
@@ -382,6 +398,42 @@ export async function duplicateCvDocument(
     design: source.design,
     revisionLabel: `Copie de « ${source.title} »`,
   })
+  return copyCvPhoto(userId, source.id, copy)
+}
+
+/**
+ * Assets belong to one document: a copy gets its own copy of the photo, and
+ * its content points at it (the copy's first revision keeps the source's
+ * reference, which restoring would simply render without a photo).
+ */
+async function copyCvPhoto(userId: string, sourceId: string, copy: CvDocumentRow) {
+  const content = readCvRow(copy).content
+  const photo = content.header.photo
+  if (!photo) return copy
+  const asset = await getCvAsset(userId, sourceId, photo.assetId)
+  if (!asset) return copy
+  const [duplicate] = await useDb()
+    .insert(cvDocumentAssets)
+    .values({
+      documentId: copy.id,
+      userId,
+      mimeType: asset.mimeType,
+      bytes: asset.bytes,
+      width: asset.width,
+      height: asset.height,
+    })
+    .returning({ id: cvDocumentAssets.id })
+  const [updated] = await useDb()
+    .update(cvDocuments)
+    .set({
+      content: {
+        ...content,
+        header: { ...content.header, photo: { ...photo, assetId: duplicate!.id } },
+      },
+    })
+    .where(eq(cvDocuments.id, copy.id))
+    .returning()
+  return updated!
 }
 
 export async function deleteCvDocument(userId: string, documentId: string) {
@@ -401,7 +453,7 @@ export async function deleteCvDocument(userId: string, documentId: string) {
  */
 export async function saveCvDocumentAsVersion(userId: string, documentId: string, title?: string) {
   const document = await getUserCvDocument(userId, documentId)
-  const pdf = await renderCvPdf(document)
+  const pdf = await renderCvDocumentPdf(userId, document)
   const extracted = await extractPdfText(pdf)
   const rawText = (extracted || cvToText(document.content, document.design)).slice(
     0,

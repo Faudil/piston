@@ -1,50 +1,43 @@
-import type { TDocumentDefinitions } from 'pdfmake/interfaces'
-import type { CvContent, CvDesign, CvTemplateId } from '@piston/shared'
-import { cvFontDictionary, cvFontFiles } from '../cv-pdf/fonts'
-import { CV_TEMPLATES } from '../cv-pdf/templates'
-
-/** The parts of pdfmake 0.3's server API used here (its types do not cover `virtualfs`). */
-interface PdfMake {
-  virtualfs: { writeFileSync(name: string, data: Buffer): void }
-  setFonts(fonts: ReturnType<typeof cvFontDictionary>): void
-  setUrlAccessPolicy(callback: (url: string) => boolean): void
-  setLocalAccessPolicy(callback: (path: string) => boolean): void
-  createPdf(definition: TDocumentDefinitions): { getBuffer(): Promise<Buffer> }
-}
-
-let pdfmakeReady: Promise<PdfMake> | undefined
+import { renderPdf, type CvAssets, type CvPdfMake, type CvRenderInput } from '@piston/cv-render'
+import type { CvContent } from '@piston/shared'
 
 /**
- * Loads pdfmake on first use (like pdf-parse, a problem there breaks PDF
- * export only, never the server start), registers the fonts from the server
- * assets, and forbids every remote or local resource: CV documents never
- * contain images, so nothing user-provided can make the server fetch a URL
- * or read a file.
+ * Server-side CV PDFs (download, « Enregistrer comme version », gallery
+ * fallback), rendered by @piston/cv-render, the same renderer as the
+ * editor's preview (which runs it in a Web Worker).
+ *
+ * The fonts are Nitro server assets (`assets:cv-fonts`, mapped to
+ * packages/cv-render/fonts in nuxt.config.ts): bundled with the server, read
+ * through `useStorage`, so the production output needs no `packages/` dir.
  */
-function usePdfMake(): Promise<PdfMake> {
-  pdfmakeReady ??= (async () => {
-    const pdfmake = (await import('pdfmake')).default as unknown as PdfMake
-    const storage = useStorage('assets:server')
-    for (const file of cvFontFiles()) {
-      const data = await storage.getItemRaw<Uint8Array>(`cv-fonts:${file}`)
-      if (!data) throw new Error(`[cv-pdf] missing font asset ${file}`)
-      pdfmake.virtualfs.writeFileSync(file, Buffer.from(data))
-    }
-    pdfmake.setFonts(cvFontDictionary())
-    pdfmake.setUrlAccessPolicy(() => false)
-    pdfmake.setLocalAccessPolicy(() => false)
-    return pdfmake
-  })().catch((error) => {
-    pdfmakeReady = undefined
-    throw error
-  })
+
+let pdfmakeReady: Promise<CvPdfMake> | undefined
+
+/**
+ * Loads pdfmake on first use: like pdf-parse, a problem there breaks PDF
+ * export only, never the server start. The renderer registers the fonts and
+ * denies every URL and file access on first render.
+ */
+function usePdfMake(): Promise<CvPdfMake> {
+  pdfmakeReady ??= import('pdfmake')
+    .then((module) => module.default as unknown as CvPdfMake)
+    .catch((error) => {
+      pdfmakeReady = undefined
+      throw error
+    })
   return pdfmakeReady
+}
+
+async function loadFont(file: string): Promise<Uint8Array> {
+  const data = await useStorage('assets:cv-fonts').getItemRaw<Uint8Array>(file)
+  if (!data) throw new Error(`[cv-pdf] missing font asset ${file}`)
+  return new Uint8Array(data)
 }
 
 /**
  * At most this many PDFs are rendered at once per process. A render takes
- * ~100 ms and a few tens of MB; previews follow autosaves, so bursts are
- * possible, and the queue keeps memory flat.
+ * ~100-300 ms and a few tens of MB; the queue keeps memory flat under a
+ * burst of exports.
  */
 const MAX_CONCURRENT_RENDERS = 2
 let activeRenders = 0
@@ -65,23 +58,16 @@ function releaseRenderSlot() {
   else activeRenders--
 }
 
-export interface CvPdfInput {
-  content: CvContent
-  design: CvDesign
-  templateId: CvTemplateId
-}
-
-/** Renders a CV document to PDF bytes with its template. */
-export async function renderCvPdf(input: CvPdfInput): Promise<Uint8Array> {
-  const pdfmake = await usePdfMake()
-  const definition = CV_TEMPLATES[input.templateId]({
-    content: input.content,
-    design: input.design,
-  })
+/** Renders a CV document to PDF bytes. `assets` holds its photo (see `loadCvRenderAssets`). */
+export async function renderCvPdf(
+  input: CvRenderInput,
+  assets: CvAssets = {},
+): Promise<Uint8Array> {
   await acquireRenderSlot()
   try {
-    const buffer = await pdfmake.createPdf(definition).getBuffer()
-    return new Uint8Array(buffer)
+    const pdfmake = await usePdfMake()
+    const result = await renderPdf(input, assets, { pdfmake, loadFont })
+    return result.pdf
   } catch (error) {
     console.error('[cv-pdf] render failed', error)
     throw createError({
@@ -91,6 +77,15 @@ export async function renderCvPdf(input: CvPdfInput): Promise<Uint8Array> {
   } finally {
     releaseRenderSlot()
   }
+}
+
+/** Renders one of the user's stored documents, its photo included. */
+export async function renderCvDocumentPdf(
+  userId: string,
+  document: CvRenderInput & { id: string },
+): Promise<Uint8Array> {
+  const assets = await loadCvRenderAssets(userId, document.id, document.content)
+  return renderCvPdf(document, assets)
 }
 
 /** « Camille Durand - CV.pdf », or the document title when the name is empty. */

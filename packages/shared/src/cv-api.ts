@@ -1,5 +1,7 @@
 import * as z from 'zod'
-import { CV_LIMITS, CvContent, CvDesign, CvId, CvSectionKey, CvTemplateId } from './cv'
+import { CV_LIMITS, CvContent, CvId, CvSectionKey } from './cv'
+import { CvDesign } from './cv-design'
+import { CvTemplateId } from './cv-templates'
 import type { JobOffer } from './models'
 
 /** Request bodies and API shapes of the CV builder routes (/api/cv-documents). */
@@ -89,6 +91,31 @@ export const SaveCvVersionBody = z.object({
   title: z.string().trim().min(1).max(120).optional(),
 })
 export type SaveCvVersionBody = z.infer<typeof SaveCvVersionBody>
+
+// --- Assets (photo) -------------------------------------------------------------------
+
+/**
+ * Images a CV document can embed (its photo), stored in `cv_document_assets`.
+ * The type is sniffed from the bytes, never taken from the client. The PDF
+ * renderer embeds PNG and JPEG only (pdfkit): a WebP photo is stored but not
+ * drawn, so the editor should upload a JPEG made with a canvas.
+ */
+export const cvAssetMimeTypes = ['image/png', 'image/jpeg', 'image/webp'] as const
+export type CvAssetMimeType = (typeof cvAssetMimeTypes)[number]
+
+/** Maximum size of an asset, after the client's crop and resize (≤ 800 px). */
+export const CV_ASSET_MAX_BYTES = 2 * 1024 * 1024
+
+/** An asset as returned by the API (the bytes are served by their own route). */
+export interface CvAsset {
+  id: string
+  documentId: string
+  mimeType: CvAssetMimeType
+  size: number
+  width: number
+  height: number
+  createdAt: string
+}
 
 /** A CV document as returned by the API. */
 export interface CvDocument {

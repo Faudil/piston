@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { cvSectionTitles, type CvLanguageCode, type CvSectionConfig } from '@piston/shared'
+import { cvSectionTitles, type CvBuiltinSectionConfig, type CvLanguageCode } from '@piston/shared'
 
 /**
  * Frame of one CV section in the editor: its title (custom or default), a
  * visibility switch, move up / down buttons and a slot for its AI menu.
  */
-const section = defineModel<CvSectionConfig>({ required: true })
+const section = defineModel<CvBuiltinSectionConfig>({ required: true })
 const props = defineProps<{
   language: CvLanguageCode
   index: number

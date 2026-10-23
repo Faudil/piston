@@ -16,6 +16,7 @@ import {
   applicationStatuses,
   generationKinds,
   type ApplicationOutcome,
+  type CvAssetMimeType,
   type CvContent,
   type CvDesign,
   type CvRevisionSource,
@@ -174,6 +175,10 @@ export const applications = pgTable(
  * A structured CV built in Piston (« Créer mon CV »), one per specialty or
  * per offer. Its content and design are validated by `CvContent` and
  * `CvDesign` (@piston/shared) on every write. See docs/design/cv-builder.md.
+ *
+ * The JSON may still be in the v1 schema (documents not saved since v2):
+ * read it through `upgradeCvDocument` (@piston/shared), never as is. It is
+ * rewritten as v2 on the next save; no migration touches it.
  */
 export const cvDocuments = pgTable(
   'cv_documents',
@@ -222,6 +227,32 @@ export const cvDocumentRevisions = pgTable(
   (t) => [index('cv_document_revisions_document_idx').on(t.documentId, t.seq)],
 )
 
+/**
+ * Binary files of a CV document: its photo. Deleted with the document (or
+ * the user). Personal data: never sent to Claude, left out of the account
+ * export's JSON like resume PDFs (the export lists them without bytes).
+ */
+export const cvDocumentAssets = pgTable(
+  'cv_document_assets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => cvDocuments.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Sniffed from the bytes (PNG, JPEG or WebP), never taken from the client.
+    mimeType: text('mime_type').$type<CvAssetMimeType>().notNull(),
+    // At most CV_ASSET_MAX_BYTES (2 MB). Never select it in list queries.
+    bytes: bytea('bytes').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+  },
+  (t) => [index('cv_document_assets_document_idx').on(t.documentId)],
+)
+
 export type UserRow = typeof users.$inferSelect
 export type InviteRow = typeof invites.$inferSelect
 export type ResumeProfileRow = typeof resumeProfiles.$inferSelect
@@ -231,3 +262,4 @@ export type GenerationRow = typeof generations.$inferSelect
 export type ApplicationRow = typeof applications.$inferSelect
 export type CvDocumentRow = typeof cvDocuments.$inferSelect
 export type CvDocumentRevisionRow = typeof cvDocumentRevisions.$inferSelect
+export type CvDocumentAssetRow = typeof cvDocumentAssets.$inferSelect

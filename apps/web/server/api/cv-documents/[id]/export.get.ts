@@ -21,7 +21,8 @@ export default defineEventHandler(async (event) => {
         : `${JSON.stringify(
             {
               format: 'piston-cv',
-              version: 1,
+              // The document schema version (v2: see upgradeCvDocument).
+              version: 2,
               title: document.title,
               templateId: document.templateId,
               design: document.design,

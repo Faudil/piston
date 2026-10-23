@@ -68,10 +68,31 @@ function panelClass(name: Exclude<Tab, 'preview'>) {
 
 // --- Preview and checks --------------------------------------------------------------
 
-const pageCount = ref<number>()
-const previewSrc = computed(
-  () => `/api/cv-documents/${id}/pdf?v=${encodeURIComponent(updatedAt.value)}`,
-)
+// The preview is rendered in the browser (a Web Worker running the same
+// renderer as the server's PDF export), on every change, before autosave.
+const {
+  result: preview,
+  status: previewStatus,
+  error: previewError,
+} = useCvPreview(() => ({
+  content: state.content,
+  design: state.design,
+  templateId: state.templateId,
+}))
+const pageCount = computed(() => preview.value?.pageCount)
+
+/** « 2 pages », and how little of the last one is used when it almost fits. */
+const pageSummary = computed(() => {
+  const result = preview.value
+  if (!result) return null
+  const pages = result.pageCount === 1 ? '1 page' : `${result.pageCount} pages`
+  const fill = Math.round(result.lastPageFill * 100)
+  const almost =
+    result.pageCount > 1 && result.lastPageFill < 0.25
+      ? `La dernière page n’est remplie qu’à ${fill} % : en resserrant un peu (espacement, taille du texte, une puce en moins), ton CV tiendrait sur ${result.pageCount - 1 === 1 ? 'une page' : `${result.pageCount - 1} pages`}.`
+      : null
+  return { pages, almost }
+})
 const checks = computed(() =>
   checkCv(state.content, state.design, state.templateId, { pageCount: pageCount.value }),
 )
@@ -447,9 +468,30 @@ const moreItems = computed(() => [
         :class="tab === 'preview' ? 'block' : 'hidden'"
         aria-label="Aperçu et vérifications"
       >
-        <ClientOnly>
-          <CvPdfPreview :src="previewSrc" @pages="pageCount = $event" />
-        </ClientOnly>
+        <div>
+          <ClientOnly>
+            <CvPdfPreview
+              :data="preview?.pdf ?? null"
+              :busy="previewStatus === 'rendering'"
+              label="Aperçu du CV"
+            />
+            <template #fallback>
+              <div class="aspect-[210/297] animate-pulse rounded-sm bg-elevated" />
+            </template>
+          </ClientOnly>
+          <UAlert
+            v-if="previewError"
+            class="mt-2"
+            color="error"
+            variant="subtle"
+            icon="i-lucide-circle-alert"
+            :title="previewError"
+          />
+          <p v-if="pageSummary" class="mt-3 text-sm text-muted" role="status">
+            <span class="font-medium text-highlighted">{{ pageSummary.pages }}</span>
+            <template v-if="pageSummary.almost"> · {{ pageSummary.almost }}</template>
+          </p>
+        </div>
         <UCard>
           <template #header>
             <h2 class="flex items-center gap-2 font-semibold text-highlighted">

@@ -1,7 +1,11 @@
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const pdfParseRequire = createRequire(require.resolve('pdf-parse'))
+
+/** The CV fonts (WOFF, Latin + Latin Extended), shipped by @piston/cv-render. */
+const cvFontsDir = fileURLToPath(new URL('../../packages/cv-render/fonts', import.meta.url))
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -41,6 +45,14 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'bun',
+    // The CV fonts, from one directory for both sides: bundled with the
+    // server as assets (`useStorage('assets:cv-fonts')`, PDF exports), and
+    // served to the browser at /cv-fonts/ (the preview's Web Worker).
+    serverAssets: [{ baseName: 'cv-fonts', dir: cvFontsDir }],
+    publicAssets: [
+      // Names are not hashed: rename a file if its content ever changes.
+      { dir: cvFontsDir, baseURL: '/cv-fonts', maxAge: 60 * 60 * 24 * 30 },
+    ],
     externals: {
       // pdf-parse (pdf.js) loads its native canvas binding and its worker
       // script dynamically, which Nitro's file tracer cannot see: copy both

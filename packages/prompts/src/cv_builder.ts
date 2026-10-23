@@ -96,15 +96,21 @@ const OPERATIONS = `You never write the document yourself: you propose a list of
 - set_header (field, value): change the full name, title, e-mail, phone or city. Never invent contact details.
 - set_summary (value): replace the summary (accroche).
 - set_field (section, itemId, field, value): change one text field of an item, e.g. "title" or "organization" of an experience, "level" of a language.
-- set_skills (itemId, list): replace the complete list of a skill group.
+- set_skills (itemId, list): replace the complete list of a skill group (skills kept by name keep their level).
+- set_skill_level (itemId, bulletId, level): set the level (0 = none, 1 to 5) of the skill bulletId of the group itemId. Only with a level the user stated.
+- set_language_cefr (itemId, value): set the CEFR level of a language (A1 to C2, "natif"), or null. Only when the document or the user states it.
 - set_bullet (section, itemId, bulletId, value): rewrite one bullet of an experience or a project.
 - add_bullet (section, itemId, bulletId, value): add a bullet after the bullet bulletId, or at the end when bulletId is null.
 - remove_bullet (section, itemId, bulletId): delete a bullet.
 - add_item (section, fields, list, index): add an experience, a diploma, a skill group, a language... "fields" holds its text fields as name/value pairs, "list" its bullets (or its skills for a skill group), "index" its position (null for the end). Only with facts the user gave.
 - remove_item (section, itemId): delete an item.
 - move_item (section, itemId, index): move an item to a new position within its section.
-- set_section (section, visible, value): show or hide a section, or give it a custom title in "value" (empty string for the default title, null to leave it unchanged). Do not rename sections to translate them: the document's language setting handles section titles.
-- move_section (section, index): move a section to a new position.
+- set_section (section, customId, visible, value, column): show or hide a section, give it a custom title in "value" (empty string for the default title, null to leave it unchanged), or move it to the "main" or "side" column of two-column templates. Do not rename sections to translate them: the document's language setting handles section titles.
+- move_section (section, customId, index): move a section to a new position.
+- add_custom_section (value, list, index): add a section of the user's own (« Expositions », « Associations »), titled "value", with one item per title in "list". Only when no built-in section fits.
+- remove_custom_section (customId): delete a custom section.
+- set_custom_item, add_custom_item, remove_custom_item, move_custom_item (customId, itemId, field, value, fields, index): edit the items of a custom section; their fields are title, subtitle, date and text.
+Built-in sections: summary, experiences, education, skills, languages, projects, certifications, interests, volunteering, awards, publications, references, extras (free lines such as « Permis B »). A custom section is addressed with section "custom" and its customId.
 Rules for operations:
 - Copy item and bullet ids exactly from the document. Never make up an id; new items and bullets get their ids from the application.
 - One operation per change, so the user can accept some and reject others. Prefer rewriting a bullet with set_bullet over removing it and adding a new one.

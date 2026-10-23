@@ -23,6 +23,7 @@
         "@anthropic-ai/sdk": "^0.135.0",
         "@napi-rs/canvas": "0.1.80",
         "@nuxt/ui": "^4.12.0",
+        "@piston/cv-render": "workspace:*",
         "@piston/db": "workspace:*",
         "@piston/prompts": "workspace:*",
         "@piston/shared": "workspace:*",
@@ -30,7 +31,7 @@
         "nuxt-auth-utils": "^0.5.32",
         "pdf-parse": "^2.4.5",
         "pdfjs-dist": "5.4.296",
-        "pdfmake": "0.3.12",
+        "pdfmake": "^0.3.12",
         "tailwindcss": "^4.3.3",
         "vue": "latest",
         "vue-draggable-plus": "^0.6.1",
@@ -41,13 +42,27 @@
         "@nuxt/eslint": "^1.17.0",
         "@nuxt/test-utils": "^4.3.4",
         "@types/bun": "latest",
-        "@types/pdfmake": "0.3.3",
+        "@types/pdfmake": "^0.3.3",
         "@vue/test-utils": "^2.5.1",
         "eslint": "^10.13.0",
         "h3": "^1.15.11",
         "happy-dom": "^21.0.3",
         "vitest": "^5.0.5",
         "vue-tsc": "^3.3.13",
+      },
+    },
+    "packages/cv-render": {
+      "name": "@piston/cv-render",
+      "version": "0.1.0",
+      "dependencies": {
+        "@piston/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/pdfmake": "^0.3.3",
+        "pdfjs-dist": "5.4.296",
+        "pdfmake": "^0.3.12",
+        "vitest": "^5.0.5",
       },
     },
     "packages/db": {
@@ -411,6 +426,8 @@
     "@parcel/watcher-wasm": ["@parcel/watcher-wasm@2.6.0", "", { "dependencies": { "is-glob": "^4.0.3", "napi-wasm": "^1.1.0", "picomatch": "^4.0.4" } }, "sha512-dtjbDxKSDPQ8AmA+pS4OFaHE1FKrjtGpLGBxw85uKFkRorjNbvDM/aFPgqosu40wprbp1xw2ZSxIKqghCUHe2w=="],
 
     "@phc/format": ["@phc/format@1.0.0", "", {}, "sha512-m7X9U6BG2+J+R1lSOdCiITLLrxm+cWlNI3HUFA92oLO77ObGNzaKdh8pMLqdZcshtkKuV84olNNXDfMc4FezBQ=="],
+
+    "@piston/cv-render": ["@piston/cv-render@workspace:packages/cv-render"],
 
     "@piston/db": ["@piston/db@workspace:packages/db"],
 
@@ -2120,6 +2137,8 @@
 
     "@parcel/watcher-wasm/napi-wasm": ["napi-wasm@1.1.3", "", { "bundled": true }, "sha512-h/4nMGsHjZDCYmQVNODIrYACVJ+I9KItbG+0si6W/jSjdA9JbWDoU4LLeMXVcEQGHjttI2tuXqDrbGF7qkUHHg=="],
 
+    "@piston/cv-render/@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
+
     "@piston/db/@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 
     "@piston/prompts/@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
@@ -2431,6 +2450,8 @@
     "@nuxt/devtools/which/isexe": ["isexe@4.0.0", "", {}, "sha512-FFUtZMpoZ8RqHS3XeXEmHWLA4thH+ZxCv2lOiPIn1Xc7CxrqhWzNSDzD+/chS/zbYezmiwWLdQC09JdQKmthOw=="],
 
     "@nuxt/eslint/find-up/locate-path": ["locate-path@8.0.0", "", { "dependencies": { "p-locate": "^6.0.0" } }, "sha512-XT9ewWAC43tiAV7xDAPflMkG0qOPn2QjHqlgX8FOqmWa/rxnyYDulF9T0F7tRy1u+TVTmK/M//6VIOye+2zDXg=="],
+
+    "@piston/cv-render/@types/bun/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "@piston/db/@types/bun/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 

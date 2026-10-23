@@ -6,6 +6,7 @@ import {
   checkCv,
   createBlankCv,
   createCvItem,
+  cvDefaultVisibleSections,
   cvSectionKeys,
   cvToMarkdown,
   cvToText,
@@ -23,22 +24,32 @@ import { sampleCv } from './cv-fixture'
 const design = CvDesign.parse({})
 
 describe('CvContent', () => {
-  it('fills a blank document with every section, visible, in the default order', () => {
+  it('fills a blank document with every section in the default order, the v1 ones visible', () => {
     const cv = createBlankCv('Camille')
+    expect(cv.version).toBe(2)
     expect(cv.header.fullName).toBe('Camille')
+    expect(cv.header.photo).toBeNull()
     expect(cv.sections.map((s) => s.key)).toEqual([...cvSectionKeys])
-    expect(cv.sections.every((s) => s.visible && s.title === '')).toBe(true)
+    expect(cv.sections.every((s) => s.title === '' && s.column === 'auto')).toBe(true)
+    expect(cv.sections.filter((s) => s.visible).map((s) => s.key)).toEqual([
+      ...cvDefaultVisibleSections,
+    ])
     expect(cv.experiences).toEqual([])
   })
 
   it('normalizes the section list: duplicates dropped, missing keys appended', () => {
     const sections = normalizeSections([
-      { key: 'skills', title: 'Savoir-faire', visible: false },
-      { key: 'skills', title: '', visible: true },
-      { key: 'summary', title: '', visible: true },
+      { key: 'skills', title: 'Savoir-faire', visible: false, column: 'side' },
+      { key: 'skills', title: '', visible: true, column: 'auto' },
+      { key: 'summary', title: '', visible: true, column: 'auto' },
     ])
     expect(sections).toHaveLength(cvSectionKeys.length)
-    expect(sections[0]).toEqual({ key: 'skills', title: 'Savoir-faire', visible: false })
+    expect(sections[0]).toEqual({
+      key: 'skills',
+      title: 'Savoir-faire',
+      visible: false,
+      column: 'side',
+    })
     expect(sections[1]!.key).toBe('summary')
     expect(sections.slice(2).map((s) => s.key)).toEqual(
       cvSectionKeys.filter((key) => key !== 'skills' && key !== 'summary'),
@@ -79,7 +90,12 @@ describe('CvContent', () => {
     expect(item.location).toBe('')
     expect(item.bullets.map((b) => b.text)).toEqual(['Une réalisation', 'Une autre'])
     expect('unknown' in item).toBe(false)
-    expect(createCvItem('skills', { items: ['a', '', 'b'] }).items).toEqual(['a', 'b'])
+    const skills = createCvItem('skills', { items: ['a', '', { name: 'b', level: 9 }] }).items
+    expect(skills.map(({ name, level }) => ({ name, level }))).toEqual([
+      { name: 'a', level: 0 },
+      { name: 'b', level: 5 },
+    ])
+    expect(createCvItem('languages', { name: 'Anglais', level: 'Courant (C1)' }).cefr).toBe('C1')
   })
 
   it('generates distinct ids', () => {

@@ -108,11 +108,11 @@ Choices that the original brief left open, or where the brief had to be adapted 
 
 The full design (model, operations, templates, alternatives) is in [docs/design/cv-builder.md](design/cv-builder.md); these are the choices worth knowing when reading the code.
 
-**PDFs are rendered by pdfmake, in the server process.** It is pure JavaScript, runs under Bun, embeds subsetted fonts, writes real text and links, and needs nothing in the Docker image (Nitro traces it; the fonts are server assets). Headless Chromium was rejected for its image size and memory, Typst for its 28 MB WASM module and a second template language. Renders are limited to two at a time per process.
+**PDFs are rendered by pdfmake.** (v1: in the server process; v2 renders the preview in the browser too, see below.) It is pure JavaScript, runs under Bun, embeds subsetted fonts, writes real text and links, and needs nothing in the Docker image (Nitro traces it; the fonts are server assets). Headless Chromium was rejected for its image size and memory, Typst for its 28 MB WASM module and a second template language. Renders are limited to two at a time per process.
 
-**The preview is the PDF itself, drawn with pdf.js.** One function per template is the single source of truth: no HTML twin that would drift from the downloaded file. `<iframe>` was not an option because Chrome on Android downloads PDFs instead of showing them. The preview follows the one-second autosave.
+**The preview is the PDF itself, drawn with pdf.js.** The renderer is the single source of truth: no HTML twin that would drift from the downloaded file. `<iframe>` was not an option because Chrome on Android downloads PDFs instead of showing them. (v1 followed the one-second autosave; v2 renders in a worker on every change.)
 
-**WOFF fonts, Latin subset, vendored.** Inter, Lato and Source Serif 4 from Fontsource (OFL, licenses next to the files). fontkit cannot subset WOFF2 composite glyphs. Characters outside the subset (emoji) are removed from the PDF and reported by a live check.
+**WOFF fonts, vendored.** (v1: Inter, Lato and Source Serif 4, Latin subset; v2: ten pairings with Latin Extended, below.) fontkit cannot subset WOFF2 composite glyphs. Characters outside the subsets (emoji) are removed from the PDF and reported by a live check.
 
 **Claude proposes typed operations on ids; the user accepts them one by one.** Edits target item and bullet ids, so any subset of a proposal applies cleanly, which index-based JSON Patch could not guarantee. The appliers are pure functions in `@piston/shared`, run in the browser and tested in the package.
 
@@ -125,6 +125,24 @@ The full design (model, operations, templates, alternatives) is in [docs/design/
 **Builder AI calls count toward the daily limit.** They are `generations` rows of kinds `cv_draft` and `cv_edit` (migration `0004` adds them to the enum) under `/api/generate/*`, so the existing rate-limit middleware and history cover them.
 
 **Interview questions are fixed, not generated.** Six questions written once in `@piston/shared` cost no call, and one generation turns the answers into a draft. Facts the user states in the instruction box (« ajoute mon stage chez X ») may be added; nothing else may, and roles may not be inflated.
+
+### CV builder v2 (see [docs/design/cv-builder-v2.md](design/cv-builder-v2.md))
+
+**One renderer, in the browser and on the server.** The pdfmake templates moved to `@piston/cv-render`, a pure `render(document) → definition` plus `renderPdf`. The editor's preview runs it in a Web Worker on every change (150 ms debounce, latest request per channel wins) instead of fetching the server's PDF after each autosave; the server uses the same code for downloads and « Enregistrer comme version ». pdfmake (~1 MB) lives in the worker chunk only.
+
+**Templates are data; the engine is blocks.** A template is a `CvTemplateMeta` in `@piston/shared` (category, ATS level, default tokens, typography): a layout and a style per block (header, section titles, items, bullets, skills, languages). The engine in `@piston/cv-render` draws any combination, so adding a template is a data entry and every design control works on every template. The three v1 templates were ported onto it and render almost identically.
+
+**The design stores overrides, not values.** `CvDesign` holds only what the user changed; `resolveCvDesign(template, design)` fills the rest from the template. Switching template keeps the user's choices (an accent, a font) and takes the new template's look for everything else; « Réinitialiser » clears the overrides. v1 designs upgrade their accent and font to overrides, so they keep their look.
+
+**Documents are upgraded on read, never migrated.** `CvContent` and `CvDesign` run `upgradeCvContent` / `upgradeCvDesign` before validating, so a v1 JSON document (stored, in a revision, sent by an old tab) parses as v2. The server reads every row through `readCvRow` and writes v2 on the next save. The upgrade is deterministic (v1 skills get ids derived from their group's id), so two reads of an unsaved v1 document agree and an AI proposal made on one applies to the other.
+
+**Custom sections are `{ key: 'custom', customId }` entries.** Keeping a `key` on every `sections[]` entry, rather than a bare `{ customId }`, keeps `section.key` valid everywhere and lets TypeScript narrow. The title of a custom section lives in `custom[]`, not in its entry. New built-in sections start hidden, so upgraded documents do not suddenly list five empty sections.
+
+**Content boxes come from pdfmake's own layout.** pdfmake 0.3 has no layout API, but it lays out the definition's node objects in place and records every line's position on them. The renderer tags nodes (`cvBox`) and reads the positions after rendering, so click-to-edit needs no pdf.js text matching. `unbreakable` blocks keep the positions of their trial layout, so titles are kept with their first item by `pageBreakBefore` instead.
+
+**Fonts: Latin Extended, from Google Fonts' static instances.** Fontsource ships one file per subset, and pdfkit takes one file per style, so the files are built from Google Fonts' full static TTFs, subset to Fontsource's latin + latin-ext ranges with fontTools, as WOFF without hinting (script in `packages/cv-render/scripts`). Google's Lato is the old version without full Latin Extended (no ş, ř, ő), so the `lato` pairing uses **Carlito**, an OFL font drawn from Lato 2.0. One directory feeds both the server (Nitro server assets) and the browser (`/cv-fonts/`, public assets, 30-day cache). Text is NFC-normalized before printing, so decomposed accents pasted from macOS are not stripped.
+
+**Photos are rows of `cv_document_assets`, not part of the document.** The document refers to an asset id; the bytes (≤ 2 MB, type sniffed from magic bytes) live in Postgres next to the document and are deleted with it, copied with it on duplication, and never sent to Claude. The renderer only embeds PNG and JPEG (pdfkit); the editor should upload JPEG.
 
 ## Web search (Tavily, optional)
 
@@ -154,7 +172,7 @@ The full design (model, operations, templates, alternatives) is in [docs/design/
 
 **Tests run under the Bun runtime** (`bun --bun vitest run`). The Nuxt test environment (`@nuxt/test-utils`) gets a longer hook timeout, because booting it can be slow when Turborepo runs every workspace's tests at once.
 
-**CV PDFs are tested by extracting their text.** Every template is rendered in the tests and read back with pdf-parse: accents, link targets, embedded fonts and reading order are checked on the real bytes.
+**CV PDFs are tested by extracting their text.** Every template, layout, style and font pairing is rendered in `packages/cv-render`'s tests and read back with pdf.js (the server tests use pdf-parse on the routes' output): accents and Latin Extended letters, link targets, embedded fonts, reading order and content boxes are checked on the real bytes.
 
 **PDF import is tested with real pdf-parse** on tiny PDFs built by hand in the test, including one without a text layer.
 

@@ -21,17 +21,17 @@ apps/web/            Nuxt 4 app: Vue pages (app/) and the HTTP API (server/)
   app/pages/         One file per route (/cv, /offres, /candidatures...)
   app/composables/   useGeneration(): streams a Claude generation over SSE
   server/api/        One route per file, method suffix (offers.post.ts)
-  server/utils/      Auto-imported server helpers (db, auth, Claude, SSE, CV documents)
-  server/cv-pdf/     CV PDF templates (pdfmake) and their shared helpers
-  server/assets/     Server assets bundled with Nitro (the CV fonts)
+  app/workers/       Web Workers (the CV preview renderer)
+  server/utils/      Auto-imported server helpers (db, auth, Claude, SSE, CV documents and PDFs)
   server/middleware/ Auth guard for /api/* and the daily generation limit
   test/server/       API route tests (Claude mocked, in-memory Postgres)
+packages/cv-render/  CV renderer (pdfmake block engine), its fonts and their build script
 packages/db/         Drizzle schema, SQL migrations, seed and invite scripts
 packages/prompts/    Claude system prompts, one pure function per feature
 packages/shared/     Zod schemas and TypeScript types shared by client and server
 ```
 
-The packages are imported as `@piston/db`, `@piston/prompts` and `@piston/shared`. They ship TypeScript source directly (no build step); Nuxt bundles them.
+The packages are imported as `@piston/cv-render`, `@piston/db`, `@piston/prompts` and `@piston/shared`. They ship TypeScript source directly (no build step); Nuxt bundles them.
 
 ## Scripts
 
@@ -63,14 +63,22 @@ Tests do not need Docker or an API key: the database is an in-memory PostgreSQL 
 
 ## Adding a CV template
 
-CV templates are TypeScript functions that return a [pdfmake](https://pdfmake.github.io/docs/0.3/) document definition. The PDF they produce is also the editor's preview, so there is nothing else to keep in sync.
+A CV template is **data**: a layout and a style for each block, with default design tokens. The block engine of `@piston/cv-render` draws it, in the browser (the editor's preview, a Web Worker) and on the server (downloads), so the preview is always the downloaded PDF.
 
-1. Add the id to `cvTemplateIds` and its label, one-line description, layout and ATS note to `cvTemplates` in `packages/shared/src/cv.ts`. The gallery, the live checks and the API validation pick it up.
-2. Create `apps/web/server/cv-pdf/templates/<id>.ts` exporting a `CvTemplate`: `({ content, design }) => TDocumentDefinitions`. Start from `sobre.ts`. Use the helpers of `../shared.ts`: `sectionsToRender` (visible, non-empty sections in the user's order, with their titles in the document's language), `clean` (strips characters the fonts cannot print), `contactRuns` and `linkTarget` (clickable e-mail, phone and web links only), `dateRange`, `scale(design.density)` for sizes and spacing, and `baseDocument` for A4, metadata and the font.
-3. Register it in `apps/web/server/cv-pdf/templates/index.ts`.
-4. Keep the reading order sensible: an ATS reads the text in the order it is drawn. Render it once and read it back (`cv-pdf.test.ts` renders every template and checks the extracted text).
+1. Add the id to `cvTemplateIds` and an entry to `cvTemplates` in `packages/shared/src/cv-templates.ts`. Copy an existing entry and change:
+   - `label`, a one-line French `description`, `category` (`ats`, `moderne`, `creatif`, `une-page`), `atsLevel` (`optimal` for one column and standard headings, `bon` for minor risks such as icons or a header band, `limite` for columns) and `atsNote` (shown by the live checks, or `null`);
+   - `defaults`: every design token — `layout`, `palette` (`#rrggbb`, or `{ tint: 0.9 }` for a tint of the primary color that follows the user's accent), `fontPairing`, `fontSize` (0), `lineHeight`, `spacing`, `margins`, `headerStyle`, `sectionTitleStyle`, `itemStyle`, `bulletStyle`, `skillStyle`, `languageStyle`, `showIcons`. The ids and what they look like are documented in `packages/shared/src/cv-design.ts`;
+   - `typography`: body, name and title sizes in points, the side column's width, and `sideSections` (sections placed in the side column by default in two-column layouts).
+2. Render it: `bun --bun vitest run` in `packages/cv-render` renders every template. To look at it, write the PDF of `renderPdf(sampleInput('<id>'), {}, engine)` (see `test/fixtures.ts` and `test/helpers.ts`) to a file and open it, in each language and with a long CV.
+3. Keep the reading order sensible: an ATS reads the text in the order it is drawn. Layouts already put the name first; the tests check it for every layout.
 
-A few pdfmake details save time: a full-page background needs `absolutePosition`, column margins are ignored (put the margin on a nested stack), and `unbreakable: true` keeps a section title with its first item.
+The gallery, the design panel, the live checks and the API validation pick the template up from `cvTemplates`.
+
+**A new style** (a header, a section title, a skill renderer…) is an id added to its enum in `cv-design.ts`, with a French label, and its drawing in `packages/cv-render/src/engine/` (`header.ts`, `sections.ts`; layouts in `src/render.ts`). Use the tokens (`t.size`, `t.space()`, `t.colors`, `t.fonts`) rather than numbers, so the design controls keep working, `clean()` on every user string (it removes characters the fonts cannot print), `linkTarget()` for links (web, e-mail and phone only), and `tagBox()` on the nodes the editor should be able to locate (click-to-edit). Add the style to the « renders every style » test.
+
+**A new font pairing** is an entry in `cvFontPairings` (`cv-design.ts`). A new family also needs its files: add it to `scripts/build-fonts.sh` (OFL fonts only, with their license) and to `cvFontFamilies`, then run the script (it needs `pip install fonttools`).
+
+A few pdfmake details save time: a full-page background needs `absolutePosition`, column margins are ignored (put the margin on a nested stack), negative margins let a band bleed to the page edges, and nodes inside `unbreakable` blocks report wrong positions (titles are kept with their content by `pageBreakBefore` instead).
 
 ## Pull requests
 

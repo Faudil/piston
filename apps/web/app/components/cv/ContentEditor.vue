@@ -1,7 +1,18 @@
 <script setup lang="ts">
-import { CV_LIMITS, type CvContent, type CvItem, type CvLanguageCode } from '@piston/shared'
+import {
+  CV_LIMITS,
+  cvSectionRef,
+  type CvContent,
+  type CvItem,
+  type CvLanguageCode,
+  type CvListSectionKey,
+} from '@piston/shared'
 
-/** Every editable part of a CV document: the header, then the sections in their order. */
+/**
+ * Every editable part of a CV document: the header, then the sections in
+ * their order. Custom sections are not editable here yet (they are kept,
+ * rendered and editable by Claude's proposals).
+ */
 const content = defineModel<CvContent>({ required: true })
 defineProps<{ language: CvLanguageCode }>()
 
@@ -15,14 +26,13 @@ function moveSection(index: number, delta: number) {
   void nextTick(() =>
     document
       .querySelector<HTMLElement>(
-        `#section-${section!.key} button[aria-label^="${delta < 0 ? 'Monter' : 'Descendre'} la section"]`,
+        `[id="section-${cvSectionRef(section!)}"] button[aria-label^="${delta < 0 ? 'Monter' : 'Descendre'} la section"]`,
       )
       ?.focus(),
   )
 }
 
-const listOf = (key: Exclude<CvContent['sections'][number]['key'], 'summary'>) =>
-  content.value[key] as CvItem[]
+const listOf = (key: CvListSectionKey) => content.value[key] as CvItem[]
 </script>
 
 <template>
@@ -40,42 +50,44 @@ const listOf = (key: Exclude<CvContent['sections'][number]['key'], 'summary'>) =
       </div>
     </section>
 
-    <CvSectionCard
-      v-for="(section, index) in content.sections"
-      :key="section.key"
-      v-model="content.sections[index]!"
-      :language="language"
-      :index="index"
-      :count="content.sections.length"
-      :item-count="section.key === 'summary' ? undefined : listOf(section.key).length"
-      @move="moveSection(index, $event)"
-    >
-      <template #actions>
-        <slot name="section-actions" :section="section.key" />
-      </template>
-
-      <UFormField
-        v-if="section.key === 'summary'"
-        label="Accroche"
-        :hint="`${content.summary.length}/${CV_LIMITS.summary}`"
-        help="3 ou 4 lignes : qui tu es, ce que tu sais faire, ce que tu cherches."
+    <template v-for="(section, index) in content.sections" :key="cvSectionRef(section)">
+      <CvSectionCard
+        v-if="section.key !== 'custom'"
+        :model-value="section"
+        :language="language"
+        :index="index"
+        :count="content.sections.length"
+        :item-count="section.key === 'summary' ? undefined : listOf(section.key).length"
+        @update:model-value="content.sections[index] = $event"
+        @move="moveSection(index, $event)"
       >
-        <UTextarea
-          v-model="content.summary"
-          class="w-full"
-          :rows="3"
-          autoresize
-          :maxlength="CV_LIMITS.summary"
-        />
-      </UFormField>
-      <CvItemsEditor v-else :model-value="listOf(section.key)" :section="section.key">
-        <template #item-actions="{ item }">
-          <slot name="item-actions" :section="section.key" :item="item" />
+        <template #actions>
+          <slot name="section-actions" :section="section.key" />
         </template>
-        <template #bullet-actions="{ item, bullet }">
-          <slot name="bullet-actions" :section="section.key" :item="item" :bullet="bullet" />
-        </template>
-      </CvItemsEditor>
-    </CvSectionCard>
+
+        <UFormField
+          v-if="section.key === 'summary'"
+          label="Accroche"
+          :hint="`${content.summary.length}/${CV_LIMITS.summary}`"
+          help="3 ou 4 lignes : qui tu es, ce que tu sais faire, ce que tu cherches."
+        >
+          <UTextarea
+            v-model="content.summary"
+            class="w-full"
+            :rows="3"
+            autoresize
+            :maxlength="CV_LIMITS.summary"
+          />
+        </UFormField>
+        <CvItemsEditor v-else :model-value="listOf(section.key)" :section="section.key">
+          <template #item-actions="{ item }">
+            <slot name="item-actions" :section="section.key" :item="item" />
+          </template>
+          <template #bullet-actions="{ item, bullet }">
+            <slot name="bullet-actions" :section="section.key" :item="item" :bullet="bullet" />
+          </template>
+        </CvItemsEditor>
+      </CvSectionCard>
+    </template>
   </div>
 </template>

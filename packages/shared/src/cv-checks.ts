@@ -1,11 +1,6 @@
-import {
-  cvSectionTitles,
-  cvTemplates,
-  type CvContent,
-  type CvDesign,
-  type CvListSectionKey,
-  type CvTemplateId,
-} from './cv'
+import { cvSectionTitle, type CvContent, type CvListSectionKey } from './cv'
+import type { CvDesign, CvSpacing } from './cv-design'
+import { cvTemplates, isTwoColumnLayout, resolveCvDesign, type CvTemplateId } from './cv-templates'
 import { isCvSectionEmpty, isPresentDate } from './cv-text'
 
 /**
@@ -21,7 +16,12 @@ export interface CvCheck {
   level: CvCheckLevel
   message: string
   /** What the check is about, so the editor can link to it. */
-  target?: { section: CvListSectionKey | 'summary' | 'header'; itemId?: string }
+  target?: {
+    section: CvListSectionKey | 'summary' | 'header' | 'custom'
+    itemId?: string
+    /** For `custom`: the custom section's id. */
+    customId?: string
+  }
 }
 
 export const CV_CHECK_THRESHOLDS = {
@@ -34,20 +34,31 @@ export const CV_CHECK_THRESHOLDS = {
 /** « 03/2021 », « 2021 » or a "present" word. */
 const DATE_PATTERN = /^(?:(0[1-9]|1[0-2])\/)?(\d{4})$/
 
-/** Characters printed by the PDF fonts (their Latin subset): ASCII, Latin-1, œ, typographic punctuation, €. */
+/**
+ * Characters printed by the PDF fonts: their Latin and Latin Extended subsets
+ * (Fontsource's « latin » + « latin-ext » ranges, see
+ * packages/cv-render/scripts/build-fonts.sh). French, Polish, Czech,
+ * Turkish, Romanian... are covered; emoji, symbols, Greek, Cyrillic, CJK are not.
+ */
 const PRINTABLE =
-  /^[\t\n\r\u0020-\u007e\u00a0-\u00ff\u0131\u0152\u0153\u02c6\u02da\u02dc\u2000-\u206f\u20ac\u2122\u2212]*$/u
+  /^(?:[\t\n\r\u0020-\u007e\u00a0-\u02cc\u02ce-\u02d7\u02da\u02dc-\u02ff\u1d00-\u1dbf\u1e00-\u1e9f\u1ef2-\u1eff\u2000-\u206f\u20a0-\u20c0\u2113\u2122\u2191\u2193\u2212\u2215\u2c60-\u2c7f\ua720-\ua7ff\ufeff\ufffd]|\u0304|\u0308|\u0329)*$/u
 
-/** Characters the CV fonts cannot print (emoji, symbols, non-Latin scripts), deduplicated. */
-export function unprintableCharacters(value: string): string[] {
+/**
+ * Characters the CV fonts cannot print (emoji, symbols, non-Latin scripts),
+ * deduplicated. Text is compared in NFC form, so a decomposed « é » (e +
+ * combining accent, common when pasting from macOS) counts as printable.
+ */
+export function unprintableCharacters(raw: string): string[] {
+  const value = raw.normalize('NFC')
   if (PRINTABLE.test(value)) return []
   const found = new Set<string>()
   for (const char of value) if (!PRINTABLE.test(char)) found.add(char)
   return [...found]
 }
 
-/** Removes what the fonts cannot print, so the PDF has no invisible glyphs. */
-export function stripUnprintable(value: string): string {
+/** Removes what the fonts cannot print, so the PDF has no invisible glyphs. Returns NFC text. */
+export function stripUnprintable(raw: string): string {
+  const value = raw.normalize('NFC')
   if (PRINTABLE.test(value)) return value
   let out = ''
   for (const char of value) if (PRINTABLE.test(char)) out += char
@@ -74,14 +85,14 @@ function allTexts(content: CvContent): string[] {
     header.city,
     ...header.links.flatMap((link) => [link.label, link.url]),
     content.summary,
-    ...content.experiences.flatMap((item) => [
+    ...[...content.experiences, ...content.volunteering].flatMap((item) => [
       item.title,
       item.organization,
       item.location,
       ...item.bullets.map((bullet) => bullet.text),
     ]),
     ...content.education.flatMap((item) => [item.degree, item.school, item.location, item.details]),
-    ...content.skills.flatMap((group) => [group.name, ...group.items]),
+    ...content.skills.flatMap((group) => [group.name, ...group.items.map((skill) => skill.name)]),
     ...content.languages.flatMap((item) => [item.name, item.level]),
     ...content.projects.flatMap((item) => [
       item.name,
@@ -90,23 +101,45 @@ function allTexts(content: CvContent): string[] {
     ]),
     ...content.certifications.flatMap((item) => [item.name, item.issuer]),
     ...content.interests.flatMap((item) => [item.name, item.details]),
+    ...content.awards.flatMap((item) => [item.name, item.issuer, item.details]),
+    ...content.publications.flatMap((item) => [item.title, item.publisher]),
+    ...content.references.flatMap((item) => [
+      item.name,
+      item.role,
+      item.organization,
+      item.contact,
+    ]),
+    ...content.extras.map((item) => item.text),
+    ...content.custom.flatMap((section) => [
+      section.title,
+      ...section.items.flatMap((item) => [item.title, item.subtitle, item.date, item.text]),
+    ]),
   ]
 }
 
 /**
  * Rough page estimate before the first PDF render: weighted lines against
- * what an A4 page of the normal density holds. The real count from the
+ * what an A4 page of the given spacing holds. The real count from the
  * preview replaces it as soon as it is known.
  */
-export function estimateCvPages(content: CvContent, density: CvDesign['density']): number {
+export function estimateCvPages(content: CvContent, spacing: CvSpacing = 'normal'): number {
   const charsPerLine = 95
   const lines = (value: string) => (value.trim() ? Math.ceil(value.length / charsPerLine) : 0)
   let total = 6 // header
   for (const section of content.sections) {
-    if (!section.visible || isCvSectionEmpty(content, section.key)) continue
+    if (!section.visible || isCvSectionEmpty(content, section)) continue
     total += 2.5
+    if (section.key === 'custom') {
+      const custom = content.custom.find((entry) => entry.id === section.customId)
+      for (const item of custom?.items ?? []) total += 1 + lines(item.text)
+      continue
+    }
     if (section.key === 'summary') total += lines(content.summary)
-    if (section.key === 'experiences' || section.key === 'projects') {
+    if (
+      section.key === 'experiences' ||
+      section.key === 'projects' ||
+      section.key === 'volunteering'
+    ) {
       for (const item of content[section.key]) {
         total += 2 + item.bullets.reduce((sum, bullet) => sum + lines(bullet.text), 0)
       }
@@ -118,8 +151,11 @@ export function estimateCvPages(content: CvContent, density: CvDesign['density']
     if (section.key === 'languages') total += Math.ceil(content.languages.length / 2)
     if (section.key === 'certifications') total += content.certifications.length
     if (section.key === 'interests') total += content.interests.length
+    if (section.key === 'awards' || section.key === 'publications' || section.key === 'references')
+      total += content[section.key].length * 1.5
+    if (section.key === 'extras') total += content.extras.length
   }
-  const perPage = { comfortable: 46, normal: 52, compact: 62 }[density]
+  const perPage = { comfortable: 46, normal: 52, compact: 62 }[spacing]
   return Math.max(1, Math.ceil(total / perPage))
 }
 
@@ -132,6 +168,8 @@ export function checkCv(
   const checks: CvCheck[] = []
   const add = (check: CvCheck) => checks.push(check)
   const { header } = content
+  const template = cvTemplates[templateId]
+  const resolved = resolveCvDesign(template, design)
 
   // --- Header
   if (!header.fullName.trim()) {
@@ -199,11 +237,11 @@ export function checkCv(
 
   // --- Sections: one notice for all the empty ones, it is a single decision to make.
   const empty = content.sections.filter(
-    (section) => section.visible && isCvSectionEmpty(content, section.key),
+    (section) => section.visible && isCvSectionEmpty(content, section),
   )
   if (empty.length) {
     const titles = empty.map(
-      (section) => `« ${section.title.trim() || cvSectionTitles[design.language][section.key]} »`,
+      (section) => `« ${cvSectionTitle(section, design.language, content.custom)} »`,
     )
     add({
       id: 'empty-sections',
@@ -212,7 +250,10 @@ export function checkCv(
         empty.length === 1
           ? `La section ${titles[0]} est vide : remplis-la ou masque-la (elle n’apparaît pas sur le PDF).`
           : `Ces sections sont vides : ${titles.join(', ')}. Remplis-les ou masque-les (elles n’apparaissent pas sur le PDF).`,
-      target: { section: empty[0]!.key },
+      target:
+        empty[0]!.key === 'custom'
+          ? { section: 'custom', customId: empty[0]!.customId }
+          : { section: empty[0]!.key },
     })
   }
 
@@ -227,11 +268,15 @@ export function checkCv(
   }
 
   // --- Items: bullets and dates
-  for (const section of ['experiences', 'projects'] as const) {
+  for (const section of ['experiences', 'projects', 'volunteering'] as const) {
     for (const item of content[section]) {
       const name =
         ('title' in item ? item.title : item.name) ||
-        (section === 'experiences' ? 'Expérience sans titre' : 'Projet sans nom')
+        {
+          experiences: 'Expérience sans titre',
+          projects: 'Projet sans nom',
+          volunteering: 'Bénévolat sans titre',
+        }[section]
       if (section === 'experiences' && item.bullets.length === 0) {
         add({
           id: `no-bullets:${item.id}`,
@@ -286,6 +331,13 @@ export function checkCv(
       section: 'projects' as const,
       id: item.id,
       name: item.name || 'Projet',
+      start: item.start,
+      end: item.end,
+    })),
+    ...content.volunteering.map((item) => ({
+      section: 'volunteering' as const,
+      id: item.id,
+      name: item.title || 'Bénévolat',
       start: item.start,
       end: item.end,
     })),
@@ -361,13 +413,13 @@ export function checkCv(
   }
 
   // --- Length
-  const pages = options.pageCount ?? estimateCvPages(content, design.density)
+  const pages = options.pageCount ?? estimateCvPages(content, resolved.spacing)
   const estimated = options.pageCount === undefined ? ' (estimation)' : ''
   if (pages > CV_CHECK_THRESHOLDS.maxPages) {
     add({
       id: 'pages',
       level: 'warning',
-      message: `Ton CV fait ${pages} pages${estimated} : vise une page, deux au maximum. Le modèle « Compact » ou la densité « Serrée » peuvent aider.`,
+      message: `Ton CV fait ${pages} pages${estimated} : vise une page, deux au maximum. Le modèle « Compact » ou un espacement « Serré » peuvent aider.`,
     })
   } else if (pages === 2) {
     add({
@@ -377,8 +429,70 @@ export function checkCv(
     })
   }
 
+  // --- Photo and references
+  if (header.photo?.visible) {
+    add({
+      id: 'photo',
+      level: 'info',
+      message:
+        design.language === 'en'
+          ? 'Ton CV est en anglais : au Royaume-Uni, aux États-Unis ou au Canada, une photo est déconseillée (elle peut même faire écarter la candidature). Masque-la pour ces candidatures.'
+          : 'La photo est courante en France, mais les logiciels de recrutement (ATS) l’ignorent et certains recruteurs préfèrent sans. Garde-la si elle est professionnelle.',
+      target: { section: 'header' },
+    })
+  }
+  const referencesShown = content.sections.some(
+    (section) => section.key === 'references' && section.visible,
+  )
+  if (referencesShown && content.references.length && !content.referencesAvailableOnRequest) {
+    add({
+      id: 'references-consent',
+      level: 'info',
+      message:
+        'Tes références apparaissent avec leurs coordonnées : vérifie qu’elles sont d’accord, ou choisis « Disponibles sur demande ».',
+      target: { section: 'references' },
+    })
+  }
+
+  // --- Levels drawn as gauges need levels
+  const shown = (key: 'skills' | 'languages') =>
+    content.sections.some((section) => section.key === key && section.visible) &&
+    content[key].length > 0
+  if (
+    (resolved.skillStyle === 'bars' || resolved.skillStyle === 'dots') &&
+    shown('skills') &&
+    content.skills.every((group) => group.items.every((skill) => skill.level === 0))
+  ) {
+    add({
+      id: 'skill-levels',
+      level: 'info',
+      message:
+        'Le style de compétences choisi affiche des niveaux, mais aucune compétence n’en a : indique un niveau (1 à 5) ou choisis un autre style.',
+      target: { section: 'skills' },
+    })
+  }
+  if (
+    (resolved.languageStyle === 'bars' ||
+      resolved.languageStyle === 'dots' ||
+      resolved.languageStyle === 'cefr') &&
+    shown('languages') &&
+    content.languages.some((language) => language.cefr === null)
+  ) {
+    add({
+      id: 'language-levels',
+      level: 'info',
+      message:
+        'Le style de langues choisi utilise le niveau CECRL (A1 à C2) : indique-le pour chaque langue, sinon sa jauge reste vide.',
+      target: { section: 'languages' },
+    })
+  }
+
   // --- Template
-  const note = cvTemplates[templateId].atsNote
+  const note =
+    template.atsNote ??
+    (isTwoColumnLayout(resolved.layout)
+      ? 'Ta mise en page a deux colonnes : certains logiciels de recrutement (ATS) les lisent dans le désordre. Préfère une colonne pour les candidatures en ligne.'
+      : null)
   if (note) add({ id: 'template-ats', level: 'info', message: note })
 
   const rank: Record<CvCheckLevel, number> = { error: 0, warning: 1, info: 2 }

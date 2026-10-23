@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resumes } from '@piston/db'
-import { cvTemplateIds, type CvDocument, type Resume } from '@piston/shared'
+import { CvDesign, cvTemplateIds, type CvDocument, type Resume } from '@piston/shared'
 import createRoute from '../../server/api/cv-documents.post'
 import patchRoute from '../../server/api/cv-documents/[id].patch'
 import pdfRoute from '../../server/api/cv-documents/[id]/pdf.get'
@@ -131,7 +131,13 @@ describe('GET /api/cv-documents/:id/pdf', () => {
     const { user } = await loginAsNewUser()
     const blank = await renderCvPdf({
       content: (await createFilledDocument()).content,
-      design: { accentColor: '#1d4ed8', font: 'source-serif', density: 'compact', language: 'en' },
+      // A v1 design, upgraded like a stored one.
+      design: CvDesign.parse({
+        accentColor: '#1d4ed8',
+        font: 'source-serif',
+        density: 'compact',
+        language: 'en',
+      }),
       templateId: 'sobre',
     })
     expect(await extractPdfText(blank)).toContain('PROFESSIONAL EXPERIENCE')

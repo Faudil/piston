@@ -8,7 +8,13 @@ import {
   resumeProfiles,
   resumes,
 } from '@piston/db'
-import type { CvDocument, CvDocumentSummary, CvDraftOutput, CvRevision } from '@piston/shared'
+import {
+  cvSectionKeys,
+  type CvDocument,
+  type CvDocumentSummary,
+  type CvDraftOutput,
+  type CvRevision,
+} from '@piston/shared'
 import listRoute from '../../server/api/cv-documents.get'
 import createRoute from '../../server/api/cv-documents.post'
 import getRoute from '../../server/api/cv-documents/[id].get'
@@ -95,10 +101,11 @@ describe('POST /api/cv-documents', () => {
       offerId: null,
       title: 'Mon CV',
       templateId: 'sobre',
-      design: { font: 'inter', density: 'normal', language: 'fr' },
+      design: { version: 2, language: 'fr', pageFormat: 'A4', palette: {} },
     })
+    expect(document.content.version).toBe(2)
     expect(document.content.header.fullName).toBe(user.displayName)
-    expect(document.content.sections).toHaveLength(8)
+    expect(document.content.sections).toHaveLength(cvSectionKeys.length)
 
     const revisions = await testState.db.select().from(cvDocumentRevisions)
     expect(revisions).toMatchObject([
@@ -223,7 +230,7 @@ describe('PATCH /api/cv-documents/:id', () => {
     const content = { ...document.content, summary: 'Cinq ans de communication.' }
     const res = await patch(document.id, {
       content,
-      design: { ...document.design, accentColor: '#1d4ed8' },
+      design: { ...document.design, palette: { primary: '#1d4ed8' }, skillStyle: 'dots' },
       templateId: 'moderne',
       title: 'CV com',
       baseUpdatedAt: document.updatedAt,
@@ -233,7 +240,7 @@ describe('PATCH /api/cv-documents/:id', () => {
     expect(saved).toMatchObject({
       title: 'CV com',
       templateId: 'moderne',
-      design: { accentColor: '#1d4ed8' },
+      design: { palette: { primary: '#1d4ed8' }, skillStyle: 'dots' },
     })
     expect(saved.content.summary).toBe('Cinq ans de communication.')
     expect(new Date(saved.updatedAt).getTime()).toBeGreaterThanOrEqual(

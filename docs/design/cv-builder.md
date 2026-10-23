@@ -1,6 +1,6 @@
 # Design: the CV builder (« Créer mon CV »)
 
-Status: implemented (phases 1 to 3). What is left is listed under [Delivery](#delivery).
+Status: implemented (phases 1 to 3). What is left is listed under [Delivery](#delivery). **v2** (renderer package, model v2, browser preview, templates as data) is described in [cv-builder-v2.md](cv-builder-v2.md); where they differ, v2 wins: rendering, fonts and templates below describe v1.
 
 ## 1. Why
 

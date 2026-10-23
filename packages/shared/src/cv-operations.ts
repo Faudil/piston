@@ -1,11 +1,20 @@
 import * as z from 'zod'
 import {
   CV_LIMITS,
+  CV_SKILL_MAX_LEVEL,
   CvBulletSectionKey,
+  CvCefr,
   CvHeaderField,
   CvListSectionKey,
+  CvSectionColumn,
   CvSectionKey,
+  createCvCustomItem,
+  createCvCustomSection,
   createCvItem,
+  cvCefrLabels,
+  cvCustomFieldMaxLength,
+  cvCustomItemFieldLabels,
+  cvCustomItemFields,
   cvFieldLabels,
   cvFieldMaxLength,
   cvHeaderFieldLabels,
@@ -13,10 +22,14 @@ import {
   cvItemTextFields,
   cvSectionMaxItems,
   cvSectionTitles,
+  newCvId,
+  normalizeSections,
   type CvBullet,
   type CvContent,
-  newCvId,
+  type CvCustomSection,
   type CvItem,
+  type CvSectionConfig,
+  type CvSkill,
 } from './cv'
 
 /**
@@ -41,6 +54,7 @@ const reason = z
   )
 const itemId = z.string().describe('Id of an existing item, copied from the document')
 const bulletId = z.string().describe('Id of an existing bullet, copied from the document')
+const customId = z.string().describe('Id of an existing custom section, copied from the document')
 
 /** Fields of an item to add. Only the fields of the item's section are kept. */
 export const CvItemDraft = z
@@ -58,17 +72,30 @@ export const CvItemDraft = z
     details: z.string().optional(),
     name: z.string().optional(),
     level: z.string().optional(),
+    cefr: z.string().optional(),
     role: z.string().optional(),
     url: z.string().optional(),
     issuer: z.string().optional(),
     date: z.string().optional(),
+    publisher: z.string().optional(),
+    contact: z.string().optional(),
+    text: z.string().optional(),
     bullets: z.array(z.string()).optional(),
     items: z.array(z.string()).optional(),
   })
   .describe(
-    'Fields of the new item, by section: experiences (title, organization, location, start, end, bullets); education (degree, school, location, start, end, details); skills (name, items); languages (name, level); projects (name, role, url, start, end, bullets); certifications (name, issuer, date, url); interests (name, details)',
+    'Fields of the new item, by section: experiences and volunteering (title, organization, location, start, end, bullets); education (degree, school, location, start, end, details); skills (name, items); languages (name, level, cefr); projects (name, role, url, start, end, bullets); certifications (name, issuer, date, url); interests (name, details); awards (name, issuer, date, details); publications (title, publisher, date, url); references (name, role, organization, contact); extras (text)',
   )
 export type CvItemDraft = z.infer<typeof CvItemDraft>
+
+/** Fields of a custom section item to add. */
+export const CvCustomItemDraft = z.object({
+  title: z.string().optional(),
+  subtitle: z.string().optional(),
+  date: z.string().optional(),
+  text: z.string().optional(),
+})
+export type CvCustomItemDraft = z.infer<typeof CvCustomItemDraft>
 
 export const SetHeaderOperation = z.object({
   op: z.literal('set_header'),
@@ -91,10 +118,24 @@ export const SetFieldOperation = z.object({
   value: z.string(),
   reason,
 })
+/** Replaces a group's skills; skills whose name is kept keep their level. */
 export const SetSkillsOperation = z.object({
   op: z.literal('set_skills'),
   itemId: z.string().describe('Id of an existing skill group'),
   items: z.array(z.string()).describe('The complete new list of skills of the group'),
+  reason,
+})
+export const SetSkillLevelOperation = z.object({
+  op: z.literal('set_skill_level'),
+  itemId: z.string().describe('Id of an existing skill group'),
+  skillId: z.string().describe('Id of an existing skill of the group'),
+  level: z.number().describe('0 (no level shown) to 5'),
+  reason,
+})
+export const SetLanguageCefrOperation = z.object({
+  op: z.literal('set_language_cefr'),
+  itemId: z.string().describe('Id of an existing language'),
+  cefr: CvCefr.nullable().describe('CEFR level, "natif" for a mother tongue, null for none'),
   reason,
 })
 export const SetBulletOperation = z.object({
@@ -146,20 +187,74 @@ export const MoveItemOperation = z.object({
   toIndex: z.number().describe('0-based index of the item after the move'),
   reason,
 })
+
+/** A section entry: a built-in key, or `custom` with the custom section's id. */
+const sectionTarget = {
+  section: z.union([CvSectionKey, z.literal('custom')]),
+  /** Required when `section` is `custom`; ignored otherwise. Optional for stored v1 proposals. */
+  customId: z.string().nullish(),
+}
+
 export const SetSectionOperation = z.object({
   op: z.literal('set_section'),
-  section: CvSectionKey,
+  ...sectionTarget,
   visible: z.boolean().nullable().describe('Show or hide the section; null to leave it unchanged'),
   title: z
     .string()
     .nullable()
     .describe('Custom title; empty string for the default title; null to leave it unchanged'),
+  column: CvSectionColumn.nullish().describe(
+    'Column in two-column templates (auto, main or side); null to leave it unchanged',
+  ),
   reason,
 })
 export const MoveSectionOperation = z.object({
   op: z.literal('move_section'),
-  section: CvSectionKey,
+  ...sectionTarget,
   toIndex: z.number().describe('0-based index of the section after the move'),
+  reason,
+})
+export const AddCustomSectionOperation = z.object({
+  op: z.literal('add_custom_section'),
+  title: z.string(),
+  position: z
+    .number()
+    .nullable()
+    .describe('0-based index of the new section among all sections; null for the end'),
+  items: z.array(CvCustomItemDraft),
+  reason,
+})
+export const RemoveCustomSectionOperation = z.object({
+  op: z.literal('remove_custom_section'),
+  customId,
+  reason,
+})
+export const SetCustomItemOperation = z.object({
+  op: z.literal('set_custom_item'),
+  customId,
+  itemId,
+  field: z.enum(cvCustomItemFields),
+  value: z.string(),
+  reason,
+})
+export const AddCustomItemOperation = z.object({
+  op: z.literal('add_custom_item'),
+  customId,
+  position: z.number().nullable(),
+  item: CvCustomItemDraft,
+  reason,
+})
+export const RemoveCustomItemOperation = z.object({
+  op: z.literal('remove_custom_item'),
+  customId,
+  itemId,
+  reason,
+})
+export const MoveCustomItemOperation = z.object({
+  op: z.literal('move_custom_item'),
+  customId,
+  itemId,
+  toIndex: z.number(),
   reason,
 })
 
@@ -168,6 +263,8 @@ export const CvOperation = z.discriminatedUnion('op', [
   SetSummaryOperation,
   SetFieldOperation,
   SetSkillsOperation,
+  SetSkillLevelOperation,
+  SetLanguageCefrOperation,
   SetBulletOperation,
   AddBulletOperation,
   RemoveBulletOperation,
@@ -176,42 +273,62 @@ export const CvOperation = z.discriminatedUnion('op', [
   MoveItemOperation,
   SetSectionOperation,
   MoveSectionOperation,
+  AddCustomSectionOperation,
+  RemoveCustomSectionOperation,
+  SetCustomItemOperation,
+  AddCustomItemOperation,
+  RemoveCustomItemOperation,
+  MoveCustomItemOperation,
 ])
 export type CvOperation = z.infer<typeof CvOperation>
 export type CvOperationKind = CvOperation['op']
+
+export const cvOperationKinds = [
+  'set_header',
+  'set_summary',
+  'set_field',
+  'set_skills',
+  'set_skill_level',
+  'set_language_cefr',
+  'set_bullet',
+  'add_bullet',
+  'remove_bullet',
+  'add_item',
+  'remove_item',
+  'move_item',
+  'set_section',
+  'move_section',
+  'add_custom_section',
+  'remove_custom_section',
+  'set_custom_item',
+  'add_custom_item',
+  'remove_custom_item',
+  'move_custom_item',
+] as const satisfies readonly CvOperationKind[]
 
 /**
  * The operation as Claude writes it: one flat object whose fields are all
  * present (null when unused), converted to a `CvOperation` by `fromWire`.
  *
  * Why not send the `CvOperation` union itself: structured outputs compile the
- * schema into a grammar, and a union of twelve objects (one of them with
- * sixteen optional fields) exceeds the API's grammar size limit ("The compiled
+ * schema into a grammar, and a union of twenty objects (one of them with
+ * twenty optional fields) exceeds the API's grammar size limit ("The compiled
  * grammar is too large"). One object with nullable fields compiles small, and
  * the typed union stays the model used everywhere else.
  */
 export const CvOperationWire = z.object({
-  op: z
-    .enum([
-      'set_header',
-      'set_summary',
-      'set_field',
-      'set_skills',
-      'set_bullet',
-      'add_bullet',
-      'remove_bullet',
-      'add_item',
-      'remove_item',
-      'move_item',
-      'set_section',
-      'move_section',
-    ])
-    .describe('The kind of edit'),
+  op: z.enum(cvOperationKinds).describe('The kind of edit'),
   section: z
     .string()
     .nullable()
     .describe(
-      'Section key: summary, experiences, education, skills, languages, projects, certifications or interests; null for set_header and set_summary',
+      'Section key: summary, experiences, education, skills, languages, projects, certifications, interests, volunteering, awards, publications, references, extras, or "custom" for a custom section (then set customId); null for operations without a section',
+    ),
+  customId: z
+    .string()
+    .nullable()
+    .describe(
+      'Id of an existing custom section, copied from the document: set_section and move_section with section "custom", remove_custom_section and the *_custom_item operations; null otherwise',
     ),
   itemId: z
     .string()
@@ -221,42 +338,49 @@ export const CvOperationWire = z.object({
     .string()
     .nullable()
     .describe(
-      'set_bullet, remove_bullet: id of an existing bullet. add_bullet: insert after this bullet, null to add at the end',
+      'set_bullet, remove_bullet: id of an existing bullet. add_bullet: insert after this bullet, null to add at the end. set_skill_level: id of the skill inside the group',
     ),
   field: z
     .string()
     .nullable()
     .describe(
-      'set_header: fullName, title, email, phone or city. set_field: a text field of the item (e.g. title, organization, location, start, end, degree, school, details, name, level, role, url, issuer, date)',
+      'set_header: fullName, title, email, phone or city. set_field: a text field of the item (e.g. title, organization, location, start, end, degree, school, details, name, level, role, url, issuer, date, publisher, contact, text). set_custom_item: title, subtitle, date or text',
     ),
   value: z
     .string()
     .nullable()
     .describe(
-      'The new text for set_header, set_summary, set_field, set_bullet and add_bullet. set_section: custom title, empty string for the default title, null to leave it unchanged',
+      'The new text for set_header, set_summary, set_field, set_bullet, add_bullet and set_custom_item. set_section: custom title, empty string for the default title, null to leave it unchanged. add_custom_section: the title of the new section. set_language_cefr: A1, A2, B1, B2, C1, C2, natif, or null',
     ),
   list: z
     .array(z.string())
     .nullable()
     .describe(
-      'set_skills: the complete new list of the group. add_item: the bullets of a new experience or project, or the skills of a new skill group',
+      'set_skills: the complete new list of the group. add_item: the bullets of a new experience, volunteering or project, or the skills of a new skill group. add_custom_section: the titles of its first items',
     ),
   fields: z
     .array(z.object({ name: z.string(), value: z.string() }))
     .nullable()
     .describe(
-      'add_item: the text fields of the new item. experiences: title, organization, location, start, end; education: degree, school, location, start, end, details; skills: name; languages: name, level; projects: name, role, url, start, end; certifications: name, issuer, date, url; interests: name, details',
+      'add_item and add_custom_item: the text fields of the new item. experiences, volunteering: title, organization, location, start, end; education: degree, school, location, start, end, details; skills: name; languages: name, level, cefr; projects: name, role, url, start, end; certifications: name, issuer, date, url; interests: name, details; awards: name, issuer, date, details; publications: title, publisher, date, url; references: name, role, organization, contact; extras: text; custom items: title, subtitle, date, text',
     ),
   index: z
     .number()
     .nullable()
     .describe(
-      'add_item: 0-based position of the new item, null for the end. move_item, move_section: 0-based position after the move',
+      'add_item, add_custom_item, add_custom_section: 0-based position of the new element, null for the end. move_item, move_custom_item, move_section: 0-based position after the move',
     ),
+  level: z.number().nullable().describe('set_skill_level: 0 (no level) to 5; null otherwise'),
   visible: z
     .boolean()
     .nullable()
     .describe('set_section: true to show, false to hide, null to leave unchanged'),
+  column: z
+    .string()
+    .nullable()
+    .describe(
+      'set_section: column in two-column templates, "main", "side" or "auto" (template default); null to leave unchanged',
+    ),
   reason,
 })
 export type CvOperationWire = z.infer<typeof CvOperationWire>
@@ -286,6 +410,13 @@ export interface CvEditProposal {
 /** Converts Claude's flat operation into the typed one; the caller validates it. */
 export function fromWire(wire: CvOperationWire): Record<string, unknown> {
   const { op, section, itemId, bulletId, field, value, list, fields, index, visible, reason } = wire
+  // Older stored or streamed answers may lack the v2 fields entirely.
+  const customId = wire.customId ?? null
+  const draft = () =>
+    Object.fromEntries((fields ?? []).map((entry) => [entry.name, entry.value])) as Record<
+      string,
+      unknown
+    >
   switch (op) {
     case 'set_header':
       return { op, field, value, reason }
@@ -295,6 +426,10 @@ export function fromWire(wire: CvOperationWire): Record<string, unknown> {
       return { op, section, itemId, field, value, reason }
     case 'set_skills':
       return { op, itemId, items: list, reason }
+    case 'set_skill_level':
+      return { op, itemId, skillId: bulletId, level: wire.level ?? null, reason }
+    case 'set_language_cefr':
+      return { op, itemId, cefr: value === '' ? null : value, reason }
     case 'set_bullet':
       return { op, section, itemId, bulletId, text: value, reason }
     case 'add_bullet':
@@ -302,9 +437,7 @@ export function fromWire(wire: CvOperationWire): Record<string, unknown> {
     case 'remove_bullet':
       return { op, section, itemId, bulletId, reason }
     case 'add_item': {
-      const item: Record<string, unknown> = Object.fromEntries(
-        (fields ?? []).map((entry) => [entry.name, entry.value]),
-      )
+      const item = draft()
       if (list) item[section === 'skills' ? 'items' : 'bullets'] = list
       return { op, section, position: index, item, reason }
     }
@@ -313,11 +446,36 @@ export function fromWire(wire: CvOperationWire): Record<string, unknown> {
     case 'move_item':
       return { op, section, itemId, toIndex: index, reason }
     case 'set_section':
-      return { op, section, visible, title: value, reason }
+      return { op, section, customId, visible, title: value, column: wire.column ?? null, reason }
     case 'move_section':
-      return { op, section, toIndex: index, reason }
+      return { op, section, customId, toIndex: index, reason }
+    case 'add_custom_section':
+      return {
+        op,
+        title: value,
+        position: index,
+        items: (list ?? []).map((title) => ({ title })),
+        reason,
+      }
+    case 'remove_custom_section':
+      return { op, customId, reason }
+    case 'set_custom_item':
+      return { op, customId, itemId, field, value, reason }
+    case 'add_custom_item':
+      return { op, customId, position: index, item: draft(), reason }
+    case 'remove_custom_item':
+      return { op, customId, itemId, reason }
+    case 'move_custom_item':
+      return { op, customId, itemId, toIndex: index, reason }
   }
 }
+
+/** The wire shape with the v2 fields optional, for answers stored or streamed before they existed. */
+const LenientWire = CvOperationWire.extend({
+  customId: z.string().nullable().default(null),
+  level: z.number().nullable().default(null),
+  column: z.string().nullable().default(null),
+})
 
 /**
  * Lenient parse of Claude's answer: every operation is converted and
@@ -331,7 +489,7 @@ export function parseCvEditOutput(value: unknown): CvEditProposal | null {
   if (!shape.success) return null
   const operations: CvOperation[] = []
   for (const raw of shape.data.operations) {
-    const wire = CvOperationWire.safeParse(raw)
+    const wire = LenientWire.safeParse(raw)
     const parsed = wire.success ? CvOperation.safeParse(fromWire(wire.data)) : wire
     if (parsed.success) operations.push(parsed.data as CvOperation)
   }
@@ -358,6 +516,46 @@ function findItem(content: CvContent, section: CvListSectionKey, id: string): Cv
 function bulletsOf(content: CvContent, section: CvBulletSectionKey, id: string) {
   return content[section].find((item) => item.id === id)?.bullets
 }
+
+function findCustom(content: CvContent, id: string | null | undefined) {
+  return id ? content.custom.find((section) => section.id === id) : undefined
+}
+
+/** Index of a section entry in `content.sections`, -1 if it does not exist. */
+function sectionIndex(
+  content: CvContent,
+  target: { section: CvSectionConfig['key']; customId?: string | null },
+): number {
+  return content.sections.findIndex((entry) =>
+    target.section === 'custom'
+      ? entry.key === 'custom' && entry.customId === target.customId
+      : entry.key === target.section,
+  )
+}
+
+/** A fresh id that does not collide with the given list's ids. */
+function uniqueId(list: Array<{ id: string }>): string {
+  const taken = new Set(list.map((entry) => entry.id))
+  let id = newCvId()
+  while (taken.has(id)) id = newCvId()
+  return id
+}
+
+/** Checks the fields of a custom item draft against their limits; null when they fit. */
+function customDraftProblem(draft: CvCustomItemDraft): CvApplyResult | null {
+  for (const field of cvCustomItemFields) {
+    const value = draft[field]
+    if (typeof value === 'string' && value.length > cvCustomFieldMaxLength(field)) {
+      return tooLong(cvCustomFieldMaxLength(field))
+    }
+  }
+  return null
+}
+
+const customDraftFilled = (draft: CvCustomItemDraft) =>
+  cvCustomItemFields.some((field) => draft[field]?.trim())
+
+const SECTION_GONE = 'Section introuvable : elle a peut-être été supprimée.'
 
 /**
  * Applies one operation to a copy of the document. Never throws: an
@@ -403,13 +601,41 @@ export function applyCvOperation(content: CvContent, op: CvOperation): CvApplyRe
     case 'set_skills': {
       const group = next.skills.find((entry) => entry.id === op.itemId)
       if (!group) return fail('Groupe de compétences introuvable.')
-      const items = op.items.map((entry) => entry.trim()).filter(Boolean)
-      if (items.length > CV_LIMITS.skillItems) {
+      const names = op.items.map((entry) => entry.trim()).filter(Boolean)
+      if (names.length > CV_LIMITS.skillItems) {
         return fail(`Trop de compétences (${CV_LIMITS.skillItems} au maximum par groupe).`)
       }
-      if (items.some((entry) => entry.length > CV_LIMITS.skillItem))
+      if (names.some((entry) => entry.length > CV_LIMITS.skillItem))
         return tooLong(CV_LIMITS.skillItem)
+      // A skill whose name is kept keeps its id and level, even if it moved.
+      const previous = new Map(group.items.map((skill) => [skill.name.trim().toLowerCase(), skill]))
+      const items: CvSkill[] = []
+      for (const name of names) {
+        const kept = previous.get(name.toLowerCase())
+        if (kept) previous.delete(name.toLowerCase())
+        items.push(
+          kept ? { ...kept, name } : { id: uniqueId([...group.items, ...items]), name, level: 0 },
+        )
+      }
       group.items = items
+      return { ok: true, content: next }
+    }
+
+    case 'set_skill_level': {
+      const group = next.skills.find((entry) => entry.id === op.itemId)
+      const skill = group?.items.find((entry) => entry.id === op.skillId)
+      if (!skill) return fail('Compétence introuvable : elle a peut-être été supprimée.')
+      if (!Number.isInteger(op.level) || op.level < 0 || op.level > CV_SKILL_MAX_LEVEL) {
+        return fail(`Le niveau va de 0 (aucun) à ${CV_SKILL_MAX_LEVEL}.`)
+      }
+      skill.level = op.level
+      return { ok: true, content: next }
+    }
+
+    case 'set_language_cefr': {
+      const language = next.languages.find((entry) => entry.id === op.itemId)
+      if (!language) return fail('Langue introuvable : elle a peut-être été supprimée.')
+      language.cefr = op.cefr
       return { ok: true, content: next }
     }
 
@@ -434,7 +660,7 @@ export function applyCvOperation(content: CvContent, op: CvOperation): CvApplyRe
       // An unknown reference only changes where the bullet goes: it is added at the end.
       const after =
         op.afterBulletId === null ? -1 : list.findIndex((entry) => entry.id === op.afterBulletId)
-      const bullet: CvBullet = { id: uniqueBulletId(list), text: op.text }
+      const bullet: CvBullet = { id: uniqueId(list), text: op.text }
       list.splice(after === -1 ? list.length : after + 1, 0, bullet)
       return { ok: true, content: next }
     }
@@ -488,28 +714,120 @@ export function applyCvOperation(content: CvContent, op: CvOperation): CvApplyRe
     }
 
     case 'set_section': {
-      const section = next.sections.find((entry) => entry.key === op.section)!
-      if (op.title !== null && op.title.length > 60) return tooLong(60)
+      const index = sectionIndex(next, op)
+      if (index === -1) return fail(SECTION_GONE)
+      const section = next.sections[index]!
+      if (op.title !== null && op.title.length > CV_LIMITS.sectionTitle)
+        return tooLong(CV_LIMITS.sectionTitle)
       if (op.visible !== null) section.visible = op.visible
-      if (op.title !== null) section.title = op.title
+      if (op.column != null) section.column = op.column
+      if (op.title !== null) {
+        if (section.key === 'custom') {
+          // A custom section's title lives in `content.custom`, and is never empty.
+          if (!op.title.trim()) return fail('Le titre de la section est vide.')
+          findCustom(next, section.customId)!.title = op.title
+        } else {
+          section.title = op.title
+        }
+      }
       return { ok: true, content: next }
     }
 
     case 'move_section': {
-      const index = next.sections.findIndex((entry) => entry.key === op.section)
+      const index = sectionIndex(next, op)
+      if (index === -1) return fail(SECTION_GONE)
       const [section] = next.sections.splice(index, 1)
       next.sections.splice(clampIndex(op.toIndex, next.sections.length), 0, section!)
       return { ok: true, content: next }
     }
-  }
-}
 
-/** A fresh bullet id that does not collide with the item's other bullets. */
-function uniqueBulletId(list: CvBullet[]): string {
-  const taken = new Set(list.map((bullet) => bullet.id))
-  let id = newCvId()
-  while (taken.has(id)) id = newCvId()
-  return id
+    case 'add_custom_section': {
+      if (next.custom.length >= CV_LIMITS.customSections) {
+        return fail(`${CV_LIMITS.customSections} sections personnalisées au maximum.`)
+      }
+      if (!op.title.trim()) return fail('Le titre de la section est vide.')
+      if (op.title.length > CV_LIMITS.sectionTitle) return tooLong(CV_LIMITS.sectionTitle)
+      if (op.items.length > CV_LIMITS.customItems) {
+        return fail(`${CV_LIMITS.customItems} éléments au maximum dans cette section.`)
+      }
+      for (const item of op.items) {
+        const problem = customDraftProblem(item)
+        if (problem) return problem
+      }
+      const section: CvCustomSection = createCvCustomSection(
+        op.title,
+        op.items.filter(customDraftFilled),
+      )
+      while (next.custom.some((entry) => entry.id === section.id)) section.id = newCvId()
+      next.custom.push(section)
+      const entry: CvSectionConfig = {
+        key: 'custom',
+        customId: section.id,
+        title: '',
+        visible: true,
+        column: 'auto',
+      }
+      const position =
+        op.position === null ? next.sections.length : clampIndex(op.position, next.sections.length)
+      next.sections.splice(position, 0, entry)
+      return { ok: true, content: next }
+    }
+
+    case 'remove_custom_section': {
+      const index = next.custom.findIndex((entry) => entry.id === op.customId)
+      if (index === -1) return fail('Section introuvable : elle a peut-être déjà été supprimée.')
+      next.custom.splice(index, 1)
+      next.sections = normalizeSections(
+        next.sections,
+        next.custom.map((entry) => entry.id),
+      )
+      return { ok: true, content: next }
+    }
+
+    case 'set_custom_item': {
+      const item = findCustom(next, op.customId)?.items.find((entry) => entry.id === op.itemId)
+      if (!item) return fail('Élément introuvable : il a peut-être été supprimé.')
+      const max = cvCustomFieldMaxLength(op.field)
+      if (op.value.length > max) return tooLong(max)
+      item[op.field] = op.value
+      return { ok: true, content: next }
+    }
+
+    case 'add_custom_item': {
+      const section = findCustom(next, op.customId)
+      if (!section) return fail(SECTION_GONE)
+      if (section.items.length >= CV_LIMITS.customItems) {
+        return fail(`${CV_LIMITS.customItems} éléments au maximum dans cette section.`)
+      }
+      const problem = customDraftProblem(op.item)
+      if (problem) return problem
+      if (!customDraftFilled(op.item)) return fail('Le nouvel élément est vide.')
+      const item = createCvCustomItem(op.item)
+      item.id = uniqueId(section.items)
+      const position =
+        op.position === null ? section.items.length : clampIndex(op.position, section.items.length)
+      section.items.splice(position, 0, item)
+      return { ok: true, content: next }
+    }
+
+    case 'remove_custom_item': {
+      const list = findCustom(next, op.customId)?.items
+      const index = list?.findIndex((entry) => entry.id === op.itemId) ?? -1
+      if (!list || index === -1)
+        return fail('Élément introuvable : il a peut-être déjà été supprimé.')
+      list.splice(index, 1)
+      return { ok: true, content: next }
+    }
+
+    case 'move_custom_item': {
+      const list = findCustom(next, op.customId)?.items
+      const index = list?.findIndex((entry) => entry.id === op.itemId) ?? -1
+      if (!list || index === -1) return fail('Élément introuvable : il a peut-être été supprimé.')
+      const [item] = list.splice(index, 1)
+      list.splice(clampIndex(op.toIndex, list.length), 0, item!)
+      return { ok: true, content: next }
+    }
+  }
 }
 
 export interface CvOperationResult {
@@ -566,6 +884,17 @@ const SECTION_SINGULAR: Record<CvSectionKey, string> = {
   projects: 'Projet',
   certifications: 'Certification',
   interests: 'Centre d’intérêt',
+  volunteering: 'Bénévolat',
+  awards: 'Distinction',
+  publications: 'Publication',
+  references: 'Référence',
+  extras: 'Information complémentaire',
+}
+
+const COLUMN_LABELS = {
+  auto: 'colonne par défaut',
+  main: 'colonne principale',
+  side: 'colonne latérale',
 }
 
 function itemTarget(content: CvContent, section: CvListSectionKey, id: string): string {
@@ -573,6 +902,20 @@ function itemTarget(content: CvContent, section: CvListSectionKey, id: string): 
   return item
     ? `${SECTION_SINGULAR[section]} · ${cvItemLabel(section, item)}`
     : SECTION_SINGULAR[section]
+}
+
+function customTarget(content: CvContent, customId: string, itemId?: string): string {
+  const section = findCustom(content, customId)
+  if (!section) return 'Section personnalisée'
+  const item = itemId ? section.items.find((entry) => entry.id === itemId) : undefined
+  const itemLabel = item ? item.title.trim() || item.text.trim().slice(0, 40) || 'Sans titre' : ''
+  return [`Section « ${section.title || 'Sans titre'} »`, itemLabel].filter(Boolean).join(' · ')
+}
+
+/** Display title of a section entry, in French (the review UI is French). */
+function sectionName(content: CvContent, section: CvSectionConfig): string {
+  if (section.key === 'custom') return findCustom(content, section.customId)?.title || 'Sans titre'
+  return section.title || cvSectionTitles.fr[section.key]
 }
 
 /** Readable one-line text of an item draft, for additions. */
@@ -587,6 +930,12 @@ function draftText(section: CvListSectionKey, draft: CvItemDraft): string {
   ]
   return [fields.join(' · '), ...lists].filter(Boolean).join('\n')
 }
+
+const customDraftText = (draft: CvCustomItemDraft) =>
+  cvCustomItemFields
+    .map((field) => draft[field]?.trim())
+    .filter(Boolean)
+    .join(' · ')
 
 /** Describes an operation against a document, for the review UI. Pure, never throws. */
 export function describeCvOperation(content: CvContent, op: CvOperation): CvOperationDescription {
@@ -623,8 +972,33 @@ export function describeCvOperation(content: CvContent, op: CvOperation): CvOper
         ...base,
         kind: 'edit',
         target: itemTarget(content, 'skills', op.itemId),
-        before: group ? group.items.join(', ') : null,
+        before: group ? group.items.map((skill) => skill.name).join(', ') : null,
         after: op.items.join(', '),
+      }
+    }
+    case 'set_skill_level': {
+      const skill = content.skills
+        .find((entry) => entry.id === op.itemId)
+        ?.items.find((entry) => entry.id === op.skillId)
+      const level = (value: number) =>
+        value ? `Niveau ${value}/${CV_SKILL_MAX_LEVEL}` : 'Sans niveau'
+      return {
+        ...base,
+        kind: 'edit',
+        target: `${itemTarget(content, 'skills', op.itemId)} · ${skill?.name ?? 'compétence'}`,
+        before: skill ? level(skill.level) : null,
+        after: level(op.level),
+      }
+    }
+    case 'set_language_cefr': {
+      const language = content.languages.find((entry) => entry.id === op.itemId)
+      const label = (cefr: CvCefr | null) => (cefr ? cvCefrLabels[cefr] : 'Aucun niveau CECRL')
+      return {
+        ...base,
+        kind: 'edit',
+        target: `${itemTarget(content, 'languages', op.itemId)} · niveau CECRL`,
+        before: language ? label(language.cefr) : null,
+        after: label(op.cefr),
       }
     }
     case 'set_bullet': {
@@ -690,30 +1064,95 @@ export function describeCvOperation(content: CvContent, op: CvOperation): CvOper
       }
     }
     case 'set_section': {
-      const section = content.sections.find((entry) => entry.key === op.section)!
-      const title = section.title || cvSectionTitles.fr[op.section]
-      const describe = (visible: boolean, name: string) =>
-        `${name} (${visible ? 'visible' : 'masquée'})`
+      const index = sectionIndex(content, op)
+      const section = content.sections[index]
+      if (!section) {
+        return { ...base, kind: 'section', target: 'Section', before: null, after: null }
+      }
+      const title = sectionName(content, section)
+      const newTitle =
+        op.title === null
+          ? title
+          : op.title || (section.key === 'custom' ? title : cvSectionTitles.fr[section.key])
+      const describe = (visible: boolean, name: string, column: keyof typeof COLUMN_LABELS) =>
+        `${name} (${visible ? 'visible' : 'masquée'}${column === 'auto' ? '' : `, ${COLUMN_LABELS[column]}`})`
       return {
         ...base,
         kind: 'section',
         target: `Section « ${title} »`,
-        before: describe(section.visible, title),
-        after: describe(
-          op.visible ?? section.visible,
-          op.title === null ? title : op.title || cvSectionTitles.fr[op.section],
-        ),
+        before: describe(section.visible, title, section.column),
+        after: describe(op.visible ?? section.visible, newTitle, op.column ?? section.column),
       }
     }
     case 'move_section': {
-      const index = content.sections.findIndex((entry) => entry.key === op.section)
+      const index = sectionIndex(content, op)
       const to = clampIndex(op.toIndex, content.sections.length - 1)
-      const section = content.sections[index]!
+      const section = content.sections[index]
       return {
         ...base,
         kind: 'move',
-        target: `Section « ${section.title || cvSectionTitles.fr[op.section]} »`,
-        before: `Position ${index + 1}`,
+        target: section ? `Section « ${sectionName(content, section)} »` : 'Section',
+        before: index === -1 ? null : `Position ${index + 1}`,
+        after: `Position ${to + 1}`,
+      }
+    }
+    case 'add_custom_section':
+      return {
+        ...base,
+        kind: 'add',
+        target: `Nouvelle section « ${op.title} »`,
+        before: null,
+        after: [op.title, ...op.items.map((item) => `• ${customDraftText(item)}`)].join('\n'),
+      }
+    case 'remove_custom_section': {
+      const section = findCustom(content, op.customId)
+      return {
+        ...base,
+        kind: 'remove',
+        target: customTarget(content, op.customId),
+        before: section
+          ? [section.title, ...section.items.map((item) => `• ${customDraftText(item)}`)].join('\n')
+          : null,
+        after: null,
+      }
+    }
+    case 'set_custom_item': {
+      const item = findCustom(content, op.customId)?.items.find((entry) => entry.id === op.itemId)
+      return {
+        ...base,
+        kind: 'edit',
+        target: `${customTarget(content, op.customId, op.itemId)} · ${cvCustomItemFieldLabels[op.field]}`,
+        before: item?.[op.field] ?? null,
+        after: op.value,
+      }
+    }
+    case 'add_custom_item':
+      return {
+        ...base,
+        kind: 'add',
+        target: `${customTarget(content, op.customId)} · nouvel élément`,
+        before: null,
+        after: customDraftText(op.item),
+      }
+    case 'remove_custom_item': {
+      const item = findCustom(content, op.customId)?.items.find((entry) => entry.id === op.itemId)
+      return {
+        ...base,
+        kind: 'remove',
+        target: customTarget(content, op.customId, op.itemId),
+        before: item ? customDraftText(item) : null,
+        after: null,
+      }
+    }
+    case 'move_custom_item': {
+      const list = findCustom(content, op.customId)?.items ?? []
+      const index = list.findIndex((item) => item.id === op.itemId)
+      const to = clampIndex(op.toIndex, list.length - 1)
+      return {
+        ...base,
+        kind: 'move',
+        target: customTarget(content, op.customId, op.itemId),
+        before: index === -1 ? null : `Position ${index + 1}`,
         after: `Position ${to + 1}`,
       }
     }

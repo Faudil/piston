@@ -8,9 +8,11 @@ import {
   cvItemTextFields,
   cvSectionMaxItems,
   formatCvDateRange,
+  newCvId,
   type CvBullet,
   type CvItem,
   type CvListSectionKey,
+  type CvSkill,
 } from '@piston/shared'
 
 /**
@@ -29,6 +31,11 @@ const ADD_LABELS: Record<CvListSectionKey, string> = {
   projects: 'Ajouter un projet',
   certifications: 'Ajouter une certification',
   interests: 'Ajouter un centre d’intérêt',
+  volunteering: 'Ajouter un engagement bénévole',
+  awards: 'Ajouter un prix ou une distinction',
+  publications: 'Ajouter une publication',
+  references: 'Ajouter une référence',
+  extras: 'Ajouter une information',
 }
 
 const PLACEHOLDERS: Record<string, string> = {
@@ -50,7 +57,12 @@ const fields = computed(() =>
     textarea: field === 'details',
   })),
 )
-const hasBullets = computed(() => props.section === 'experiences' || props.section === 'projects')
+const hasBullets = computed(
+  () =>
+    props.section === 'experiences' ||
+    props.section === 'projects' ||
+    props.section === 'volunteering',
+)
 const max = computed(() => cvSectionMaxItems[props.section])
 
 // Only one or two items: show them open; otherwise open on demand.
@@ -82,7 +94,18 @@ function remove(index: number) {
 
 const record = (item: CvItem) => item as unknown as Record<string, string>
 const bulletsOf = (item: CvItem) => (item as unknown as { bullets: CvBullet[] }).bullets
-const skillsOf = (item: CvItem) => item as unknown as { items: string[] }
+const skillsOf = (item: CvItem) => item as unknown as { items: CvSkill[] }
+
+/** The skill names, for the tags input. */
+const skillNames = (item: CvItem) => skillsOf(item).items.map((skill) => skill.name)
+
+/** New list of names from the tags input: kept skills keep their id and level. */
+function setSkillNames(item: CvItem, names: string[]) {
+  const previous = new Map(skillsOf(item).items.map((skill) => [skill.name, skill]))
+  skillsOf(item).items = names.map(
+    (name) => previous.get(name) ?? { id: newCvId(), name, level: 0 },
+  )
+}
 
 function dates(item: CvItem) {
   const value = record(item)
@@ -196,7 +219,7 @@ function dates(item: CvItem) {
             help="Tape une compétence puis Entrée (ou colle une liste séparée par des virgules)."
           >
             <UInputTags
-              v-model="skillsOf(item).items"
+              :model-value="skillNames(item)"
               class="w-full"
               :max-length="CV_LIMITS.skillItem"
               :max="CV_LIMITS.skillItems"
@@ -204,6 +227,7 @@ function dates(item: CvItem) {
               add-on-paste
               delimiter=","
               placeholder="Ex. : Canva"
+              @update:model-value="setSkillNames(item, $event)"
             />
           </UFormField>
         </div>

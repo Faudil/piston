@@ -1,0 +1,26 @@
+{
+  "name": "@piston/cv-render",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CV renderer: turns a CV document and its design into a pdfmake document definition, in the browser (Web Worker) and on the server.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p .",
+    "test": "bun --bun vitest run"
+  },
+  "dependencies": {
+    "@piston/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/pdfmake": "^0.3.3",
+    "pdfjs-dist": "5.4.296",
+    "pdfmake": "^0.3.12",
+    "vitest": "^5.0.5"
+  }
+}

@@ -11,9 +11,8 @@ export default defineEventHandler(async (event) => {
   const query = await getValidatedQuery(event, zodValidator(CvPdfQuery))
   const document = await getUserCvDocument(user.id, id)
 
-  const pdf = await renderCvPdf({
-    content: document.content,
-    design: document.design,
+  const pdf = await renderCvDocumentPdf(user.id, {
+    ...document,
     templateId: query.templateId ?? document.templateId,
   })
   const filename = cvPdfFilename(document.content, document.title)
