@@ -21,7 +21,9 @@ apps/web/            Nuxt 4 app: Vue pages (app/) and the HTTP API (server/)
   app/pages/         One file per route (/cv, /offres, /candidatures...)
   app/composables/   useGeneration(): streams a Claude generation over SSE
   server/api/        One route per file, method suffix (offers.post.ts)
-  server/utils/      Auto-imported server helpers (db, auth, Claude, SSE)
+  server/utils/      Auto-imported server helpers (db, auth, Claude, SSE, CV documents)
+  server/cv-pdf/     CV PDF templates (pdfmake) and their shared helpers
+  server/assets/     Server assets bundled with Nitro (the CV fonts)
   server/middleware/ Auth guard for /api/* and the daily generation limit
   test/server/       API route tests (Claude mocked, in-memory Postgres)
 packages/db/         Drizzle schema, SQL migrations, seed and invite scripts
@@ -58,6 +60,17 @@ Tests do not need Docker or an API key: the database is an in-memory PostgreSQL 
 - **Database changes**: edit the schema, run `bun run db:generate`, commit the generated SQL file.
 - **Commits** follow [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`.
 - A Husky pre-commit hook runs Prettier on staged files. CI runs lint, tests and a Docker build on every push.
+
+## Adding a CV template
+
+CV templates are TypeScript functions that return a [pdfmake](https://pdfmake.github.io/docs/0.3/) document definition. The PDF they produce is also the editor's preview, so there is nothing else to keep in sync.
+
+1. Add the id to `cvTemplateIds` and its label, one-line description, layout and ATS note to `cvTemplates` in `packages/shared/src/cv.ts`. The gallery, the live checks and the API validation pick it up.
+2. Create `apps/web/server/cv-pdf/templates/<id>.ts` exporting a `CvTemplate`: `({ content, design }) => TDocumentDefinitions`. Start from `sobre.ts`. Use the helpers of `../shared.ts`: `sectionsToRender` (visible, non-empty sections in the user's order, with their titles in the document's language), `clean` (strips characters the fonts cannot print), `contactRuns` and `linkTarget` (clickable e-mail, phone and web links only), `dateRange`, `scale(design.density)` for sizes and spacing, and `baseDocument` for A4, metadata and the font.
+3. Register it in `apps/web/server/cv-pdf/templates/index.ts`.
+4. Keep the reading order sensible: an ATS reads the text in the order it is drawn. Render it once and read it back (`cv-pdf.test.ts` renders every template and checks the extracted text).
+
+A few pdfmake details save time: a full-page background needs `absolutePosition`, column margins are ignored (put the margin on a nested stack), and `unbreakable: true` keeps a section title with its first item.
 
 ## Pull requests
 

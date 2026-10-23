@@ -77,6 +77,9 @@ Open the link, choose a name, e-mail and password, and you are in. From then on,
 ## 4. First steps in the app
 
 1. **CV**: paste your resume or import a PDF (5 MB max, text-based PDFs only; the original file is kept and can be downloaded again), then click « Critiquer ». Versions can be renamed, downloaded and deleted. If you apply in several fields, create one profile per specialty (« Nouveau profil ») and pick the CV each offer uses on its page; the default profile is used otherwise. « Mon compte » (user menu) lets you export or delete your data.
+
+   **Créer mon CV** (on the same page): build a structured CV from a version or from a short interview with Claude, pick a template, accept or reject Claude's suggested edits, download the PDF, and « Enregistrer comme version » so the other features use it.
+
 2. **Offres**: paste a job offer. Piston analyzes the fit with your resume, then writes a cover letter you can edit paragraph by paragraph.
 3. **Candidatures**: add the offer to the kanban and move it from « À envoyer » to « Terminée ».
 4. **Pistes**: get adjacent job titles, job-board keywords and company types to target.
@@ -85,10 +88,11 @@ Each user can run 30 generations per rolling 24 hours (`DAILY_GENERATION_LIMIT`)
 
 ## Troubleshooting
 
-| Symptom                                         | Fix                                                                                |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `DATABASE_URL is not set`                       | Run the commands from the repository root, where `.env` lives.                     |
-| `ECONNREFUSED 127.0.0.1:5432`                   | The dev database is not running: `docker compose -f docker-compose.dev.yml up -d`. |
-| Login works locally but not through your domain | Serve the app over HTTPS: the session cookie is `secure` in production.            |
-| « La clé API Claude du serveur est invalide »   | Check `ANTHROPIC_API_KEY` in `.env`, then restart (`docker compose up -d`).        |
-| PDF import says the file looks like an image    | The PDF is a scan without a text layer: paste the text instead.                    |
+| Symptom                                         | Fix                                                                                                               |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL is not set`                       | Run the commands from the repository root, where `.env` lives.                                                    |
+| `ECONNREFUSED 127.0.0.1:5432`                   | The dev database is not running: `docker compose -f docker-compose.dev.yml up -d`.                                |
+| Login works locally but not through your domain | Serve the app over HTTPS: the session cookie is `secure` in production.                                           |
+| « La clé API Claude du serveur est invalide »   | Check `ANTHROPIC_API_KEY` in `.env`, then restart (`docker compose up -d`).                                       |
+| The CV preview stays empty                      | The browser could not load pdf.js (old browser or blocked script): download the PDF instead, it is the same file. |
+| PDF import says the file looks like an image    | The PDF is a scan without a text layer: paste the text instead.                                                   |

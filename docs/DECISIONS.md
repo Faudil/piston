@@ -104,6 +104,28 @@ Choices that the original brief left open, or where the brief had to be adapted 
 
 **Rate limit over a rolling 24 hours.** The limit counts rows in `generations` created in the last 24 hours. It needs no extra storage, survives restarts, and avoids choosing a time zone for "per day".
 
+## CV builder
+
+The full design (model, operations, templates, alternatives) is in [docs/design/cv-builder.md](design/cv-builder.md); these are the choices worth knowing when reading the code.
+
+**PDFs are rendered by pdfmake, in the server process.** It is pure JavaScript, runs under Bun, embeds subsetted fonts, writes real text and links, and needs nothing in the Docker image (Nitro traces it; the fonts are server assets). Headless Chromium was rejected for its image size and memory, Typst for its 28 MB WASM module and a second template language. Renders are limited to two at a time per process.
+
+**The preview is the PDF itself, drawn with pdf.js.** One function per template is the single source of truth: no HTML twin that would drift from the downloaded file. `<iframe>` was not an option because Chrome on Android downloads PDFs instead of showing them. The preview follows the one-second autosave.
+
+**WOFF fonts, Latin subset, vendored.** Inter, Lato and Source Serif 4 from Fontsource (OFL, licenses next to the files). fontkit cannot subset WOFF2 composite glyphs. Characters outside the subset (emoji) are removed from the PDF and reported by a live check.
+
+**Claude proposes typed operations on ids; the user accepts them one by one.** Edits target item and bullet ids, so any subset of a proposal applies cleanly, which index-based JSON Patch could not guarantee. The appliers are pure functions in `@piston/shared`, run in the browser and tested in the package.
+
+**Claude writes a flat operation, the code uses a typed union.** The twelve-variant union, sent as the structured-output schema, was rejected by the API ("compiled grammar is too large"). Claude now fills one object whose fields are all present and null when unused, converted by `fromWire()`. Each operation is validated on its own and dropped if invalid, through a new lenient output mode of `streamGeneration` (`format` + `fromJson`).
+
+**Documents are snapshotted, not diffed.** A revision is a full copy (a few KB), taken at creation, on accepted AI edits, restorations and template changes, after manual edits made before such a snapshot, and every 15 minutes of autosaving; 50 per document at most. Saves carry the `updatedAt` the client saw and get a 409 if another tab saved in between. Revisions are ordered by an identity column (`seq`), not by `created_at`: Postgres' `now()` is the transaction's start time, so the « manual changes » revision and the AI snapshot written by the same save share a timestamp, and the history came back in random order.
+
+**Saving as a resume version stores the PDF and the text extracted from it.** Reviews, analyses and letters keep reading `resumes.raw_text` unchanged. The text comes from the PDF, not from the document, because that is what an ATS reads; the « Moderne » template puts the name above its two columns so it comes first in that text.
+
+**Builder AI calls count toward the daily limit.** They are `generations` rows of kinds `cv_draft` and `cv_edit` (migration `0004` adds them to the enum) under `/api/generate/*`, so the existing rate-limit middleware and history cover them.
+
+**Interview questions are fixed, not generated.** Six questions written once in `@piston/shared` cost no call, and one generation turns the answers into a draft. Facts the user states in the instruction box (« ajoute mon stage chez X ») may be added; nothing else may, and roles may not be inflated.
+
 ## Web search (Tavily, optional)
 
 **Tavily through plain `fetch`.** Two endpoints (`/search`, `/extract`) do not justify an SDK dependency. A single `tavilyRequest()` in `server/utils/tavily.ts` handles the key, the 15 s timeout, logging (status and `request_id`) and the mapping of Tavily errors to French messages: missing or invalid key and exhausted quota are 503, rate limit is 429, anything else is 502. The feature is optional: without `TAVILY_API_KEY`, `/api/features` reports `webSearch: false` and the routes answer 503.
@@ -131,6 +153,8 @@ Choices that the original brief left open, or where the brief had to be adapted 
 **In-memory PostgreSQL (PGlite) for tests.** Tests run the real migrations against PGlite, so SQL behavior (constraints, JSON columns, the partial unique index) is tested for real, with no Docker needed in CI.
 
 **Tests run under the Bun runtime** (`bun --bun vitest run`). The Nuxt test environment (`@nuxt/test-utils`) gets a longer hook timeout, because booting it can be slow when Turborepo runs every workspace's tests at once.
+
+**CV PDFs are tested by extracting their text.** Every template is rendered in the tests and read back with pdf-parse: accents, link targets, embedded fonts and reading order are checked on the real bytes.
 
 **PDF import is tested with real pdf-parse** on tiny PDFs built by hand in the test, including one without a text layer.
 

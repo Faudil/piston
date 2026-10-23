@@ -11,20 +11,24 @@
   <img src="docs/screenshots/offer.png" alt="Offer analysis and cover letter on a phone" width="300">
   <img src="docs/screenshots/kanban.png" alt="Application kanban" width="520">
 </p>
+<p align="center">
+  <img src="docs/screenshots/cv-builder.png" alt="CV builder with live PDF preview" width="820">
+</p>
 <p align="center"><sub>Screenshots use the fictional demo profile from the seed script and illustrative results.</sub></p>
 
 ## Features
 
-| Feature                   | What you get                                                                                                                                                                                                                        |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Resume profiles**       | One CV per specialty (« Communication », « Marketing digital »…), each with its own versions and reviews; each offer picks its CV, the default profile otherwise                                                                    |
-| **Resume review**         | A score out of 10 for readability, impact, keywords and consistency; an ATS-filter check (score out of 100 and a checklist, judged from the resume text); 5 strengths and 5 fixes, each quoting your resume; a line-by-line rewrite |
-| **Offer analysis**        | A match score out of 100, an ATS keyword match (found and missing keywords), matching and missing skills backed by your actual experience, 5 likely interview questions, HR jargon translated                                       |
-| **Cover letter**          | 5 templates × 3 tones, from an application and its notes; edit in place, regenerate a paragraph or ask for corrections; every version kept                                                                                          |
-| **Search leads**          | 5 adjacent jobs you have not held yet, 10 job-board keywords, 5 kinds of companies to target                                                                                                                                        |
-| **Application tracking**  | A five-column kanban with drag-and-drop (and keyboard controls), notes, and the date of every status change                                                                                                                         |
-| **Web search** (optional) | Search live offers on French job boards and import an offer from its link, through [Tavily](https://tavily.com) (needs `TAVILY_API_KEY`)                                                                                            |
-| **History**               | Every Claude output is stored and can be reopened                                                                                                                                                                                   |
+| Feature                   | What you get                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Resume profiles**       | One CV per specialty (« Communication », « Marketing digital »…), each with its own versions and reviews; each offer picks its CV, the default profile otherwise                                                                                                                                                                                                              |
+| **CV builder**            | « Créer mon CV »: a structured CV from your resume or a six-question interview, three PDF templates (ATS-readable text, embedded fonts, links), live checks, and Claude's edits (rewrite, shorten, quantify with placeholders, translate, tailor to an offer, apply the review) proposed as a diff you accept line by line; saved as a resume version for every other feature |
+| **Resume review**         | A score out of 10 for readability, impact, keywords and consistency; an ATS-filter check (score out of 100 and a checklist, judged from the resume text); 5 strengths and 5 fixes, each quoting your resume; a line-by-line rewrite                                                                                                                                           |
+| **Offer analysis**        | A match score out of 100, an ATS keyword match (found and missing keywords), matching and missing skills backed by your actual experience, 5 likely interview questions, HR jargon translated                                                                                                                                                                                 |
+| **Cover letter**          | 5 templates × 3 tones, from an application and its notes; edit in place, regenerate a paragraph or ask for corrections; every version kept                                                                                                                                                                                                                                    |
+| **Search leads**          | 5 adjacent jobs you have not held yet, 10 job-board keywords, 5 kinds of companies to target                                                                                                                                                                                                                                                                                  |
+| **Application tracking**  | A five-column kanban with drag-and-drop (and keyboard controls), notes, and the date of every status change                                                                                                                                                                                                                                                                   |
+| **Web search** (optional) | Search live offers on French job boards and import an offer from its link, through [Tavily](https://tavily.com) (needs `TAVILY_API_KEY`)                                                                                                                                                                                                                                      |
+| **History**               | Every Claude output is stored and can be reopened                                                                                                                                                                                                                                                                                                                             |
 
 The main flow — paste an offer, read the analysis, generate the letter, tweak it, add it to the kanban — happens on a single page and takes under two minutes on a phone.
 
@@ -54,6 +58,7 @@ Browser (Vue, Nuxt UI) ──fetch + SSE──▶ Nitro API routes ──▶ Cla
 - **Streaming.** `/api/generate/*` routes stream Claude's answer to the browser over Server-Sent Events, then save the full generation. Structured results (scores, lists) are parsed while they stream, so they fill in progressively.
 - **Structured outputs.** Each feature defines a Zod schema in `@piston/shared`; it is sent to the API as the output format and used again to validate and type the result.
 - **Prompt caching.** The system prompt and the resume are cache breakpoints, since they repeat across a user's calls; only the offer and options change.
+- **AI edits as a reviewable diff.** In the CV builder, Claude never rewrites the document: it returns typed operations on item ids (`set_bullet`, `add_item`, `move_section`...) that the user accepts or rejects one by one, applied by pure functions in `@piston/shared`. PDFs are rendered with pdfmake and previewed with pdf.js, so the preview is the downloaded file. See [docs/design/cv-builder.md](docs/design/cv-builder.md).
 - **Prompt-injection guard.** The resume and offer are wrapped in `<cv>` and `<offre>` tags, closing tags inside them are escaped, and the prompts state that their content is data, never instructions.
 - **Guardrails.** Invite-only accounts, scrypt-hashed passwords, httpOnly session cookies, every query scoped to the logged-in user, input size limits, and 30 generations per user per 24 hours.
 
@@ -83,7 +88,7 @@ apps/web/          Nuxt app: pages and components (app/), API routes and utils (
 packages/db/       Drizzle schema, migrations, seed and invite scripts
 packages/prompts/  Claude system prompts, one pure function per feature, snapshot-tested
 packages/shared/   Zod schemas and types shared by the client, the API and the prompts
-docs/              Getting started and design decisions
+docs/              Getting started, design decisions, design docs (docs/design)
 ```
 
 ## Development
