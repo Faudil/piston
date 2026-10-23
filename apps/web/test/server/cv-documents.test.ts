@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
 import {
   cvDocumentRevisions,
   cvDocuments,
+  eq,
   generations,
   jobOffers,
   resumeProfiles,
