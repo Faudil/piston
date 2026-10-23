@@ -1,6 +1,6 @@
 # Design: CV builder v2 — a real alternative to Canva and CVDesignr
 
-Status: in progress — WP0 (foundation) done, see [§5](#5-wp0-delivered-contracts-for-the-next-work-packages). Builds on [cv-builder.md](cv-builder.md) (v1: structured model, reviewable AI edits, three pdfmake templates, revisions). This document is the plan for the v2 work packages; each package updates it when it lands.
+Status: WP0 to WP5 done (2026-10-23). Contracts in [§5](#5-wp0-delivered-contracts-for-the-next-work-packages). Builds on [cv-builder.md](cv-builder.md) (v1: structured model, reviewable AI edits, three pdfmake templates, revisions). This document is the plan for the v2 work packages; each package updates it when it lands.
 
 ## 1. Why
 
@@ -129,7 +129,7 @@ Status: done. Delivered:
 
 ### WP3 — AI v2 (after WP0, parallel to WP1/WP2)
 
-Status: done (integration into the editor page pending, see « Integration » below).
+Status: done (wired into the editor page by WP2).
 
 - **Design operations** `set_template { templateId, resetDesign }` and `set_design { changes }` (`cv-operations.ts`; `changes` is a strict object of colors `primary`/`secondary`/`sidebarBg`, `fontPairing`, `layout`, `headerStyle`, `sectionTitleStyle`, `itemStyle`, `bulletStyle`, `skillStyle`, `languageStyle`, `spacing`, `lineHeight`, `margins`, `fontSize`, `showIcons`; `null` = back to the template's value). They ride on the existing flat wire (`value`, `visible`, `fields`), so the grammar did not grow. They change the document, not the content: `cv-document-operations.ts` has `CvDocumentState` (content + design + templateId), `applyCvOperationToDocument(s)` and `describeCvOperationInDocument` (French diff lines « Modèle : Sobre → Moderne », swatches, ATS warning when the template or the layout reads worse for applicant tracking systems). `applyCvOperation` (content only) refuses them.
 - **Prompts** (`packages/prompts/src/cv_builder.ts`): the edit system prompt now carries the design catalog (`cvDesignCatalog()`: templates sorted by id with category, ATS reading, layout, fonts; the enum values of every setting) and the design rules (ATS trade-off, sober vs creative sectors, contrast, keep the user's customizations). The current look goes in the request as `<cv_design>` (customizations + resolved values), not in the cached document block.
@@ -150,7 +150,12 @@ Status: done (editor mounting: `CvExportMenu` is in the sticky bar of the editor
 
 ### WP5 — Integration and QA (last, coordinator)
 
-Docker image check (fonts, worker bundle), real-Claude validation of the new AI flows (a handful of calls), screenshots, docs (this file, DECISIONS, README, CONTRIBUTING « Adding a template »).
+Status: done.
+
+- Full suite green after integration: shared 120, prompts 47, db 5, cv-render 82, web 258. ESLint and Prettier clean (`vue/html-self-closing` disabled: it contradicted Prettier's output).
+- Docker image built and run (279 MB, no Chromium): all 12 templates export to PDF and Word in production, with Latin Extended text extractable (« Léa Wróblewska »); `docx`, `pdfmake`, `pdfkit` traced into `.output`; share link created, served without a session with `X-Robots-Tag: noindex`, 410 after revocation, 404 for a malformed token; the matching letter PDF renders; migrations 0006 and 0007 applied at startup.
+- Real-Claude validation (5 calls, about 42k input and 2.7k output tokens): a design instruction (« plus sobre, je postule dans une banque ») proposed « Classique » + navy + serif without touching content; bullets from notes stayed within the notes with « [X %] » placeholders; « Compléter » asked three precise questions; the summary used only figures from the CV; « Version une page » only tightened spacing, margins and size.
+- Follow-ups noted: when generating a summary for a hidden « Accroche » section, the proposal should also show the section; about half of the twelve templates are visually close (white, one column) — a design round with photo-forward and bolder layouts would widen the gallery.
 
 ## 4. Constraints
 
