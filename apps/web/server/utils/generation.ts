@@ -48,10 +48,14 @@ export interface GenerationSpec<K extends GenerationKind> {
  *
  * Usage in a route: `return streamGeneration(event, spec)`.
  */
-export function streamGeneration<K extends GenerationKind>(
+export async function streamGeneration<K extends GenerationKind>(
   event: H3Event,
   spec: GenerationSpec<K>,
 ) {
+  // Counted before Claude is called, so a call that is aborted or fails still
+  // counts. Throws a French 429/503 when a limit is reached.
+  const usageId = await reserveUsage(spec.userId, 'anthropic', spec.kind)
+
   const eventStream = createEventStream(event)
   const send = (payload: GenerationEvent) =>
     eventStream.push({ event: payload.type, data: JSON.stringify(payload) })
@@ -67,30 +71,42 @@ export function streamGeneration<K extends GenerationKind>(
         ? { type: 'json_schema' as const, schema: betaZodOutputFormat(outputSpec.format).schema }
         : undefined
 
-  const claudeStream = useClaude().beta.messages.stream({
-    model: claudeModel,
-    max_tokens: 16000,
-    // If the model declines for policy reasons, the API retries on its default
-    // fallback model inside the same call instead of failing.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: {
-      effort: 'medium',
-      ...(format && { format }),
-    },
-    // Cache breakpoints: the system prompt, then the resume. Only `request`
-    // changes between two calls of the same user.
-    system: [{ type: 'text', text: spec.system, cache_control: { type: 'ephemeral' } }],
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: spec.resume, cache_control: { type: 'ephemeral' } },
-          { type: 'text', text: spec.request },
-        ],
+  const startClaudeStream = () => {
+    return useClaude().beta.messages.stream({
+      model: claudeModel,
+      max_tokens: 16000,
+      // If the model declines for policy reasons, the API retries on its default
+      // fallback model inside the same call instead of failing.
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: {
+        effort: 'medium',
+        ...(format && { format }),
       },
-    ],
-  })
+      // Cache breakpoints: the system prompt, then the resume. Only `request`
+      // changes between two calls of the same user.
+      system: [{ type: 'text', text: spec.system, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: spec.resume, cache_control: { type: 'ephemeral' } },
+            { type: 'text', text: spec.request },
+          ],
+        },
+      ],
+    })
+  }
+
+  const claudeStream = await (async () => {
+    try {
+      return startClaudeStream()
+    } catch (error) {
+      // Nothing was sent to Claude (e.g. no API key): release the reservation.
+      await settleUsage(usageId, { status: 'failed', usage: NO_USAGE })
+      throw error
+    }
+  })()
 
   // Stop paying for tokens nobody will read if the user leaves the page.
   eventStream.onClosed(() => claudeStream.abort())
@@ -99,9 +115,14 @@ export function streamGeneration<K extends GenerationKind>(
     void send({ type: 'delta', text })
   })
 
+  let settled = false
   const run = async () => {
     try {
       const message = await claudeStream.finalMessage()
+      // Settle right away with the real usage, before any validation can throw:
+      // refused, truncated and unusable answers cost tokens too.
+      await settleUsage(usageId, { status: 'done', usage: message.usage, model: message.model })
+      settled = true
 
       if (message.stop_reason === 'refusal') {
         throw new UnusableAnswerError(
@@ -156,6 +177,11 @@ export function streamGeneration<K extends GenerationKind>(
 
       await send({ type: 'done', generation: toGeneration(row!) as Generation<GenerationKind> })
     } catch (error) {
+      // Aborted or failed before settling: the reserved estimate stays, since
+      // the tokens generated so far were billed. No-op if already settled
+      // (an error after finalMessage must not overwrite the real usage).
+      if (!settled)
+        await settleUsage(usageId, { status: claudeStream.aborted ? 'aborted' : 'failed' })
       if (claudeStream.aborted) return
       const message =
         error instanceof UnusableAnswerError ? error.message : describeClaudeError(error)

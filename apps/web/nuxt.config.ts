@@ -39,6 +39,11 @@ export default defineNuxtConfig({
     claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5',
     databaseUrl: process.env.DATABASE_URL ?? '',
     dailyGenerationLimit: Number(process.env.DAILY_GENERATION_LIMIT || 30),
+    // Global caps over all users (see server/utils/usage.ts).
+    claudeGlobalDailyLimit: Number(process.env.CLAUDE_GLOBAL_DAILY_LIMIT || 300),
+    claudeMonthlyBudgetUsd: Number(process.env.CLAUDE_MONTHLY_BUDGET_USD || 25),
+    tavilyGlobalDailyLimit: Number(process.env.TAVILY_GLOBAL_DAILY_LIMIT || 300),
+    tavilyMonthlyCredits: Number(process.env.TAVILY_MONTHLY_CREDITS || 1000),
     // Optional: enables job search and offer import from a link.
     tavilyApiKey: process.env.TAVILY_API_KEY ?? '',
   },

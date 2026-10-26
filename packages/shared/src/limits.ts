@@ -6,4 +6,8 @@ export const LIMITS = {
   maxPdfBytes: 5 * 1024 * 1024,
   /** Invitation links expire after this many days. */
   inviteValidityDays: 7,
+  /** Invitation links one user may create per rolling 7 days. */
+  invitesPerUserPerWeek: 5,
+  /** Tavily calls (searches and page imports) per user per rolling 24 hours. */
+  webCallsPerUserPerDay: 50,
 } as const

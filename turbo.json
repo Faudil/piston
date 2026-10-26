@@ -11,9 +11,9 @@
       "persistent": true,
       "passThroughEnv": [
         "ANTHROPIC_*",
-        "CLAUDE_MODEL",
         "DATABASE_URL",
         "DAILY_GENERATION_LIMIT",
+        "CLAUDE_*",
         "TAVILY_*",
         "NUXT_*"
       ]

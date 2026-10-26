@@ -1,4 +1,4 @@
-import type { JobSearchResult } from '@piston/shared'
+import { TAVILY_CREDITS_PER_CALL, type JobSearchResult } from '@piston/shared'
 
 const TAVILY_URL = 'https://api.tavily.com'
 
@@ -23,10 +23,12 @@ const JOB_BOARD_DOMAINS = [
 const SNIPPET_LENGTH = 300
 
 interface TavilySearchResponse {
+  usage?: { credits?: number }
   results?: Array<{ title: string; url: string; content: string; published_date?: string }>
 }
 
 interface TavilyExtractResponse {
+  usage?: { credits?: number }
   results?: Array<{ url: string; raw_content: string }>
   failed_results?: Array<{ url: string; error: string }>
 }
@@ -37,10 +39,17 @@ export function isWebSearchEnabled(): boolean {
 }
 
 /**
- * The only function that talks to Tavily. Returns the parsed JSON, or throws
- * an h3 error with a French message the user can read.
+ * The only function that talks to Tavily. Reserves the call in the usage
+ * ledger first (which enforces the per-user and global limits), then returns
+ * the parsed JSON, or throws an h3 error with a French message the user can
+ * read. The ledger gets the credits Tavily reports (`usage.credits`), or the
+ * documented cost of one call when the response has none.
  */
-async function tavilyRequest<T>(path: '/search' | '/extract', body: object): Promise<T> {
+async function tavilyRequest<T extends { usage?: { credits?: number } }>(
+  userId: string,
+  path: '/search' | '/extract',
+  body: object,
+): Promise<T> {
   const { tavilyApiKey } = useRuntimeConfig()
   if (!tavilyApiKey) {
     throw createError({
@@ -48,6 +57,8 @@ async function tavilyRequest<T>(path: '/search' | '/extract', body: object): Pro
       message: "La recherche web n'est pas configurée sur ce serveur.",
     })
   }
+
+  const usageId = await reserveUsage(userId, 'tavily', path.slice(1))
 
   let response: Response
   try {
@@ -58,6 +69,8 @@ async function tavilyRequest<T>(path: '/search' | '/extract', body: object): Pro
       signal: AbortSignal.timeout(15_000),
     })
   } catch (error) {
+    // No answer: the request may still have been processed, keep the estimate.
+    await settleUsage(usageId, { status: 'failed' })
     console.error(`[tavily] ${path} request failed`, error)
     throw createError({
       statusCode: 502,
@@ -67,7 +80,16 @@ async function tavilyRequest<T>(path: '/search' | '/extract', body: object): Pro
 
   const payload = (await response.json().catch(() => ({}))) as T & { request_id?: string }
   console.info(`[tavily] ${path} status=${response.status} request_id=${payload.request_id ?? '-'}`)
-  if (response.ok) return payload
+  if (response.ok) {
+    await settleUsage(usageId, {
+      status: 'done',
+      credits: payload.usage?.credits ?? TAVILY_CREDITS_PER_CALL,
+    })
+    return payload
+  }
+  // Rejected requests (bad key, quota) are not billed by Tavily, but they still
+  // count as a call; the estimated credit is kept, which is the safe side.
+  await settleUsage(usageId, { status: 'failed' })
 
   if (response.status === 401) {
     console.error('[tavily] invalid TAVILY_API_KEY')
@@ -95,8 +117,12 @@ async function tavilyRequest<T>(path: '/search' | '/extract', body: object): Pro
 }
 
 /** Searches the French job boards. Costs one Tavily credit (basic depth). */
-export async function searchJobs(query: string, location?: string): Promise<JobSearchResult[]> {
-  const data = await tavilyRequest<TavilySearchResponse>('/search', {
+export async function searchJobs(
+  userId: string,
+  query: string,
+  location?: string,
+): Promise<JobSearchResult[]> {
+  const data = await tavilyRequest<TavilySearchResponse>(userId, '/search', {
     query: [query, "offre d'emploi", location].filter(Boolean).join(' '),
     search_depth: 'basic',
     max_results: 10,
@@ -117,8 +143,8 @@ export async function searchJobs(query: string, location?: string): Promise<JobS
 }
 
 /** Fetches a page as markdown, or throws a French error when Tavily could not read it. */
-export async function extractPage(url: string): Promise<string> {
-  const data = await tavilyRequest<TavilyExtractResponse>('/extract', {
+export async function extractPage(userId: string, url: string): Promise<string> {
+  const data = await tavilyRequest<TavilyExtractResponse>(userId, '/extract', {
     urls: url,
     extract_depth: 'basic',
     format: 'markdown',

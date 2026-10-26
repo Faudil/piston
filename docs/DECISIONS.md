@@ -172,11 +172,31 @@ The full design (model, operations, templates, alternatives) is in [docs/design/
 
 **Searches are restricted to French job boards.** A general web search mostly returns career advice articles. `include_domains` lists Welcome to the Jungle, Indeed, HelloWork, APEC, France Travail, LinkedIn, JobTeaser, Cadremploi and Meteojob, with `country: france` and `time_range: month` so results are recent. Basic depth, 10 results: one Tavily credit per search.
 
-**Imported pages are cleaned by Claude.** A page extracted as markdown is full of navigation, cookie banners and other offers. One non-streaming structured call (`messages.parse`, effort `low`) keeps only the ad and says whether the page is an offer at all. The page is capped at 60 000 characters before it is sent, wrapped in `<page>` tags with the closing tag escaped, and treated as data. The result is returned to prefill the form and is not stored, so this call counts toward the Tavily limit and not toward the daily generations.
+**Imported pages are cleaned by Claude.** A page extracted as markdown is full of navigation, cookie banners and other offers. One non-streaming structured call (`messages.parse`, effort `low`) keeps only the ad and says whether the page is an offer at all. The page is capped at 60 000 characters before it is sent, wrapped in `<page>` tags with the closing tag escaped, and treated as data. The result is returned to prefill the form and is not stored, so this call is recorded in the usage ledger (one Tavily call plus one Claude call) and not in `generations`.
 
-**In-memory limit of 50 Tavily calls per user and 24 hours.** It only protects the owner's Tavily credits. The counters live in `server/utils/web-limit.ts` and reset on restart, which is acceptable for a single-process app used by about ten friends and avoids a table for a soft guard.
+**Tavily is limited to 50 calls per user and 24 hours, through the usage ledger** (see « Usage ledger and global caps » below), not in memory: counters survive restarts and a global cap sits on top.
 
 **URLs are checked before import.** Only http(s) URLs with a dotted public-looking hostname are accepted (no localhost, bare hostnames, private IPv4 ranges, IPv6 literals, credentials in the URL). Tavily, not this server, fetches the page, so this is hygiene rather than a full SSRF defence.
+
+## Usage ledger and global caps
+
+The app is public and the owner pays the Anthropic and Tavily bills, so spam must not be able to overcharge him. Per-user limits are not enough (accounts multiply, and counting successful `generations` misses aborted or failed calls), so every paid call goes through one ledger.
+
+**One ledger table, `api_usage`.** One row per Claude or Tavily call: user, provider, operation, model, token counts, Tavily credits, estimated cost in micro-dollars, status (`reserved`, `done`, `failed`, `aborted`). All limits are computed from it: per user over a rolling 24 h (30 Claude calls, 50 Tavily calls), globally over a rolling 24 h (`CLAUDE_GLOBAL_DAILY_LIMIT`, `TAVILY_GLOBAL_DAILY_LIMIT`), and globally over the calendar month (UTC): estimated Claude cost against `CLAUDE_MONTHLY_BUDGET_USD`, Tavily credits against `TAVILY_MONTHLY_CREDITS`. Daily limits answer 429, the monthly budget 503, with French messages.
+
+**Reserve, then settle.** `reserveUsage()` runs before the call and inserts a `reserved` row holding a conservative estimate: 30k input + 8k output tokens at the configured model's price for a generation (20k + 4k for the offer import cleanup), 1 credit for a Tavily call. `settleUsage()` replaces the estimate with the real usage (`finalMessage().usage`, Tavily's `usage.credits`). A call that is aborted (the client left) or fails keeps its estimate, so looping « start then abort » is no longer free. A reservation whose call never left the server (e.g. no API key, a failed page fetch before the Claude call) is settled at zero. If the process dies mid-call the row simply stays at its estimate.
+
+**Advisory lock.** The checks and the insert run in one transaction after `pg_advisory_xact_lock` (one key per provider), so parallel requests cannot all pass the check and overshoot a limit. Invite creation uses the same technique.
+
+**Prices live in `@piston/shared`** (`MODEL_PRICES`, USD per million tokens, cache reads and writes priced separately). A model missing from the table is priced like the most expensive known model: over-estimating is the safe direction for a cap. A Tavily extract really costs 0.2 credit per URL; it is budgeted at 1 credit unless the response reports its own `usage.credits`.
+
+**Ledger rows survive account deletion** (`user_id` is set to null): deleting an account must not erase what it spent from the global limits. A warning is logged once per process and month when 80 % of a monthly budget is reached.
+
+**Invitations are capped at 5 per user per rolling 7 days**, since each new account gets its own per-user quota.
+
+**`GET /api/usage`** returns the user's own 24 h counts and limits and the server's monthly budget as percentages only (no money amounts).
+
+**These are estimates, so provider-side limits remain the real hard stop.** The ledger can drift from the invoice (price changes, fallback models, uncounted retries, a bug). The self-hoster must also set a spend limit in the Anthropic Console and keep Tavily on a plan with a credit cap; see « Limiting costs » in the getting-started guide.
 
 ## Frontend
 

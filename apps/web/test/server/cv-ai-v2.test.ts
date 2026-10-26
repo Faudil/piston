@@ -6,7 +6,14 @@ import createRoute from '../../server/api/cv-documents.post'
 import patchRoute from '../../server/api/cv-documents/[id].patch'
 import coachRoute from '../../server/api/cv-documents/[id]/coach.get'
 import translateRoute from '../../server/api/cv-documents/[id]/translate.post'
-import { callRoute, loginAsNewUser, mockClaude, readSse, resetTestState } from './helpers'
+import {
+  callRoute,
+  loginAsNewUser,
+  mockClaude,
+  readSse,
+  resetTestState,
+  seedUsage,
+} from './helpers'
 import { testState } from './state'
 
 beforeEach(resetTestState)
@@ -358,12 +365,7 @@ describe('rate limit', () => {
   it('counts every new flow toward the daily limit', async () => {
     const { document, user } = await setup()
     testState.config.dailyGenerationLimit = 1
-    await testState.db.insert(generations).values({
-      userId: user.id,
-      kind: 'cv_edit',
-      output: { summary: '', operations: [], dropped: 0 },
-      model: 'm',
-    })
+    await seedUsage(user.id, 1)
     const claude = mockClaude({ text: JSON.stringify(bulletsProposal) })
     const id = document.id
     const bodies = [

@@ -46,11 +46,21 @@ export function parsePublicUrl(input: string): URL {
  * Fetches a job ad through Tavily, then asks Claude to keep only the ad itself.
  * The result is not saved: the user reviews it in the new-offer form.
  *
- * This call counts toward the Tavily limit, not toward the daily generations
- * (nothing is stored in `generations`).
+ * Counts as one Tavily call (the extract) and one Claude call (the cleanup),
+ * both in the usage ledger. Nothing is stored in `generations`.
  */
-export async function importOffer(url: URL): Promise<ImportedOffer> {
-  const page = (await extractPage(url.href)).slice(0, MAX_PAGE_CHARS)
+export async function importOffer(userId: string, url: URL): Promise<ImportedOffer> {
+  // Reserve the Claude call first: if the user or the server is out of quota,
+  // do not spend a Tavily credit on a page that could not be cleaned up.
+  const usageId = await reserveUsage(userId, 'anthropic', 'import_offer')
+
+  let page: string
+  try {
+    page = (await extractPage(userId, url.href)).slice(0, MAX_PAGE_CHARS)
+  } catch (error) {
+    await settleUsage(usageId, { status: 'failed', usage: NO_USAGE }) // Claude was never called
+    throw error
+  }
   const { claudeModel } = useRuntimeConfig()
 
   let output: ImportedOfferOutput | null
@@ -62,8 +72,11 @@ export async function importOffer(url: URL): Promise<ImportedOffer> {
       system: importOfferPrompt(),
       messages: [{ role: 'user', content: wrapPage(page) }],
     })
+    await settleUsage(usageId, { status: 'done', usage: message.usage, model: message.model })
     output = message.parsed_output
   } catch (error) {
+    // Unknown cost (the request may have been billed): keep the estimate.
+    await settleUsage(usageId, { status: 'failed' })
     throw createError({ statusCode: 502, message: describeClaudeError(error) })
   }
 

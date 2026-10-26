@@ -33,7 +33,7 @@ import * as pdf from '../../server/utils/pdf'
 import * as profiles from '../../server/utils/profiles'
 import * as importOffer from '../../server/utils/import-offer'
 import * as tavily from '../../server/utils/tavily'
-import * as webLimit from '../../server/utils/web-limit'
+import * as usage from '../../server/utils/usage'
 import * as resumes from '../../server/utils/resumes'
 import * as serialize from '../../server/utils/serialize'
 import * as validation from '../../server/utils/validation'
@@ -64,7 +64,7 @@ for (const util of [
   serialize,
   importOffer,
   tavily,
-  webLimit,
+  usage,
 ]) {
   for (const [name, value] of Object.entries(util)) vi.stubGlobal(name, value)
 }

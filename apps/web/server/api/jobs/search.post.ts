@@ -10,6 +10,5 @@ export default defineEventHandler(async (event): Promise<JobSearchResponse> => {
       message: "La recherche web n'est pas configurée sur ce serveur.",
     })
   }
-  consumeWebCall(user.id)
-  return { results: await searchJobs(body.query, body.location || undefined) }
+  return { results: await searchJobs(user.id, body.query, body.location || undefined) }
 })

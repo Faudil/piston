@@ -11,6 +11,5 @@ export default defineEventHandler(async (event) => {
       message: "La recherche web n'est pas configurée sur ce serveur.",
     })
   }
-  consumeWebCall(user.id)
-  return importOffer(url)
+  return importOffer(user.id, url)
 })

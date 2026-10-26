@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import {
   boolean,
   customType,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -13,6 +14,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import {
+  apiProviders,
+  usageStatuses,
   applicationStatuses,
   generationKinds,
   type ApplicationOutcome,
@@ -47,6 +50,8 @@ const base = {
 
 export const generationKind = pgEnum('generation_kind', generationKinds)
 export const applicationStatus = pgEnum('application_status', applicationStatuses)
+export const apiProvider = pgEnum('api_provider', apiProviders)
+export const usageStatus = pgEnum('usage_status', usageStatuses)
 
 export const users = pgTable('users', {
   ...base,
@@ -146,6 +151,39 @@ export const generations = pgTable(
     outputTokens: integer('output_tokens').notNull().default(0),
   },
   (t) => [index('generations_user_kind_idx').on(t.userId, t.kind, t.createdAt)],
+)
+
+/**
+ * Ledger of every paid API call (Claude, Tavily), written BEFORE the call as a
+ * `reserved` row holding a conservative estimate, then settled with the real
+ * numbers. All usage limits (per user, global, monthly budget) are computed
+ * from it, so aborted and failed calls are counted too.
+ */
+export const apiUsage = pgTable(
+  'api_usage',
+  {
+    ...base,
+    // Kept (set to null) when the account is deleted: deleting an account must
+    // not erase what it already spent from the global limits.
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    provider: apiProvider('provider').notNull(),
+    /** Generation kind, 'import_offer', 'search' or 'extract'. */
+    operation: text('operation').notNull(),
+    model: text('model'),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    /** Tavily credits (fractional: an extract costs 0.2). */
+    credits: doublePrecision('credits').notNull().default(0),
+    /** Estimated cost in micro-dollars (USD x 1e6); the estimate until settled. */
+    estimatedCostMicros: integer('estimated_cost_micros').notNull().default(0),
+    status: usageStatus('status').notNull().default('reserved'),
+  },
+  (t) => [
+    index('api_usage_provider_created_idx').on(t.provider, t.createdAt),
+    index('api_usage_user_provider_created_idx').on(t.userId, t.provider, t.createdAt),
+  ],
 )
 
 export const applications = pgTable(

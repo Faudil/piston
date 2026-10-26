@@ -8,14 +8,13 @@ import {
   type H3Error,
 } from 'h3'
 import { vi } from 'vitest'
-import { resumeProfiles, resumes, users } from '@piston/db'
+import { apiUsage, resumeProfiles, resumes, users } from '@piston/db'
 import { createTestDb, truncateAll } from '@piston/db/testing'
 import { sampleResume } from '@piston/db/fixtures'
 import type { GenerationEvent } from '@piston/shared'
 import authMiddleware from '../../server/middleware/auth'
-import rateLimitMiddleware from '../../server/middleware/rate-limit'
 import { resetShareViews } from '../../server/utils/cv-share'
-import { resetWebCalls } from '../../server/utils/web-limit'
+import { resetUsageWarnings } from '../../server/utils/usage'
 import { testState } from './state'
 
 /**
@@ -28,9 +27,30 @@ export async function resetTestState() {
   testState.user = null
   testState.config.dailyGenerationLimit = 30
   testState.config.tavilyApiKey = 'test-tavily-key'
-  resetWebCalls()
+  testState.config.claudeGlobalDailyLimit = 300
+  testState.config.claudeMonthlyBudgetUsd = 25
+  testState.config.tavilyGlobalDailyLimit = 300
+  testState.config.tavilyMonthlyCredits = 1000
+  resetUsageWarnings()
   resetShareViews()
   testState.claude = createClaudeMock({ text: '{}' }).client
+}
+
+/** Fills the usage ledger with `count` finished calls of a user (default: Claude, now). */
+export async function seedUsage(
+  userId: string,
+  count: number,
+  overrides: Partial<typeof apiUsage.$inferInsert> = {},
+) {
+  await testState.db.insert(apiUsage).values(
+    Array.from({ length: count }, () => ({
+      userId,
+      provider: 'anthropic' as const,
+      operation: 'cv_edit',
+      status: 'done' as const,
+      ...overrides,
+    })),
+  )
 }
 
 /** Creates a user with a default « Principal » profile holding a current resume, and logs them in. */
@@ -86,7 +106,6 @@ export async function callRoute(
     },
   })
   app.use(authMiddleware)
-  app.use(rateLimitMiddleware)
   const router = createRouter()
   router.use(options.route ?? path.split('?')[0]!, handler, method.toLowerCase() as 'get')
   app.use(router)

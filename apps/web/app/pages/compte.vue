@@ -7,6 +7,10 @@ useSeoMeta({ title: 'Mon compte' })
 const toast = useToast()
 const { user, fetch: refreshSession, clear } = useUserSession()
 
+// --- Usage ---------------------------------------------------------------------
+
+const { data: usage } = useFetch('/api/usage', { server: false })
+
 // --- Profile -------------------------------------------------------------------
 
 const profile = reactive({ displayName: user.value?.displayName ?? '' })
@@ -88,6 +92,19 @@ async function deleteAccount() {
             </UFormField>
             <UButton type="submit" label="Enregistrer" :loading="savingProfile" />
           </UForm>
+        </UCard>
+      </section>
+
+      <section v-if="usage" aria-labelledby="account-usage">
+        <AppSectionHeading id="account-usage" title="Utilisation" icon="i-lucide-gauge" />
+        <UCard>
+          <ul class="space-y-1 text-sm">
+            <li>{{ usage.claude.used }}/{{ usage.claude.limit }} générations aujourd'hui</li>
+            <li>{{ usage.web.used }}/{{ usage.web.limit }} recherches web aujourd'hui</li>
+            <li class="text-muted">
+              Budget IA mensuel du serveur : {{ usage.monthlyPercent.claude }} % utilisé
+            </li>
+          </ul>
         </UCard>
       </section>
 

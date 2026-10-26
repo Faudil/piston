@@ -5,7 +5,14 @@ import draftRoute from '../../server/api/generate/cv-draft.post'
 import editRoute from '../../server/api/generate/cv-edit.post'
 import createRoute from '../../server/api/cv-documents.post'
 import patchRoute from '../../server/api/cv-documents/[id].patch'
-import { callRoute, loginAsNewUser, mockClaude, readSse, resetTestState } from './helpers'
+import {
+  callRoute,
+  loginAsNewUser,
+  mockClaude,
+  readSse,
+  resetTestState,
+  seedUsage,
+} from './helpers'
 import { testState } from './state'
 
 beforeEach(resetTestState)
@@ -148,23 +155,9 @@ describe('POST /api/generate/cv-draft', () => {
   it('counts toward the daily generation limit', async () => {
     const { user } = await loginAsNewUser()
     testState.config.dailyGenerationLimit = 1
-    await testState.db.insert(generations).values({
-      userId: user.id,
-      kind: 'cv_edit',
-      output: { summary: '', operations: [], dropped: 0 },
-      model: 'm',
-    })
+    await seedUsage(user.id, 1)
     const claude = mockClaude({ text: '{}', parsed: draft })
     expect((await draftCall({ mode: 'import' })).status).toBe(429)
-    expect(
-      (
-        await editCall({
-          mode: 'instruction',
-          documentId: crypto.randomUUID(),
-          instruction: 'Plus court',
-        })
-      ).status,
-    ).toBe(429)
     expect(claude.stream).not.toHaveBeenCalled()
   })
 })

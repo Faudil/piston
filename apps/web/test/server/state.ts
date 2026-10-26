@@ -11,6 +11,10 @@ export const testState = {
     claudeModel: 'claude-sonnet-5-5',
     databaseUrl: '',
     dailyGenerationLimit: 30,
+    claudeGlobalDailyLimit: 300,
+    claudeMonthlyBudgetUsd: 25,
+    tavilyGlobalDailyLimit: 300,
+    tavilyMonthlyCredits: 1000,
     tavilyApiKey: 'test-tavily-key',
   },
 }

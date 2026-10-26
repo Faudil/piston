@@ -98,7 +98,28 @@ Open the link, choose a name, e-mail and password, and you are in. From then on,
 3. **Candidatures**: add the offer to the kanban and move it from « À envoyer » to « Terminée ».
 4. **Pistes**: get adjacent job titles, job-board keywords and company types to target.
 
-Each user can run 30 generations per rolling 24 hours (`DAILY_GENERATION_LIMIT`).
+Each user can run 30 Claude calls per rolling 24 hours (`DAILY_GENERATION_LIMIT`; offer imports count) and 50 web searches or imports, and can create 5 invitations per week. See [Limiting costs](#limiting-costs) for the server-wide caps.
+
+## Limiting costs
+
+Piston calls two paid APIs on your account. Every call is recorded in a usage ledger (before it starts, so aborted and failed calls count) and checked against these limits, all configurable in `.env`:
+
+| Variable                    | Default | Meaning                                                             |
+| --------------------------- | ------- | ------------------------------------------------------------------- |
+| `DAILY_GENERATION_LIMIT`    | 30      | Claude calls per user per rolling 24 hours                          |
+| `CLAUDE_GLOBAL_DAILY_LIMIT` | 300     | Claude calls per rolling 24 hours, all users together               |
+| `CLAUDE_MONTHLY_BUDGET_USD` | 25      | Estimated Claude spend per calendar month (UTC), in USD             |
+| `TAVILY_GLOBAL_DAILY_LIMIT` | 300     | Tavily calls (searches and imports) per rolling 24 hours, all users |
+| `TAVILY_MONTHLY_CREDITS`    | 1000    | Tavily credits per calendar month (1000 is the free tier)           |
+
+Users are also limited to 50 Tavily calls per day and 5 invitations per week. When a global limit is reached, users see a French message (« Le quota quotidien du serveur est atteint » or « Le budget mensuel de l'IA de ce serveur est atteint »); the server logs a warning at 80 % of a monthly budget.
+
+These limits rely on cost **estimates** computed by the app. They are a safety net, not a guarantee. To be sure you cannot be overcharged:
+
+- **Set a spend limit in the Anthropic Console** (Settings, Limits, and the workspace spend limit of the workspace your API key belongs to). Use a dedicated workspace for Piston.
+- **Keep Tavily on a plan with a credit cap** (the free tier stops at 1000 credits a month; do not enable pay-as-you-go unless you want it).
+
+Those provider-side limits are the only protection against a bug in the app.
 
 ## Troubleshooting
 

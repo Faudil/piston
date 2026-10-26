@@ -23,7 +23,7 @@ apps/web/            Nuxt 4 app: Vue pages (app/) and the HTTP API (server/)
   server/api/        One route per file, method suffix (offers.post.ts)
   app/workers/       Web Workers (the CV preview renderer)
   server/utils/      Auto-imported server helpers (db, auth, Claude, SSE, CV documents and PDFs)
-  server/middleware/ Auth guard for /api/* and the daily generation limit
+  server/middleware/ Auth guard for /api/*
   test/server/       API route tests (Claude mocked, in-memory Postgres)
 packages/cv-render/  CV renderer (pdfmake block engine), its fonts and their build script
 packages/db/         Drizzle schema, SQL migrations, seed and invite scripts

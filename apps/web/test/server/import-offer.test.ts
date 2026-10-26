@@ -148,12 +148,26 @@ describe('POST /api/offers/import-url', () => {
     )
   })
 
-  it('does not store a generation and counts toward the Tavily limit', async () => {
-    await loginAsNewUser()
+  it('does not store a generation and counts as a Claude call and a Tavily call', async () => {
+    const { user } = await loginAsNewUser()
     fetchMock.mockImplementation(async () => extracted())
     mockClaude({ text: '{}', parsed: offerOutput })
-    for (let i = 0; i < 50; i++) expect((await importUrl()).status).toBe(200)
-    expect((await importUrl()).status).toBe(429)
+    // The Claude cleanup shares the per-user quota of 30 calls with generations.
+    for (let i = 0; i < 30; i++) expect((await importUrl()).status).toBe(200)
+    const blocked = await importUrl()
+    expect(blocked.status).toBe(429)
+    expect((await blocked.json()).message).toContain('30 générations')
+    // The blocked import did not spend a Tavily credit.
+    expect(fetchMock).toHaveBeenCalledTimes(30)
     expect(await testState.db.query.generations.findMany()).toHaveLength(0)
+
+    const rows = await testState.db.query.apiUsage.findMany()
+    expect(
+      rows.filter((r) => r.provider === 'anthropic' && r.operation === 'import_offer'),
+    ).toHaveLength(30)
+    expect(rows.filter((r) => r.provider === 'tavily' && r.operation === 'extract')).toHaveLength(
+      30,
+    )
+    expect(rows.every((r) => r.userId === user.id && r.status === 'done')).toBe(true)
   })
 })
