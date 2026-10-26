@@ -51,6 +51,20 @@ Put it behind a reverse proxy that terminates HTTPS (Caddy, Traefik, nginx). Ses
 
 To update: `git pull && docker compose up -d --build`. Your data lives in the `piston-db` volume and survives rebuilds.
 
+### Behind nginx-proxy, with continuous deployment
+
+If your server already runs [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) with its Let's Encrypt companion, add `docker-compose.proxy.yml`: the app is then served only through the proxy, at `https://$PISTON_DOMAIN`, with a certificate issued and renewed automatically.
+
+1. Point the domain's DNS to the server.
+2. In the server's `.env`, set `PISTON_DOMAIN`, `LETSENCRYPT_EMAIL` and `PROXY_NETWORK` (the Docker network the proxy container is attached to).
+3. Start it:
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+   ```
+
+To deploy on every push to `main` once the CI passes, enable the `deploy` job of `.github/workflows/ci.yml`: in the GitHub repository settings, add the secrets `SSH_HOST`, `SSH_USER` and `SSH_KEY` (a key allowed to log in to the server) and the variable `DEPLOY_ENABLED=true` (optionally `DEPLOY_PATH`, default `~/piston`). The job copies the code over SSH and runs the command above. The server's `.env` is never overwritten: application secrets stay on the server, GitHub only holds the SSH access.
+
 ## 3. Create the first account
 
 Piston has no public sign-up: every account is created from an invitation link, valid 7 days and usable once. On a fresh install there is nobody to invite you yet, so create the first link from the command line.
