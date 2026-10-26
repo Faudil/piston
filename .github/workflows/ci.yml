@@ -28,3 +28,41 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Continuous deployment to a server running nginx-proxy (see
+  # docs/GETTING_STARTED.md, "Deploying behind nginx-proxy"). Opt-in: set the
+  # repository variable DEPLOY_ENABLED=true and the secrets SSH_HOST, SSH_USER,
+  # SSH_KEY (and optionally the variable DEPLOY_PATH, default ~/piston).
+  # Application secrets never leave the server: they live in its .env file,
+  # which the sync below excludes.
+  deploy:
+    needs: [check, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Sync files to the server
+        uses: easingthemes/ssh-deploy@v5.1.0
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: ${{ vars.DEPLOY_PATH || '~/piston' }}
+          EXCLUDE: '/.git/, /.env, **/node_modules/, **/.output/, **/.nuxt/, **/.turbo/'
+
+      - name: Rebuild and restart
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ vars.DEPLOY_PATH || '~/piston' }}
+            # Migrations run when the new container starts (server/plugins/migrate.ts).
+            docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+            docker image prune -f
