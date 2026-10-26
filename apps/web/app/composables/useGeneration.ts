@@ -46,7 +46,7 @@ export function useGeneration<K extends GenerationKind>(kind: K) {
         body: JSON.stringify(body),
         signal: controller.signal,
       })
-      // Errors raised before streaming starts (validation, rate limit...) are plain JSON.
+      // Errors raised before streaming starts (validation, usage limits...) are plain JSON.
       if (!response.ok || !response.body) {
         const data = await response.json().catch(() => null)
         throw new Error(data?.message ?? 'La génération a échoué.')

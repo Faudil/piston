@@ -27,6 +27,18 @@ export default defineNuxtConfig({
   app: {
     head: {
       titleTemplate: '%s — Piston',
+      // Installable app (PWA): manifest, icons and the service worker plugin.
+      link: [
+        { rel: 'manifest', href: '/manifest.webmanifest' },
+        { rel: 'icon', href: '/icons/icon.svg', type: 'image/svg+xml' },
+        { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png' },
+      ],
+      meta: [
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-title', content: 'Piston' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
+      ],
     },
   },
 
@@ -58,6 +70,19 @@ export default defineNuxtConfig({
     // Merged into nuxt-auth-utils' defaults (httpOnly, secure, sameSite=lax).
     // maxAge is in seconds and counted from login, not renewed on activity.
     session: { maxAge: Number(process.env.SESSION_MAX_AGE || 60 * 60 * 24 * 30) },
+  },
+
+  // The service worker must always be revalidated, or an update could take
+  // days to arrive; the manifest needs its own media type.
+  routeRules: {
+    '/sw.js': { headers: { 'cache-control': 'no-cache', 'service-worker-allowed': '/' } },
+    '/manifest.webmanifest': {
+      headers: {
+        'content-type': 'application/manifest+json',
+        'cache-control': 'public, max-age=3600',
+      },
+    },
+    '/offline.html': { headers: { 'cache-control': 'no-cache' } },
   },
 
   nitro: {

@@ -1,8 +1,10 @@
 /**
  * Options shared by every drag-and-drop list of the CV editor
  * (vue-draggable-plus / SortableJS). Dragging starts from a handle only, so
- * scrolling a form on a phone never moves anything by accident; a short
- * delay on touch screens avoids a drag starting on a tap. The list scrolls
+ * scrolling a form on a phone never moves anything by accident. On touch
+ * screens a drag needs a long press (the finger staying still for 250 ms),
+ * and any movement before that cancels it and lets the page scroll; the
+ * handle itself allows vertical panning (see DragHandle.vue). The list scrolls
  * by itself near the edges. Every drag has a keyboard equivalent (the
  * up / down buttons), so the handle is hidden from assistive technologies.
  */
@@ -15,9 +17,9 @@ export function cvDragOptions(level: CvDragLevel) {
 
 const baseOptions = {
   animation: 160,
-  delay: 120,
+  delay: 250,
   delayOnTouchOnly: true,
-  touchStartThreshold: 4,
+  touchStartThreshold: 8,
   ghostClass: 'opacity-40',
   chosenClass: 'shadow-lg',
   scroll: true,

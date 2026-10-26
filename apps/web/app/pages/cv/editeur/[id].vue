@@ -13,13 +13,14 @@ import {
   type CvListSectionKey,
   type CvOperation,
   type CvSectionKey,
-  type Resume,
 } from '@piston/shared'
 
 /**
  * The CV builder: form editor, live PDF preview, live checks, design options
- * and Claude's proposals. On phones the parts are tabs (« Aperçu » included);
- * from `lg` the preview stays on the right.
+ * and Claude's proposals. On phones the content is edited one section per
+ * screen, the design and AI panels are tabs, the preview opens as a
+ * full-screen sheet and the main actions sit in a bottom bar; from `lg` the
+ * preview stays on the right.
  */
 const route = useRoute()
 const router = useRouter()
@@ -42,19 +43,14 @@ useSeoMeta({ title: () => state.title })
 
 // --- Layout --------------------------------------------------------------------
 
-type Tab = 'content' | 'ai' | 'design' | 'preview'
+type Tab = 'content' | 'ai' | 'design'
 const tab = ref<Tab>('content')
-/** On desktop the preview is always visible, so « Aperçu » falls back to « Contenu ». */
-const sideTab = computed<Exclude<Tab, 'preview'>>(() =>
-  tab.value === 'preview' ? 'content' : tab.value,
-)
 
-// Phones get text-only tabs: four labels with icons do not fit in 375 px.
+// Phones get text-only tabs: labels with icons do not fit in 375 px.
 const mobileTabs = [
   { label: 'Contenu', value: 'content' },
   { label: 'Design', value: 'design' },
   { label: 'IA', value: 'ai' },
-  { label: 'Aperçu', value: 'preview' },
 ]
 const desktopTabs = [
   { label: 'Contenu', value: 'content', icon: 'i-lucide-list' },
@@ -62,12 +58,9 @@ const desktopTabs = [
   { label: 'IA', value: 'ai', icon: 'i-lucide-sparkles' },
 ]
 
-/** Classes of a side panel: shown for its tab on phones, for `sideTab` from `lg`. */
-function panelClass(name: Exclude<Tab, 'preview'>) {
-  return [
-    tab.value === name ? 'block' : 'hidden',
-    sideTab.value === name ? 'lg:block' : 'lg:hidden',
-  ]
+/** Classes of a panel: shown only for the selected tab. */
+function panelClass(name: Tab) {
+  return [tab.value === name ? 'block' : 'hidden', tab.value === name ? 'lg:block' : 'lg:hidden']
 }
 
 // --- Preview and checks --------------------------------------------------------------
@@ -87,6 +80,11 @@ const {
   () => photo.assets.value,
 )
 const pageCount = computed(() => preview.value?.pageCount)
+
+// On phones the preview is a full-screen sheet; from `lg` it sits beside the form.
+const isDesktop = useIsDesktop()
+const previewOpen = ref(false)
+watch(isDesktop, (desktop) => desktop && (previewOpen.value = false))
 
 /** « 2 pages », and how little of the last one is used when it almost fits. */
 const pageSummary = computed(() => {
@@ -119,6 +117,23 @@ async function goToCheck(check: CvCheck) {
   await contentEditor.value?.reveal(contentId)
 }
 
+/** What the preview pane shows, beside the form (desktop) or in the sheet (phones). */
+const previewPane = computed(() => ({
+  data: preview.value?.pdf ?? null,
+  busy: previewStatus.value === 'rendering',
+  highlight: highlight.value,
+  error: previewError.value,
+  pageSummary: pageSummary.value,
+  checks: checks.value,
+  checksToFix: checksToFix.value,
+}))
+
+/** A check opened from the sheet: close it to show the field. */
+function onSheetCheck(check: CvCheck) {
+  previewOpen.value = false
+  return goToCheck(check)
+}
+
 // --- Click-to-edit ---------------------------------------------------------------------
 
 const contentEditor = useTemplateRef<{ reveal: (contentId: string) => Promise<boolean> }>(
@@ -143,7 +158,8 @@ async function onPreviewPoint(point: { page: number; x: number; y: number }) {
   )
   const smallest = boxes.sort((a, b) => a.width * a.height - b.width * b.height)[0]
   if (!smallest) return
-  // On phones the preview is its own tab: go back to the editor, then focus the field.
+  // On phones the preview is a sheet: close it, then focus the field.
+  previewOpen.value = false
   tab.value = 'content'
   await nextTick()
   await contentEditor.value?.reveal(smallest.id)
@@ -299,7 +315,7 @@ async function tailorInCopy(offerId: string) {
     })
     await router.push({ path: `/cv/editeur/${copy.id}`, query: { adapter: offerId } })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), icon: 'i-lucide-circle-alert', color: 'error' })
   }
 }
 
@@ -316,111 +332,17 @@ onMounted(async () => {
 
 // --- Actions ------------------------------------------------------------------------------
 
-const busy = ref<'version' | 'duplicate' | 'delete' | null>(null)
-const historyOpen = ref(false)
-const renameOpen = ref(false)
-const deleteOpen = ref(false)
-const newTitle = ref('')
-
-async function download(path: string) {
-  await editor.flush()
-  window.location.href = path
-}
-
-async function saveAsVersion() {
-  busy.value = 'version'
-  try {
-    await editor.flush()
-    const resume = await $fetch<Resume>(`/api/cv-documents/${id}/save-version`, { method: 'POST' })
-    toast.add({
-      title: `« ${resume.title} » est la nouvelle version actuelle de ton profil.`,
-      description: 'Critiques, analyses et lettres l’utilisent désormais.',
-      icon: 'i-lucide-check',
-      actions: [{ label: 'Voir sur la page CV', to: `/cv?profil=${resume.profileId}` }],
-    })
-  } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
-  } finally {
-    busy.value = null
-  }
-}
-
-async function duplicate() {
-  busy.value = 'duplicate'
-  try {
-    await editor.flush()
-    const copy = await $fetch<CvDocument>(`/api/cv-documents/${id}/duplicate`, {
-      method: 'POST',
-      body: {},
-    })
-    await router.push(`/cv/editeur/${copy.id}`)
-    toast.add({ title: 'Copie créée', icon: 'i-lucide-copy' })
-  } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
-  } finally {
-    busy.value = null
-  }
-}
-
-async function remove() {
-  busy.value = 'delete'
-  try {
-    await $fetch(`/api/cv-documents/${id}`, { method: 'DELETE' })
-    deleteOpen.value = false
-    // Nothing left to save.
-    status.value = 'saved'
-    await router.push(`/cv?profil=${document.profileId}`)
-    toast.add({ title: 'CV supprimé', icon: 'i-lucide-check' })
-  } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
-  } finally {
-    busy.value = null
-  }
-}
-
-function openRename() {
-  newTitle.value = state.title
-  renameOpen.value = true
-}
-
-function rename() {
-  if (!newTitle.value.trim()) return
-  state.title = newTitle.value.trim()
-  renameOpen.value = false
-}
-
-const moreItems = computed(() => [
-  [
-    { label: 'Renommer', icon: 'i-lucide-pencil', onSelect: openRename },
-    { label: 'Historique', icon: 'i-lucide-history', onSelect: () => (historyOpen.value = true) },
-    { label: 'Dupliquer', icon: 'i-lucide-copy', onSelect: duplicate },
-  ],
-  [
-    {
-      label: 'Exporter en texte (.txt)',
-      icon: 'i-lucide-file-text',
-      onSelect: () => download(`/api/cv-documents/${id}/export?format=txt`),
-    },
-    {
-      label: 'Exporter en Markdown (.md)',
-      icon: 'i-lucide-file-code',
-      onSelect: () => download(`/api/cv-documents/${id}/export?format=md`),
-    },
-    {
-      label: 'Exporter en JSON',
-      icon: 'i-lucide-braces',
-      onSelect: () => download(`/api/cv-documents/${id}/export?format=json`),
-    },
-  ],
-  [
-    {
-      label: 'Supprimer',
-      icon: 'i-lucide-trash-2',
-      color: 'error' as const,
-      onSelect: () => (deleteOpen.value = true),
-    },
-  ],
-])
+const {
+  busy,
+  historyOpen,
+  renameOpen,
+  deleteOpen,
+  newTitle,
+  saveAsVersion,
+  remove,
+  rename,
+  moreItems,
+} = useCvDocumentActions(id, document, editor)
 </script>
 
 <template>
@@ -433,6 +355,7 @@ const moreItems = computed(() => [
     <template #actions>
       <UButton
         label="Enregistrer comme version"
+        class="max-lg:min-h-11"
         icon="i-lucide-file-check"
         :loading="busy === 'version'"
         @click="saveAsVersion"
@@ -442,6 +365,7 @@ const moreItems = computed(() => [
           icon="i-lucide-ellipsis"
           color="neutral"
           variant="outline"
+          class="max-lg:size-11"
           aria-label="Plus d’actions"
         />
       </UDropdownMenu>
@@ -470,6 +394,7 @@ const moreItems = computed(() => [
 
     <!-- Sticky bar: save status, undo / redo, page count, download; the phone tabs sit under it. -->
     <div
+      data-touch-targets
       class="sticky top-0 z-30 -mx-4 mb-5 border-b border-default bg-canvas/90 px-4 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10"
     >
       <div class="flex items-center gap-2 py-2">
@@ -517,7 +442,7 @@ const moreItems = computed(() => [
             variant="subtle"
             class="ml-1"
           />
-          <div class="ml-1">
+          <div class="ml-1 max-lg:hidden">
             <CvExportMenu :document-id="id" :before-export="editor.flush" />
           </div>
         </div>
@@ -531,10 +456,13 @@ const moreItems = computed(() => [
       />
     </div>
 
-    <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:items-start">
+    <div
+      data-touch-targets
+      class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:items-start"
+    >
       <div class="min-w-0">
         <UTabs
-          :model-value="sideTab"
+          :model-value="tab"
           :items="desktopTabs"
           :content="false"
           class="mb-5 hidden lg:flex"
@@ -551,6 +479,7 @@ const moreItems = computed(() => [
             :design="state.design"
             :photo="photo"
             @highlight="hoveredId = $event"
+            @preview="previewOpen = true"
           >
             <template #section-actions="{ section }">
               <CvAiMenu :scope="{ section }" :label="sectionLabel(section)" />
@@ -584,7 +513,7 @@ const moreItems = computed(() => [
 
         <div :class="panelClass('design')">
           <CvDesignPanel
-            v-if="sideTab === 'design' || tab === 'design'"
+            v-if="tab === 'design'"
             v-model:template-id="state.templateId"
             v-model:design="state.design"
             :document-id="id"
@@ -595,55 +524,35 @@ const moreItems = computed(() => [
       </div>
 
       <aside
-        class="min-w-0 space-y-6 lg:sticky lg:top-16 lg:block lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto"
-        :class="tab === 'preview' ? 'block' : 'hidden'"
+        v-if="isDesktop"
+        class="hidden min-w-0 lg:sticky lg:top-16 lg:block lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto"
         aria-label="Aperçu et vérifications"
       >
-        <div>
-          <ClientOnly>
-            <CvPdfPreview
-              class="[&_canvas]:cursor-pointer"
-              :data="preview?.pdf ?? null"
-              :busy="previewStatus === 'rendering'"
-              :highlight="highlight"
-              label="Aperçu du CV. Touche une zone pour la modifier."
-              @point="onPreviewPoint"
-            />
-            <template #fallback>
-              <div class="aspect-[210/297] animate-pulse rounded-sm bg-elevated" />
-            </template>
-          </ClientOnly>
-          <UAlert
-            v-if="previewError"
-            class="mt-2"
-            color="error"
-            variant="subtle"
-            icon="i-lucide-circle-alert"
-            :title="previewError"
-          />
-          <p v-if="pageSummary" class="mt-3 text-sm text-muted" role="status">
-            <span class="font-medium text-highlighted">{{ pageSummary.pages }}</span>
-            <template v-if="pageSummary.almost"> · {{ pageSummary.almost }}</template>
-          </p>
-        </div>
-        <UCard>
-          <template #header>
-            <h2 class="flex items-center gap-2 font-semibold text-highlighted">
-              <UIcon name="i-lucide-list-checks" class="size-5 text-primary" />
-              Vérifications
-              <UBadge
-                v-if="checksToFix"
-                :label="String(checksToFix)"
-                color="warning"
-                variant="subtle"
-                size="sm"
-              />
-            </h2>
-          </template>
-          <CvChecksList :checks="checks" @go="goToCheck" />
-        </UCard>
+        <CvPreviewPane v-bind="previewPane" @point="onPreviewPoint" @go="goToCheck" />
       </aside>
     </div>
+
+    <CvMobileBar
+      :document-id="id"
+      :ai-active="tab === 'ai'"
+      :before-export="editor.flush"
+      @preview="previewOpen = true"
+      @ai="tab = tab === 'ai' ? 'content' : 'ai'"
+    />
+
+    <!-- Phones: the preview as a full-screen sheet. -->
+    <UModal
+      v-if="!isDesktop"
+      v-model:open="previewOpen"
+      fullscreen
+      title="Aperçu du CV"
+      :description="pageSummary?.pages"
+      :ui="{ body: 'pb-[calc(1.5rem+env(safe-area-inset-bottom))]' }"
+    >
+      <template #body>
+        <CvPreviewPane v-bind="previewPane" @point="onPreviewPoint" @go="onSheetCheck" />
+      </template>
+    </UModal>
 
     <CvRevisionsSlideover
       v-model:open="historyOpen"

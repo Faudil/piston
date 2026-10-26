@@ -43,7 +43,7 @@ const emit = defineEmits<{
   tailorInCopy: [offerId: string]
 }>()
 
-const { start, reset, partial, generation, pending, error } = useGeneration('cv_edit')
+const { start, reset, abort, partial, generation, pending, error } = useGeneration('cv_edit')
 
 /** The request being shown, to label the revision once its edits are applied. */
 const current = ref<{ body: CvEditBody; label: string } | null>(null)
@@ -170,7 +170,7 @@ async function translateInCopy() {
     })
     await router.push({ path: `/cv/editeur/${copy.id}`, query: { ia: 'traduire' } })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     copying.value = false
   }
@@ -411,7 +411,7 @@ function discard() {
     >
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 id="ai-proposal" class="font-semibold text-highlighted">Proposition de Claude</h3>
-        <StreamingIndicator v-if="pending" text="Claude prépare ses propositions…" />
+        <StreamingIndicator v-if="pending" text="Claude prépare ses propositions…" @stop="abort" />
       </div>
       <p v-if="current" class="text-sm text-muted">{{ current.label.replace(/^IA : /, '') }}</p>
       <UAlert

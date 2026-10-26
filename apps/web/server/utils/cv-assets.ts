@@ -82,7 +82,7 @@ export function sniffImage(bytes: Uint8Array): SniffedImage | null {
   return null
 }
 
-export function toCvAsset(row: Omit<CvDocumentAssetRow, 'bytes'> & { size: number }): CvAsset {
+function toCvAsset(row: Omit<CvDocumentAssetRow, 'bytes'> & { size: number }): CvAsset {
   return {
     id: row.id,
     documentId: row.documentId,
@@ -153,7 +153,7 @@ export async function getCvAsset(
 }
 
 /** An asset as a data URL, for the renderer. */
-export function cvAssetDataUrl(row: Pick<CvDocumentAssetRow, 'mimeType' | 'bytes'>): string {
+function cvAssetDataUrl(row: Pick<CvDocumentAssetRow, 'mimeType' | 'bytes'>): string {
   return `data:${row.mimeType};base64,${Buffer.from(row.bytes).toString('base64')}`
 }
 

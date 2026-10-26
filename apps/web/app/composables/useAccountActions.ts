@@ -28,7 +28,7 @@ export function useAccountActions() {
         icon: 'i-lucide-link',
       })
     } catch (error) {
-      toast.add({ title: apiErrorMessage(error), color: 'error' })
+      toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
     }
   }
 

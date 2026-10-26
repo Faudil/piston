@@ -59,7 +59,11 @@ export function useCvPhoto(documentId: string, content: () => CvContent) {
       content().header.photo = next
       return true
     } catch (err) {
-      toast.add({ title: apiErrorMessage(err, 'Impossible d’envoyer la photo.'), color: 'error' })
+      toast.add({
+        title: apiErrorMessage(err, 'Impossible d’envoyer la photo.'),
+        icon: 'i-lucide-circle-alert',
+        color: 'error',
+      })
       return false
     } finally {
       busy.value = false
@@ -75,6 +79,7 @@ export function useCvPhoto(documentId: string, content: () => CvContent) {
     } catch (err) {
       toast.add({
         title: apiErrorMessage(err, 'Impossible de supprimer la photo.'),
+        icon: 'i-lucide-circle-alert',
         color: 'error',
       })
     } finally {

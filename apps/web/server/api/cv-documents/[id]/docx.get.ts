@@ -6,7 +6,8 @@ export default defineEventHandler(async (event) => {
   const { id } = await getValidatedRouterParams(event, zodValidator(IdParam))
   const document = await getUserCvDocument(user.id, id)
 
-  const docx = await buildCvDocx(document)
+  const assets = await loadCvRenderAssets(user.id, document.id, document.content)
+  const docx = await buildCvDocx(document, assets)
   setResponseHeaders(event, {
     'content-type': DOCX_CONTENT_TYPE,
     'content-disposition': attachmentHeader(cvDocxFilename(document.content, document.title)),

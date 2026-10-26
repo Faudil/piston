@@ -21,7 +21,8 @@ export default defineAppConfig({
     },
     button: {
       slots: {
-        base: 'rounded-lg',
+        // Touch screens: every button is at least 44 px tall (WCAG target size).
+        base: 'rounded-lg pointer-coarse:min-h-11 pointer-coarse:min-w-11',
       },
     },
     empty: {

@@ -4,7 +4,7 @@
  * centered column with the page header (title, one-line description,
  * actions) above the content. Leaves room for the mobile bottom tab bar.
  */
-withDefaults(
+const props = withDefaults(
   defineProps<{
     title: string
     description?: string
@@ -12,8 +12,10 @@ withDefaults(
     back?: { to: string; label: string }
     /** `wide` for boards that need the whole width (kanban). */
     width?: 'default' | 'narrow' | 'wide'
+    /** Phones: hides the logo and tightens the header, to leave room for dense pages. */
+    compact?: boolean
   }>(),
-  { description: undefined, back: undefined, width: 'default' },
+  { description: undefined, back: undefined, width: 'default', compact: false },
 )
 </script>
 
@@ -28,9 +30,12 @@ withDefaults(
           'max-w-7xl': width === 'wide',
         }"
       >
-        <AppLogo class="mb-6 lg:hidden" />
+        <AppLogo v-if="!props.compact" class="mb-6 lg:hidden" />
 
-        <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <header
+          class="flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between"
+          :class="props.compact ? 'mb-4' : 'mb-8'"
+        >
           <div class="min-w-0 space-y-1.5">
             <UButton
               v-if="back"
@@ -40,7 +45,7 @@ withDefaults(
               color="neutral"
               variant="link"
               size="sm"
-              class="-ml-1 mb-1 px-1"
+              class="-ml-1 mb-1 min-h-11 px-1 sm:min-h-0"
             />
             <h1
               class="text-3xl leading-tight font-semibold text-balance text-highlighted sm:text-4xl"

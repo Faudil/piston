@@ -23,7 +23,7 @@ async function saveProfile(event: FormSubmitEvent<UpdateAccountBody>) {
     await refreshSession()
     toast.add({ title: 'Profil mis à jour', icon: 'i-lucide-check' })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     savingProfile.value = false
   }
@@ -41,7 +41,7 @@ async function savePassword(event: FormSubmitEvent<ChangePasswordBody>) {
     Object.assign(password, { currentPassword: '', newPassword: '' })
     toast.add({ title: 'Mot de passe modifié', icon: 'i-lucide-check' })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     savingPassword.value = false
   }
@@ -62,7 +62,7 @@ async function deleteAccount() {
     await clear()
     await navigateTo('/login')
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
     deleting.value = false
   }
 }

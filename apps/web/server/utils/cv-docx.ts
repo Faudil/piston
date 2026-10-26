@@ -1,17 +1,21 @@
 import { renderCvDocx } from '@piston/cv-render/docx'
+import type { CvAssets } from '@piston/cv-render'
 import type { CvContent, CvDesign, CvTemplateId } from '@piston/shared'
 
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 /** The Word file of a CV document (structure and styles, not pixel-perfect). */
-export async function buildCvDocx(document: {
-  content: CvContent
-  design: CvDesign
-  templateId: CvTemplateId
-}): Promise<Uint8Array> {
+export async function buildCvDocx(
+  document: {
+    content: CvContent
+    design: CvDesign
+    templateId: CvTemplateId
+  },
+  assets: CvAssets = {},
+): Promise<Uint8Array> {
   try {
-    return await renderCvDocx(document)
+    return await renderCvDocx(document, assets)
   } catch (error) {
     console.error('[cv-docx] export failed', error)
     throw createError({

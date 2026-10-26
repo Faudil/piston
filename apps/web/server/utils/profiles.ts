@@ -13,7 +13,7 @@ import type { ResumeProfile } from '@piston/shared'
 type DbExecutor = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
 
 /** Name of the profile created for users who add a resume without having any profile. */
-export const DEFAULT_PROFILE_NAME = 'Principal'
+const DEFAULT_PROFILE_NAME = 'Principal'
 
 function profileNotFound() {
   return createError({ statusCode: 404, message: 'Profil de CV introuvable.' })

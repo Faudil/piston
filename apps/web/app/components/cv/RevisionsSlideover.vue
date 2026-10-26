@@ -29,7 +29,7 @@ async function load() {
   try {
     revisions.value = await $fetch<CvRevision[]>(`/api/cv-documents/${props.documentId}/revisions`)
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     loading.value = false
   }
@@ -48,7 +48,7 @@ async function restore(revision: CvRevision) {
     toast.add({ title: 'Version restaurée', icon: 'i-lucide-history' })
     await load()
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     restoring.value = null
   }

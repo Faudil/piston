@@ -16,7 +16,7 @@ declare module 'h3' {
  * personal can reach the logs: no request body, no query string, no e-mail,
  * no document content, and the user is only a short keyed hash.
  */
-export function logEvent(level: 'info' | 'warn' | 'error', fields: Record<string, unknown>) {
+function logEvent(level: 'info' | 'warn' | 'error', fields: Record<string, unknown>) {
   const line = JSON.stringify({ time: new Date().toISOString(), level, ...fields })
   if (level === 'error') console.error(line)
   else console.log(line)

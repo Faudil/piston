@@ -20,17 +20,44 @@ const more = [
   { label: 'Historique', icon: 'i-lucide-history', to: '/historique' },
 ]
 
+// The CV editor has its own action bar on phones, in this one's place.
+const hidden = computed(() => route.path.startsWith('/cv/editeur/'))
+
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 const moreActive = computed(() => more.some((item) => isActive(item.to)))
 
+// « Installer l'application »: the native prompt, or iOS instructions in a dialog.
+const installPrompt = useInstallPrompt()
+const iosHelpOpen = ref(false)
+
+const installItems = computed<DropdownMenuItem[][]>(() =>
+  installPrompt.available.value
+    ? [
+        [
+          {
+            label: 'Installer l’application',
+            icon: 'i-lucide-smartphone',
+            onSelect: () => {
+              if (installPrompt.needsInstructions.value)
+                afterMenuCloses(() => (iosHelpOpen.value = true))
+              else void installPrompt.install()
+            },
+          },
+        ],
+      ]
+    : [],
+)
+
 const moreItems = computed<DropdownMenuItem[][]>(() => [
   more.map((item) => ({ ...item, active: isActive(item.to) })),
+  ...installItems.value,
   ...accountItems.value,
 ])
 </script>
 
 <template>
   <nav
+    v-if="!hidden"
     aria-label="Navigation principale"
     class="fixed inset-x-0 bottom-0 z-40 border-t border-default bg-default/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden"
   >
@@ -69,6 +96,39 @@ const moreItems = computed<DropdownMenuItem[][]>(() => [
         </UDropdownMenu>
       </li>
     </ul>
+    <UModal
+      v-model:open="iosHelpOpen"
+      title="Installer Piston"
+      description="Ajoute Piston à ton écran d’accueil pour l’ouvrir comme une application."
+    >
+      <template #body>
+        <ol class="space-y-3 text-sm">
+          <li class="flex items-center gap-3">
+            <UIcon name="i-lucide-share" class="size-5 shrink-0 text-primary" />
+            <span>Touche <strong>Partager</strong> dans la barre de Safari.</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <UIcon name="i-lucide-square-plus" class="size-5 shrink-0 text-primary" />
+            <span>Choisis <strong>Sur l’écran d’accueil</strong>.</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <UIcon name="i-lucide-check" class="size-5 shrink-0 text-primary" />
+            <span>Valide avec <strong>Ajouter</strong>.</span>
+          </li>
+        </ol>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton
+            label="Ne plus proposer"
+            color="neutral"
+            variant="ghost"
+            @click="(installPrompt.dismiss(), (iosHelpOpen = false))"
+          />
+          <UButton label="Compris" @click="iosHelpOpen = false" />
+        </div>
+      </template>
+    </UModal>
   </nav>
 </template>
 

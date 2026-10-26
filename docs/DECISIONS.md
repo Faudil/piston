@@ -102,7 +102,7 @@ Choices that the original brief left open, or where the brief had to be adapted 
 
 **Stored outputs predate new fields.** Generations saved before `ats` / `atsMatch` existed have neither in their JSON. Stored outputs are not migrated or re-validated on read, and the result components already take `Partial<...>`: the ATS blocks render only when the field is present (and progressively while streaming), so old history keeps displaying as before.
 
-**Rate limit over a rolling 24 hours.** The limit counts rows in `generations` created in the last 24 hours. It needs no extra storage, survives restarts, and avoids choosing a time zone for "per day".
+**Rate limit over a rolling 24 hours.** Per-user limits count over the last 24 hours rather than a calendar day: it survives restarts and avoids choosing a time zone for "per day". They are now computed from the usage ledger (see « Usage ledger and global caps »).
 
 ## CV builder
 
@@ -122,7 +122,7 @@ The full design (model, operations, templates, alternatives) is in [docs/design/
 
 **Saving as a resume version stores the PDF and the text extracted from it.** Reviews, analyses and letters keep reading `resumes.raw_text` unchanged. The text comes from the PDF, not from the document, because that is what an ATS reads; the « Moderne » template puts the name above its two columns so it comes first in that text.
 
-**Builder AI calls count toward the daily limit.** They are `generations` rows of kinds `cv_draft` and `cv_edit` (migration `0004` adds them to the enum) under `/api/generate/*`, so the existing rate-limit middleware and history cover them.
+**Builder AI calls count toward the daily limit.** They are `generations` rows of kinds `cv_draft` and `cv_edit` (migration `0004` adds them to the enum) under `/api/generate/*`, so the usage ledger limits and the history cover them.
 
 **Interview questions are fixed, not generated.** Six questions written once in `@piston/shared` cost no call, and one generation turns the answers into a draft. Facts the user states in the instruction box (« ajoute mon stage chez X ») may be added; nothing else may, and roles may not be inflated.
 
@@ -265,3 +265,11 @@ The app is public and the owner pays the Anthropic and Tavily bills, so spam mus
 **Next steps follow the main flow.** The offer page, the application's letter page and its detail panel show one « Prochaine étape » card: analysis → letter → application → CV tailored to the offer (`cv_documents.offer_id`). « Adapter mon CV à cette offre » copies the latest CV of the offer's profile for the offer and opens the editor with `?adapter=<offerId>`, the editor's own « Dans une copie dédiée » flow. The dashboard picks its next step from the real state: resume, review, first offer, applications « à envoyer », then follow-ups older than ten days.
 
 **Shared UI helpers.** Dates go through `app/utils/dates.ts` (one format per kind of date, relative dates for letter versions, rendered after hydration). Error toasts carry `i-lucide-circle-alert`, success toasts `i-lucide-check`; load errors are a subtle `UAlert` with `apiErrorMessage` as description. Every generation shows `StreamingIndicator` with « Arrêter » (`useGeneration().abort()`; an aborted generation is not saved). Dropdown items that open a dialog are deferred until the menu has closed and the menu is non-modal (`utils/menus.ts`), so the menu handing focus back to its trigger cannot dismiss the dialog.
+
+## Mobile and PWA
+
+**A hand-written service worker, not a module.** `public/sw.js` is about 70 lines: static, content-addressed files (`/_nuxt/`, `/_fonts/`, `/cv-fonts/`, icons) are cache-first; navigations always hit the network and fall back to `/offline.html` (« Tu es hors ligne »); `/api/**` and every non-GET request are never touched, and HTML (which holds user data) is never cached. `/_nuxt/builds/` is excluded so deployments are still detected. A module such as `@vite-pwa/nuxt` would add a build step and generated code for what is a short, auditable file, and the registration (`app/plugins/pwa.client.ts`, an external script, production only) needs no inline script, so the nonce-based CSP is untouched. The worker is served `no-cache` so updates arrive on the next visit; bump `VERSION` to drop the caches. Icons are rendered from the brand mark by `scripts/generate-pwa-icons.mjs` (rounded, maskable with a safe zone, apple-touch).
+
+**Install hint lives in the « Plus » menu.** `useInstallPrompt` keeps the browser's `beforeinstallprompt` event; the menu entry calls its native prompt, or opens iOS instructions (Partager → Sur l'écran d'accueil) where there is none. Hidden once installed (standalone) and for 30 days after « Ne plus proposer » or a declined prompt.
+
+**The CV editor is one section per screen below `lg`.** The same cards stay in the DOM and the inactive ones are hidden by CSS (`max-lg:hidden`), so nothing remounts and desktop is untouched; steps are tracked by section ref (`app/utils/cv-steps.ts`), not index. The preview is a full-screen sheet (mounted only on phones, `useIsDesktop`), and a bottom bar (Aperçu, Exporter, IA) replaces the main tab bar on that page. Touch targets are enforced by one CSS block (`[data-cv-editor]`, `[data-touch-targets]`) instead of per-button classes. Drag handles are 44 px, allow vertical panning, and a drag needs a 250 ms long press; every drag has up / down buttons or menu items as fallback.

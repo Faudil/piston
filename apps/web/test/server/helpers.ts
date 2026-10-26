@@ -8,7 +8,7 @@ import {
   type H3Error,
 } from 'h3'
 import { vi } from 'vitest'
-import { apiUsage, resumeProfiles, resumes, users } from '@piston/db'
+import { apiUsage, jobOffers, resumeProfiles, resumes, users } from '@piston/db'
 import { createTestDb, truncateAll } from '@piston/db/testing'
 import { sampleResume } from '@piston/db/fixtures'
 import type { GenerationEvent } from '@piston/shared'
@@ -39,6 +39,24 @@ export async function resetTestState() {
 }
 
 /** Fills the usage ledger with `count` finished calls of a user (default: Claude, now). */
+/** A job offer owned by `userId`; `overrides` replaces any default column. */
+export async function insertOffer(
+  userId: string,
+  overrides: Partial<typeof jobOffers.$inferInsert> = {},
+) {
+  const [offer] = await testState.db
+    .insert(jobOffers)
+    .values({
+      userId,
+      title: 'Dev front',
+      company: 'Globex',
+      rawText: 'Offre Vue.js à Lyon.',
+      ...overrides,
+    })
+    .returning()
+  return offer!
+}
+
 export async function seedUsage(
   userId: string,
   count: number,

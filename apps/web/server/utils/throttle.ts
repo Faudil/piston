@@ -35,7 +35,7 @@ export function clientIp(event: H3Event): string {
 }
 
 /** Key of one counter: rule name and what is counted (an IP, an e-mail). */
-export function throttleBucket(rule: ThrottleRule, key: string) {
+function throttleBucket(rule: ThrottleRule, key: string) {
   return `${rule.name}:${key}`
 }
 

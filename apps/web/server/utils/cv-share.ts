@@ -18,7 +18,7 @@ const TOKEN_FORMAT = /^[A-Za-z0-9_-]{32,64}$/
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-export function toShareLink(row: CvShareLinkRow): CvShareLink {
+function toShareLink(row: CvShareLinkRow): CvShareLink {
   return {
     id: row.id,
     token: row.token,
@@ -113,7 +113,8 @@ const viewsByToken = new Map<string, number[]>()
 
 /**
  * Caps how often one link can render a PDF (a leaked link must not become a
- * way to burn the server's CPU). In memory, per process, like web-limit.ts.
+ * way to burn the server's CPU). In memory and per process (unlike the DB-backed throttle.ts):
+ * it protects CPU, not an account, so losing the counters on restart is fine.
  */
 export function consumeShareView(token: string, now = Date.now()) {
   const recent = (viewsByToken.get(token) ?? []).filter((time) => now - time < WINDOW_MS)

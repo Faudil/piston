@@ -1,23 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { jobOffers } from '@piston/db'
 import type { Application } from '@piston/shared'
 import listRoute from '../../server/api/applications.get'
 import createRoute from '../../server/api/applications.post'
 import patchRoute from '../../server/api/applications/[id].patch'
 import deleteRoute from '../../server/api/applications/[id].delete'
 import { applyStatusChange } from '../../server/utils/applications'
-import { callRoute, loginAsNewUser, resetTestState } from './helpers'
-import { testState } from './state'
+import { callRoute, loginAsNewUser, resetTestState, insertOffer } from './helpers'
 
 beforeEach(resetTestState)
 
-async function insertOffer(userId: string, title = 'Dev Vue') {
-  const [offer] = await testState.db
-    .insert(jobOffers)
-    .values({ userId, title, company: 'Acme', rawText: 'Offre' })
-    .returning()
-  return offer!
-}
+const acme = { title: 'Dev Vue', company: 'Acme' }
 
 const create = (jobOfferId: string) =>
   callRoute(createRoute, { method: 'POST', path: '/api/applications', body: { jobOfferId } })
@@ -32,7 +24,7 @@ const patch = (id: string, body: unknown) =>
 
 async function createdApplication() {
   const { user } = await loginAsNewUser()
-  const offer = await insertOffer(user.id)
+  const offer = await insertOffer(user.id, acme)
   const app = (await (await create(offer.id)).json()) as Application
   return { user, offer, app }
 }
@@ -40,7 +32,7 @@ async function createdApplication() {
 describe('POST /api/applications', () => {
   it('creates a to_send application with one history entry', async () => {
     const { user } = await loginAsNewUser()
-    const offer = await insertOffer(user.id)
+    const offer = await insertOffer(user.id, acme)
     const res = await create(offer.id)
     expect(res.status).toBe(201)
     const app = (await res.json()) as Application
@@ -53,7 +45,7 @@ describe('POST /api/applications', () => {
 
   it('returns 409 when the offer already has an application', async () => {
     const { user } = await loginAsNewUser()
-    const offer = await insertOffer(user.id)
+    const offer = await insertOffer(user.id, acme)
     await create(offer.id)
     const res = await create(offer.id)
     expect(res.status).toBe(409)
@@ -64,7 +56,7 @@ describe('POST /api/applications', () => {
 
   it("returns 404 for another user's offer", async () => {
     const { user: owner } = await loginAsNewUser('owner@example.com')
-    const offer = await insertOffer(owner.id)
+    const offer = await insertOffer(owner.id, acme)
     await loginAsNewUser('other@example.com')
     expect((await create(offer.id)).status).toBe(404)
   })
@@ -137,7 +129,7 @@ describe('user isolation', () => {
   it('lists applications with their offer, newest update first', async () => {
     const { user, app } = await createdApplication()
     const second = (await (
-      await create((await insertOffer(user.id, 'Autre')).id)
+      await create((await insertOffer(user.id, { ...acme, title: 'Autre' })).id)
     ).json()) as Application
     await patch(app.id, { notes: 'touché' })
     const list = (await (

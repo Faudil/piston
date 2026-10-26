@@ -28,7 +28,7 @@ import type {
  * Checks that an action's scope points at something that exists in the
  * document (the user may have deleted it since opening the menu).
  */
-export function assertCvScope(content: CvContent, scope: CvEditScope) {
+function assertCvScope(content: CvContent, scope: CvEditScope) {
   const gone = () =>
     createError({
       statusCode: 400,

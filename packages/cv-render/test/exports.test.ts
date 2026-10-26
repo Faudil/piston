@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { cvTemplateIds } from '@piston/shared'
 import { renderCvDocx } from '../src/docx'
 import { formatLetterDate, renderLetterPdf, type CvLetterInput } from '../src'
-import { sampleInput } from './fixtures'
+import { PHOTO_DATA_URL, sampleInput } from './fixtures'
 import { engine, pdfText } from './helpers'
 
 const PARAGRAPHS = [
@@ -113,6 +113,52 @@ describe('Word export', () => {
     const xml = await zip.file('word/document.xml')!.async('string')
     expect(xml).toContain('w:ascii="EB Garamond"')
     expect(xml).toContain('0E7490')
+  })
+
+  it('draws the accent on headings, the section title style and rated skills as text', async () => {
+    const input = sampleInput('ardoise', {
+      palette: { primary: '#0e7490' },
+      sectionTitleStyle: 'block',
+    })
+    input.content.skills[0]!.items[0]!.level = 4
+    const xml = await documentXml(await renderCvDocx(input))
+    // The block style fills the heading with the accent.
+    expect(xml).toMatch(/<w:shd [^>]*w:fill="0E7490"/)
+    expect(xml).toContain('●●●●○')
+    expect(xml).toContain('w:val="Heading2"')
+    const rule = await documentXml(
+      await renderCvDocx(sampleInput('sobre', { sectionTitleStyle: 'smallcaps' })),
+    )
+    expect(rule).toContain('<w:smallCaps')
+  })
+
+  it('embeds the photo only when there is one, and centers a centered header', async () => {
+    const photoId = '00000000-0000-4000-8000-000000000001'
+    const input = sampleInput('classique')
+    expect(Object.keys((await JSZip.loadAsync(await renderCvDocx(input))).files)).not.toContain(
+      'word/media/',
+    )
+    input.content.header.photo = {
+      assetId: photoId,
+      shape: 'round',
+      size: 'm',
+      position: 'left',
+      visible: true,
+    }
+    const bytes = await renderCvDocx(input, { images: { [photoId]: PHOTO_DATA_URL } })
+    const zip = await JSZip.loadAsync(bytes)
+    expect(Object.keys(zip.files).some((name) => name.startsWith('word/media/'))).toBe(true)
+    // « Classique » has a centered header.
+    expect(await documentXml(bytes)).toContain('<w:jc w:val="center"/>')
+    // A WebP or missing image is left out rather than breaking the export.
+    const without = await renderCvDocx(input, {
+      images: { [photoId]: 'data:image/webp;base64,UklGRg==' },
+    })
+    expect(
+      Object.keys((await JSZip.loadAsync(without)).files).some(
+        (n) => n.startsWith('word/media/') && !n.endsWith('/'),
+      ),
+    ).toBe(false)
   })
 
   it.each(cvTemplateIds)('builds %s', async (templateId) => {

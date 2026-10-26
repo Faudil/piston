@@ -23,7 +23,7 @@ import deleteRoute from '../../server/api/cv-documents/[id].delete'
 import duplicateRoute from '../../server/api/cv-documents/[id]/duplicate.post'
 import revisionsRoute from '../../server/api/cv-documents/[id]/revisions.get'
 import restoreRoute from '../../server/api/cv-documents/[id]/revisions/[revisionId]/restore.post'
-import { MAX_CV_REVISIONS } from '../../server/utils/cv-documents'
+import { MAX_CV_REVISIONS } from '../../server/utils/cv-revisions'
 import { callRoute, loginAsNewUser, resetTestState } from './helpers'
 import { testState } from './state'
 

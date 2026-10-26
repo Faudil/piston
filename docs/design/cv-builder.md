@@ -232,7 +232,7 @@ Options: accent color (6 presets), font (3), density (scales font sizes and spac
 
 ## 9. Rate limiting
 
-Every AI call is a row in `generations` with kind `cv_draft` or `cv_edit`, under `/api/generate/*`, so the existing middleware counts it against the 30-per-24-hours limit with no change, and token usage appears in the history like any other generation. A separate budget for builder actions was considered and rejected: one limit is easier to explain and the builder's calls cost the same as the others. PDF renders do not call Claude and are not counted; the render semaphore protects the server.
+Every AI call is a row in `generations` with kind `cv_draft` or `cv_edit`, under `/api/generate/*`, so the usage ledger counts it against the per-user daily limit (and the global caps) with no change, and token usage appears in the history like any other generation. A separate budget for builder actions was considered and rejected: one limit is easier to explain and the builder's calls cost the same as the others. PDF renders do not call Claude and are not counted; the render semaphore protects the server.
 
 ## 10. Security
 

@@ -42,7 +42,7 @@ const text = computed(() =>
 </script>
 
 <template>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-x-2">
     <div
       ref="group"
       role="radiogroup"
@@ -59,7 +59,7 @@ const text = computed(() =>
         :aria-checked="level === dot"
         :aria-label="`${dot} sur ${CV_SKILL_MAX_LEVEL}`"
         :tabindex="level === dot || (level === 0 && dot === 1) ? 0 : -1"
-        class="grid size-7 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-primary"
+        class="grid size-11 place-items-center lg:size-7 rounded-full focus-visible:outline-2 focus-visible:outline-primary"
         @click="set(level === dot ? 0 : dot)"
       >
         <span

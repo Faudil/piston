@@ -63,35 +63,37 @@ Browser (Vue, Nuxt UI) ──fetch + SSE──▶ Nitro API routes ──▶ Cla
 - **Prompt caching.** The system prompt and the resume are cache breakpoints, since they repeat across a user's calls; only the offer and options change.
 - **AI edits as a reviewable diff.** In the CV builder, Claude never rewrites the document: it returns typed operations on item ids (`set_bullet`, `add_item`, `move_section`...) that the user accepts or rejects one by one, applied by pure functions in `@piston/shared`. PDFs are rendered with pdfmake and previewed with pdf.js, so the preview is the downloaded file. See [docs/design/cv-builder.md](docs/design/cv-builder.md).
 - **Prompt-injection guard.** The resume and offer are wrapped in `<cv>` and `<offre>` tags, closing tags inside them are escaped, and the prompts state that their content is data, never instructions.
-- **Guardrails.** Invite-only accounts, scrypt-hashed passwords, httpOnly session cookies, every query scoped to the logged-in user, input size limits, and 30 generations per user per 24 hours.
+- **Guardrails.** Invite-only accounts, scrypt-hashed passwords, httpOnly session cookies, every query scoped to the logged-in user, input size limits, and every Claude and Tavily call recorded in a usage ledger, with per-user and server-wide daily caps and a monthly budget (30 Claude calls per user per 24 hours by default).
 
-The non-obvious choices are documented in [docs/DECISIONS.md](docs/DECISIONS.md).
+A code map (request lifecycle, where each feature lives, how streaming and the shared CV engine work) is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the non-obvious choices are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Stack
 
-| Layer       | Choice                                                                                  |
-| ----------- | --------------------------------------------------------------------------------------- |
-| Runtime     | [Bun](https://bun.sh) 1.3 (install, scripts, tests, production server)                  |
-| Monorepo    | Bun workspaces + [Turborepo](https://turbo.build)                                       |
-| App and API | [Nuxt 4](https://nuxt.com) (Vue 3, Nitro, h3), TypeScript strict                        |
-| UI          | [Nuxt UI](https://ui.nuxt.com) + Tailwind CSS                                           |
-| Database    | PostgreSQL 17 + [Drizzle ORM](https://orm.drizzle.team)                                 |
-| AI          | [Claude](https://docs.anthropic.com) via `@anthropic-ai/sdk`, model `claude-sonnet-5-5` |
-| Validation  | [Zod](https://zod.dev), on every route                                                  |
-| Auth        | [nuxt-auth-utils](https://github.com/atinux/nuxt-auth-utils), invitation links          |
-| Tests       | Vitest, PGlite (in-memory Postgres), mocked Anthropic SDK                               |
-| Quality     | ESLint, Prettier, Husky, GitHub Actions                                                 |
-| Web search  | [Tavily](https://tavily.com) REST API through `fetch`, optional                         |
-| Deployment  | Docker multi-stage image + Docker Compose                                               |
+| Layer       | Choice                                                                                    |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| Runtime     | [Bun](https://bun.sh) 1.3 (install, scripts, tests, production server)                    |
+| Monorepo    | Bun workspaces + [Turborepo](https://turbo.build)                                         |
+| App and API | [Nuxt 4](https://nuxt.com) (Vue 3, Nitro, h3), TypeScript strict                          |
+| UI          | [Nuxt UI](https://ui.nuxt.com) + Tailwind CSS                                             |
+| Database    | PostgreSQL 17 + [Drizzle ORM](https://orm.drizzle.team)                                   |
+| AI          | [Claude](https://docs.anthropic.com) via `@anthropic-ai/sdk`, model `claude-sonnet-5-5`   |
+| Validation  | [Zod](https://zod.dev), on every route                                                    |
+| Auth        | [nuxt-auth-utils](https://github.com/atinux/nuxt-auth-utils), invitation links            |
+| Tests       | Vitest, PGlite (in-memory Postgres), mocked Anthropic SDK                                 |
+| Quality     | ESLint, Prettier, Husky, GitHub Actions, Playwright (e2e)                                 |
+| Web search  | [Tavily](https://tavily.com) REST API through `fetch`, optional                           |
+| Deployment  | Docker multi-stage image + Docker Compose, optional nginx-proxy overlay, database backups |
 
 ## Repository layout
 
 ```
-apps/web/          Nuxt app: pages and components (app/), API routes and utils (server/)
-packages/db/       Drizzle schema, migrations, seed and invite scripts
-packages/prompts/  Claude system prompts, one pure function per feature, snapshot-tested
-packages/shared/   Zod schemas and types shared by the client, the API and the prompts
-docs/              Getting started, design decisions, design docs (docs/design)
+apps/web/            Nuxt app: pages and components (app/), API routes and utils (server/)
+packages/cv-render/  CV renderer (pdfmake block engine) and Word export, shared by browser and server
+packages/db/         Drizzle schema, migrations, seed and invite scripts
+packages/prompts/    Claude system prompts, one pure function per feature, snapshot-tested
+packages/shared/     Zod schemas and types shared by the client, the API and the prompts
+e2e/                 Playwright end-to-end tests
+docs/                Architecture, getting started, design decisions, design docs (docs/design)
 ```
 
 ## Development

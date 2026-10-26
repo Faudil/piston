@@ -43,7 +43,7 @@ async function load() {
   try {
     links.value = await $fetch<CvShareLink[]>(`/api/cv-documents/${props.documentId}/share`)
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     loading.value = false
   }
@@ -58,6 +58,7 @@ async function copy(link: CvShareLink) {
     toast.add({
       title: 'Copie impossible : sélectionne le lien et copie-le à la main.',
       color: 'error',
+      icon: 'i-lucide-circle-alert',
     })
   }
 }
@@ -72,7 +73,7 @@ async function create() {
     links.value = [link, ...links.value]
     await copy(link)
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     creating.value = false
   }
@@ -88,7 +89,7 @@ async function revoke(link: CvShareLink) {
     links.value = links.value.map((entry) => (entry.id === link.id ? updated : entry))
     toast.add({ title: 'Lien désactivé.', icon: 'i-lucide-check' })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     revoking.value = null
   }

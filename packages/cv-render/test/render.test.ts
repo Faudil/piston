@@ -436,6 +436,20 @@ describe('every template', () => {
     })
   }
 
+  it('keeps the name wide when the contact details are very long', async () => {
+    // « Exécutif » and « Chronologie » put the contact beside the name: a long e-mail or URL
+    // must move under the name rather than squeeze it into a narrow column.
+    for (const templateId of ['executif', 'chronologie'] as const) {
+      const result = await renderPdf(
+        sampleInput(templateId, {}, withPhoto(stressContent())),
+        assets,
+        engine,
+      )
+      const name = result.boxes.find((box) => box.id === cvContentId.header('fullName'))
+      expect(name!.width, templateId).toBeGreaterThan(280)
+    }
+  })
+
   it('keeps every text color of every template at 4.5:1 on what it is drawn on', () => {
     for (const templateId of cvTemplateIds) {
       const t = computeTokens(resolveCvDesign(cvTemplates[templateId], CvDesign.parse({})))

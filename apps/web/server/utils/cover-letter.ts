@@ -8,7 +8,7 @@ import type { CoverLetterOutput, Generation, LetterSummary } from '@piston/share
  */
 
 /** Splits Claude's free text on blank lines into trimmed, non-empty paragraphs. */
-export function splitParagraphs(text: string): string[] {
+function splitParagraphs(text: string): string[] {
   return text
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())

@@ -1,20 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { applications, generations, jobOffers } from '@piston/db'
+import { applications, generations } from '@piston/db'
 import type { LetterSummary } from '@piston/shared'
 import listLetters from '../../server/api/letters.get'
 import offerLettersRoute from '../../server/api/offers/[id]/letters.get'
-import { callRoute, loginAsNewUser, resetTestState } from './helpers'
+import { callRoute, loginAsNewUser, resetTestState, insertOffer } from './helpers'
 import { testState } from './state'
 
 beforeEach(resetTestState)
-
-async function insertOffer(userId: string, title: string) {
-  const [offer] = await testState.db
-    .insert(jobOffers)
-    .values({ userId, title, company: 'Acme', rawText: 'Offre.' })
-    .returning()
-  return offer!
-}
 
 async function insertLetter(
   userId: string,
@@ -37,8 +29,8 @@ const body = 'Un vrai paragraphe de lettre, assez long pour servir d’extrait d
 describe('GET /api/letters', () => {
   it('groups versions per application and per offer, newest first', async () => {
     const { user } = await loginAsNewUser()
-    const offerA = await insertOffer(user.id, 'Poste A')
-    const offerB = await insertOffer(user.id, 'Poste B')
+    const offerA = await insertOffer(user.id, { title: 'Poste A', company: 'Acme' })
+    const offerB = await insertOffer(user.id, { title: 'Poste B', company: 'Acme' })
     const [application] = await testState.db
       .insert(applications)
       .values({ userId: user.id, jobOfferId: offerA.id })
@@ -71,7 +63,7 @@ describe('GET /api/letters', () => {
 
   it('merges the letters written from the offer page into its application entry', async () => {
     const { user } = await loginAsNewUser()
-    const offer = await insertOffer(user.id, 'Poste A')
+    const offer = await insertOffer(user.id, { title: 'Poste A', company: 'Acme' })
     const day = (n: number) => new Date(Date.UTC(2026, 9, n, 12))
     // Written from the offer page before the offer was tracked...
     await insertLetter(user.id, { offerId: offer.id }, ['Madame, Monsieur,', body], day(1))
@@ -96,13 +88,13 @@ describe('GET /api/letters', () => {
 
   it("skips letters whose offer was deleted and never shows another user's letters", async () => {
     const { user } = await loginAsNewUser('a@example.com')
-    const kept = await insertOffer(user.id, 'Gardée')
+    const kept = await insertOffer(user.id, { title: 'Gardée', company: 'Acme' })
     await insertLetter(user.id, { offerId: kept.id }, [body], new Date())
     // A letter pointing at an offer that no longer exists.
     await insertLetter(user.id, { offerId: crypto.randomUUID() }, [body], new Date())
 
     const { user: other } = await loginAsNewUser('b@example.com')
-    const otherOffer = await insertOffer(other.id, 'Autre')
+    const otherOffer = await insertOffer(other.id, { title: 'Autre', company: 'Acme' })
     await insertLetter(other.id, { offerId: otherOffer.id }, [body], new Date())
 
     testState.user = { id: user.id, email: user.email, displayName: user.displayName }
@@ -126,8 +118,8 @@ describe('GET /api/offers/:id/letters', () => {
 
   it('lists every letter of the offer, newest first, for its owner only', async () => {
     const { user: alice } = await loginAsNewUser('alice@example.com')
-    const offer = await insertOffer(alice.id, 'Poste A')
-    const other = await insertOffer(alice.id, 'Poste B')
+    const offer = await insertOffer(alice.id, { title: 'Poste A', company: 'Acme' })
+    const other = await insertOffer(alice.id, { title: 'Poste B', company: 'Acme' })
     const [application] = await testState.db
       .insert(applications)
       .values({ userId: alice.id, jobOfferId: offer.id })

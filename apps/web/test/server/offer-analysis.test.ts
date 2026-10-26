@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { generations, jobOffers } from '@piston/db'
+import { generations } from '@piston/db'
 import type { OfferAnalysisOutput } from '@piston/shared'
 import analysisRoute from '../../server/api/generate/offer-analysis.post'
-import { callRoute, loginAsNewUser, mockClaude, readSse, resetTestState } from './helpers'
+import {
+  callRoute,
+  loginAsNewUser,
+  mockClaude,
+  readSse,
+  resetTestState,
+  insertOffer,
+} from './helpers'
 import { testState } from './state'
 
 beforeEach(resetTestState)
@@ -19,14 +26,6 @@ const output: OfferAnalysisOutput = {
   missingSkills: [{ skill: 'Go', advice: 'Suis un tutoriel.' }],
   interviewQuestions: [{ question: 'Pourquoi nous ?', hint: 'Ton projet X.' }],
   jargon: [{ term: 'Environnement stimulant', meaning: 'Beaucoup de travail.' }],
-}
-
-async function insertOffer(userId: string) {
-  const [offer] = await testState.db
-    .insert(jobOffers)
-    .values({ userId, title: 'Dev front', company: 'Globex', rawText: 'Offre Vue.js à Lyon.' })
-    .returning()
-  return offer!
 }
 
 const call = (offerId: string) =>

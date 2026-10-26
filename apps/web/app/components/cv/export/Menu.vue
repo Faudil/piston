@@ -7,6 +7,10 @@
 const props = defineProps<{
   documentId: string
   beforeExport?: () => Promise<unknown>
+  /** Size of the trigger button. */
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  /** Full-width trigger (mobile bar). */
+  block?: boolean
 }>()
 
 const shareOpen = ref(false)
@@ -53,7 +57,9 @@ const items = computed(() => [
       trailing-icon="i-lucide-chevron-down"
       color="neutral"
       variant="outline"
-      size="sm"
+      :size="size ?? 'sm'"
+      :block="block"
+      :class="block && 'min-h-11 flex-1 justify-center'"
       aria-label="Exporter ou partager le CV"
     />
   </UDropdownMenu>

@@ -86,3 +86,46 @@
 :root {
   --app-bottom-nav: calc(4rem + env(safe-area-inset-bottom));
 }
+/* The CV editor's action bar (components/cv/MobileBar.vue) replaces the tab bar. */
+@media (max-width: 1023px) {
+  :root:has([data-editor-bar]) {
+    --app-bottom-nav: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+}
+
+/*
+ * Touch targets of the CV editor on phones: at least 44 px (WCAG 2.5.8 asks
+ * for 24, Apple and Material for 44-48). Icon-only buttons (every child is an
+ * icon) become 44 px squares; switches get an invisible 44 px hit area.
+ */
+@media (max-width: 1023px) {
+  :is([data-cv-editor], [data-touch-targets]) button {
+    min-height: 2.75rem;
+  }
+  :is([data-cv-editor], [data-touch-targets])
+    :is(
+      input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
+      select,
+      textarea
+    ) {
+    min-height: 2.75rem;
+  }
+  :is([data-cv-editor], [data-touch-targets]) input[type='color'] {
+    min-width: 2.75rem;
+  }
+  :is([data-cv-editor], [data-touch-targets]) button:not(:has(> :not(.iconify))) {
+    min-width: 2.75rem;
+  }
+  :is([data-cv-editor], [data-touch-targets])
+    :is([role='switch'], [role='checkbox'], [role='radio']) {
+    position: relative;
+    min-height: 0;
+    min-width: 0;
+  }
+  :is([data-cv-editor], [data-touch-targets])
+    :is([role='switch'], [role='checkbox'], [role='radio'])::after {
+    content: '';
+    position: absolute;
+    inset: -0.875rem -0.5rem;
+  }
+}

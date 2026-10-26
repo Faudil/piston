@@ -14,63 +14,20 @@ import { readFile } from 'node:fs/promises'
 import * as h3 from 'h3'
 import { CV_FONTS_DIR } from '@piston/cv-render/node'
 import { vi } from 'vitest'
-import * as account from '../../server/utils/account'
-import * as applications from '../../server/utils/applications'
-import * as auth from '../../server/utils/auth'
-import * as claude from '../../server/utils/claude'
-import * as coverLetter from '../../server/utils/cover-letter'
-import * as cvAi from '../../server/utils/cv-ai'
-import * as cvCoach from '../../server/utils/cv-coach'
-import * as cvAssets from '../../server/utils/cv-assets'
-import * as cvDocuments from '../../server/utils/cv-documents'
-import * as cvDocx from '../../server/utils/cv-docx'
-import * as fakeAi from '../../server/utils/fake-ai'
-import * as cvShare from '../../server/utils/cv-share'
-import * as letterPdf from '../../server/utils/letter-pdf'
-import * as cvPdf from '../../server/utils/cv-pdf'
-import * as generation from '../../server/utils/generation'
-import * as offers from '../../server/utils/offers'
-import * as pdf from '../../server/utils/pdf'
-import * as profiles from '../../server/utils/profiles'
-import * as importOffer from '../../server/utils/import-offer'
-import * as throttle from '../../server/utils/throttle'
-import * as tavily from '../../server/utils/tavily'
-import * as usage from '../../server/utils/usage'
-import * as resumes from '../../server/utils/resumes'
-import * as serialize from '../../server/utils/serialize'
-import * as validation from '../../server/utils/validation'
 import { testState } from './state'
 
 for (const [name, value] of Object.entries(h3)) vi.stubGlobal(name, value)
 
-for (const util of [
-  validation,
-  account,
-  applications,
-  auth,
-  claude,
-  coverLetter,
-  cvAi,
-  cvCoach,
-  cvAssets,
-  cvDocuments,
-  cvDocx,
-  cvShare,
-  fakeAi,
-  letterPdf,
-  cvPdf,
-  generation,
-  offers,
-  pdf,
-  profiles,
-  resumes,
-  serialize,
-  importOffer,
-  tavily,
-  throttle,
-  usage,
-]) {
-  for (const [name, value] of Object.entries(util)) vi.stubGlobal(name, value)
+// Every util is exposed, so a new file in server/utils needs no registration here.
+// db.ts (replaced by the PGlite double below) and the Nitro-only files stay out.
+const utils = import.meta.glob(
+  ['../../server/utils/*.ts', '!../../server/utils/{db,logger,security-headers}.ts'],
+  { eager: true },
+)
+for (const util of Object.values(utils)) {
+  for (const [name, value] of Object.entries(util as Record<string, unknown>)) {
+    vi.stubGlobal(name, value)
+  }
 }
 
 vi.stubGlobal('useRuntimeConfig', () => testState.config)

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import { parseCvContentId } from '@piston/cv-render'
 import {
@@ -26,6 +27,10 @@ import {
  * buttons), hidden empty sections are added from the « Ajouter une section »
  * menu, custom sections are created and deleted here.
  *
+ * On phones (below `lg`) the same sections are shown one per screen, with
+ * « Précédent / Suivant » and a list to jump (see cv-steps.ts); the other
+ * sections stay in the DOM, hidden by CSS, so nothing remounts.
+ *
  * Click-to-edit: `reveal(contentId)` opens the right section and item and
  * focuses the field of a renderer content id; hovering or focusing a field
  * emits `highlight` with the id of its box on the preview.
@@ -37,7 +42,11 @@ const props = defineProps<{
   design: CvDesign
   photo: CvPhotoController
 }>()
-const emit = defineEmits<{ highlight: [contentId: string | null] }>()
+const emit = defineEmits<{
+  highlight: [contentId: string | null]
+  /** « Voir l'aperçu » on the last step of the phone layout. */
+  preview: []
+}>()
 
 const resolved = computed(() => resolveCvDesign(cvTemplates[props.templateId], props.design))
 const twoColumns = computed(() => isTwoColumnLayout(resolved.value.layout))
@@ -115,6 +124,41 @@ function itemCount(section: CvSectionConfig): number | undefined {
   return (content.value[section.key] as unknown[]).length
 }
 
+// --- Steps (phones) -------------------------------------------------------------------
+
+const steps = computed<CvStep[]>(() => [
+  {
+    ref: CV_HEADER_STEP,
+    label: 'En-tête',
+    summary: content.value.header.fullName || 'Nom, titre, contact, photo',
+  },
+  ...shown.value.map((section) => ({
+    ref: cvSectionRef(section),
+    label: titleOf(section),
+    summary: cvSectionSummary(content.value, section),
+  })),
+])
+const currentStep = ref(CV_HEADER_STEP)
+/** The step on screen; the first one when its section has gone. */
+const activeStep = computed(() => steps.value[cvStepIndex(steps.value, currentStep.value)]!.ref)
+/** Hides a card below `lg` unless it is the step on screen. */
+const stepClass = (ref: string) => (ref === activeStep.value ? '' : 'max-lg:hidden')
+
+// A phone shows one card: have it open from the start.
+onMounted(() => {
+  if (!window.matchMedia('(min-width: 1024px)').matches) expansion.open(activeStep.value)
+})
+
+const stepNav = useTemplateRef<ComponentPublicInstance>('stepNav')
+function goToStep(ref: string) {
+  currentStep.value = ref
+  expansion.open(ref)
+  // Each step starts at the top of its screen.
+  void nextTick(() =>
+    (stepNav.value?.$el as HTMLElement | undefined)?.scrollIntoView({ block: 'start' }),
+  )
+}
+
 // --- Expanded cards -------------------------------------------------------------------
 
 const expansion = createCvExpansion([
@@ -152,6 +196,7 @@ const root = useTemplateRef<HTMLElement>('root')
 
 async function scrollToSection(ref: string) {
   expansion.open(ref)
+  currentStep.value = ref
   await nextTick()
   const card = document.getElementById(`section-${ref}`)
   card?.scrollIntoView({ behavior: smooth(), block: 'start' })
@@ -197,9 +242,12 @@ function removeCustom() {
   deleting.value = null
 }
 
+const addLabel = (section: CvSectionConfig) =>
+  cvSectionTitles[props.language][section.key as keyof (typeof cvSectionTitles)['fr']]
+
 const addItems = computed(() => [
   addable.value.map((section) => ({
-    label: cvSectionTitles[props.language][section.key as keyof (typeof cvSectionTitles)['fr']],
+    label: addLabel(section),
     icon: SECTION_ICONS[section.key],
     onSelect: () => addBuiltin(section),
   })),
@@ -229,6 +277,7 @@ async function reveal(contentId: string): Promise<boolean> {
   const section = content.value.sections.find((entry) => cvSectionRef(entry) === place.section)
   if (section && !section.visible) kept.value = new Set([...kept.value, place.section])
   expansion.open(place.section)
+  currentStep.value = place.section
   if (place.itemId) expansion.open(place.itemId)
   // Opened cards render on the next frame.
   await nextTick()
@@ -257,6 +306,21 @@ function setHighlight(contentId: string | null) {
   highlighted = contentId
   emit('highlight', contentId)
 }
+
+/**
+ * On phones the keyboard covers the lower half of the screen: once it is up,
+ * bring the focused field to the middle of what remains.
+ */
+function keepFieldVisible(event: FocusEvent) {
+  const field = event.target as HTMLElement | null
+  if (!field?.matches?.('input:not([type=file]):not([type=range]), textarea')) return
+  if (window.matchMedia('(min-width: 1024px)').matches) return
+  setTimeout(() => {
+    if (document.activeElement === field)
+      field.scrollIntoView({ block: 'center', behavior: smooth() })
+  }, 300)
+}
+
 const contentIdAt = (event: Event) =>
   (event.target as HTMLElement | null)?.closest?.('[data-cv-id]')?.getAttribute('data-cv-id') ??
   null
@@ -269,13 +333,28 @@ const listOf = (key: CvListSectionKey) => content.value[key] as CvItem[]
     ref="root"
     class="space-y-4"
     data-cv-editor
-    @focusin="setHighlight(contentIdAt($event))"
+    @focusin="(setHighlight(contentIdAt($event)), keepFieldVisible($event))"
     @focusout="setHighlight(null)"
     @mouseover="setHighlight(contentIdAt($event))"
     @mouseleave="setHighlight(null)"
   >
+    <CvStepNav
+      ref="stepNav"
+      placement="top"
+      class="scroll-mt-32"
+      :steps="steps"
+      :current="activeStep"
+      :addable="
+        addable.map((section) => ({ ref: cvSectionRef(section), label: addLabel(section) }))
+      "
+      @select="goToStep"
+      @add="addBuiltin(content.sections.find((section) => cvSectionRef(section) === $event)!)"
+      @add-custom="addCustomOpen = true"
+    />
+
     <section
       class="rounded-2xl border border-default bg-default shadow-xs"
+      :class="stepClass(CV_HEADER_STEP)"
       aria-labelledby="section-title-header"
     >
       <header class="flex items-center gap-1 px-2 py-2 sm:px-3">
@@ -331,6 +410,7 @@ const listOf = (key: CvListSectionKey) => content.value[key] as CvItem[]
         :item-count="itemCount(section)"
         :deletable="section.key === 'custom'"
         :show-column="twoColumns"
+        :class="stepClass(cvSectionRef(section))"
         @move="moveSection(index, $event)"
         @rename="rename(section, $event)"
         @remove="deleting = customOf(section) ?? null"
@@ -383,6 +463,14 @@ const listOf = (key: CvListSectionKey) => content.value[key] as CvItem[]
       </CvSectionCard>
     </VueDraggable>
 
+    <CvStepNav
+      placement="bottom"
+      :steps="steps"
+      :current="activeStep"
+      @select="goToStep"
+      @finish="emit('preview')"
+    />
+
     <UDropdownMenu :items="addItems" :content="{ align: 'start' }">
       <UButton
         label="Ajouter une section"
@@ -390,7 +478,7 @@ const listOf = (key: CvListSectionKey) => content.value[key] as CvItem[]
         color="neutral"
         variant="outline"
         block
-        class="border-dashed"
+        class="border-dashed max-lg:hidden"
       />
     </UDropdownMenu>
 

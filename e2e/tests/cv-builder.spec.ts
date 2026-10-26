@@ -12,8 +12,11 @@ test.describe('CV builder', () => {
     await login(page)
     await createCvFromResume(page)
 
-    // The fake draft is in the editor.
-    await expect(page.getByRole('textbox', { name: 'Accroche' })).toHaveValue(/trois ans/)
+    // The fake draft is in the editor (on phones the summary is on the second
+    // step: its field is in the page but hidden).
+    await expect(page.getByRole('textbox', { name: 'Accroche', includeHidden: true })).toHaveValue(
+      /trois ans/,
+    )
 
     // Template gallery.
     await expect(page.getByRole('banner').getByText('Modèle « Sobre »')).toBeVisible()

@@ -226,6 +226,24 @@ function contactStack(ctx: BlockContext, colors: HeaderColors, alignment?: 'righ
   }))
 }
 
+/** Share of the header row the split style's contact column may take. */
+const SPLIT_CONTACT_SHARE = 0.4
+
+/**
+ * The width of the split header's contact column: what the longest detail
+ * needs, or null when that is more than `SPLIT_CONTACT_SHARE` of the row
+ * (the contact then goes under the name instead of squeezing it).
+ */
+function splitContactWidth(ctx: BlockContext): number | null {
+  const entries = contactEntries(ctx.content)
+  const fontSize = ctx.t.size.contact
+  const icon = ctx.t.design.showIcons ? fontSize * 1.5 : 0
+  const longest = Math.max(0, ...entries.map((entry) => entry.text.length * fontSize * 0.52 + icon))
+  const row = regionWidth(ctx.region)
+  if (longest > row * SPLIT_CONTACT_SHARE) return null
+  return Math.ceil(longest) + 14
+}
+
 /** Puts the photo beside (or above) a header block. */
 function withPhoto(ctx: BlockContext, block: Content[], photo: Content | null): Content[] {
   if (!photo) return block
@@ -304,15 +322,21 @@ export function headerBlock(
         (node) => ({ ...(node as object), margin: [0, t.space(4), 0, 0] }) as Content,
       ),
     ]
-  } else if (style === 'split') {
+  } else if (style === 'split' && splitContactWidth(textCtx) !== null) {
+    // The contact column has a capped width (long e-mails and URLs wrap
+    // inside it), so the name always keeps most of the row.
+    const width = splitContactWidth(textCtx)!
     block = [
       {
         columns: [
-          { width: '*', stack: identity(ctx, colors) },
-          { width: 'auto', stack: contactStack(ctx, colors, 'right'), margin: [12, 2, 0, 0] },
+          { width: '*', stack: identity(textCtx, colors) },
+          { width, stack: contactStack(ctx, colors, 'right'), margin: [12, 2, 0, 0] },
         ],
       },
     ]
+  } else if (style === 'split') {
+    // Details too long for a side column: under the name, on the full width.
+    block = [...identity(textCtx, colors), ...contactLine(textCtx, colors)]
   } else {
     block = [...identity(textCtx, colors, centered), ...contactLine(textCtx, colors, centered)]
   }

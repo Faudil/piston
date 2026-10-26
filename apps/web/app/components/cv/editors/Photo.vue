@@ -43,18 +43,26 @@ async function onPick(event: Event) {
   target.value = ''
   if (!file) return
   if (!file.type.startsWith('image/')) {
-    toast.add({ title: 'Choisis une image JPEG ou PNG.', color: 'error' })
+    toast.add({
+      title: 'Choisis une image JPEG ou PNG.',
+      icon: 'i-lucide-circle-alert',
+      color: 'error',
+    })
     return
   }
   if (file.size > MAX_PICKED_BYTES) {
-    toast.add({ title: 'Cette image est trop volumineuse (25 Mo au maximum).', color: 'error' })
+    toast.add({
+      title: 'Cette image est trop volumineuse (25 Mo au maximum).',
+      icon: 'i-lucide-circle-alert',
+      color: 'error',
+    })
     return
   }
   try {
     source.value = await loadPhotoSource(file)
     cropping.value = true
   } catch (err) {
-    toast.add({ title: (err as Error).message, color: 'error' })
+    toast.add({ title: (err as Error).message, icon: 'i-lucide-circle-alert', color: 'error' })
   }
 }
 
@@ -134,13 +142,28 @@ async function onCropped(blob: Blob) {
 
     <div v-if="current" class="grid gap-3 sm:grid-cols-3">
       <UFormField label="Forme">
-        <URadioGroup v-model="current.shape" :items="shapeItems" size="sm" />
+        <URadioGroup
+          v-model="current.shape"
+          :items="shapeItems"
+          size="sm"
+          :ui="{ item: 'max-lg:min-h-11 max-lg:items-center' }"
+        />
       </UFormField>
       <UFormField label="Taille">
-        <URadioGroup v-model="current.size" :items="sizeItems" size="sm" />
+        <URadioGroup
+          v-model="current.size"
+          :items="sizeItems"
+          size="sm"
+          :ui="{ item: 'max-lg:min-h-11 max-lg:items-center' }"
+        />
       </UFormField>
       <UFormField label="Position">
-        <URadioGroup v-model="current.position" :items="positionItems" size="sm" />
+        <URadioGroup
+          v-model="current.position"
+          :items="positionItems"
+          size="sm"
+          :ui="{ item: 'max-lg:min-h-11 max-lg:items-center' }"
+        />
       </UFormField>
       <USwitch
         v-model="current.visible"
@@ -154,7 +177,7 @@ async function onCropped(blob: Blob) {
       :source="source"
       :shape="current?.shape ?? 'round'"
       @confirm="onCropped"
-      @error="toast.add({ title: $event, color: 'error' })"
+      @error="toast.add({ title: $event, icon: 'i-lucide-circle-alert', color: 'error' })"
     />
   </fieldset>
 </template>

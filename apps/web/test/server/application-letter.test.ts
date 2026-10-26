@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { applications, desc, generations, jobOffers } from '@piston/db'
+import { applications, desc, generations } from '@piston/db'
 import coverLetterRoute from '../../server/api/generate/cover-letter.post'
 import getApplicationRoute from '../../server/api/applications/[id].get'
 import lettersRoute from '../../server/api/applications/[id]/letters.get'
-import { callRoute, loginAsNewUser, mockClaude, readSse, resetTestState } from './helpers'
+import {
+  callRoute,
+  loginAsNewUser,
+  mockClaude,
+  readSse,
+  resetTestState,
+  insertOffer,
+} from './helpers'
 import { testState } from './state'
 
 /*
@@ -15,14 +22,6 @@ import { testState } from './state'
 beforeEach(resetTestState)
 
 const letter = 'Madame, Monsieur,\n\nPremier paragraphe.\n\nCamille'
-
-async function insertOffer(userId: string) {
-  const [offer] = await testState.db
-    .insert(jobOffers)
-    .values({ userId, title: 'Dev front', company: 'Globex', rawText: 'Offre Vue.js à Lyon.' })
-    .returning()
-  return offer!
-}
 
 async function insertApplication(userId: string, jobOfferId: string, notes = '') {
   const [application] = await testState.db

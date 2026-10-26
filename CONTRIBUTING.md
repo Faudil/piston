@@ -16,14 +16,16 @@ bun dev
 
 ## Repository layout
 
+A longer tour (request lifecycle, where each feature lives, streaming, the CV engine) is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ```
 apps/web/            Nuxt 4 app: Vue pages (app/) and the HTTP API (server/)
   app/pages/         One file per route (/cv, /offres, /candidatures...)
-  app/composables/   useGeneration(): streams a Claude generation over SSE
+  app/composables/   Stateful helpers, e.g. useGeneration(): streams a Claude generation over SSE
   server/api/        One route per file, method suffix (offers.post.ts)
   app/workers/       Web Workers (the CV preview renderer)
   server/utils/      Auto-imported server helpers (db, auth, Claude, SSE, CV documents and PDFs)
-  server/middleware/ Auth guard for /api/*
+  server/middleware/ Request id, security headers, auth guard for /api/*, invite throttle
   test/server/       API route tests (Claude mocked, in-memory Postgres)
 packages/cv-render/  CV renderer (pdfmake block engine), its fonts and their build script
 packages/db/         Drizzle schema, SQL migrations, seed and invite scripts

@@ -5,9 +5,7 @@ import {
   cvDocuments,
   desc,
   eq,
-  inArray,
   jobOffers,
-  type CvDocumentRevisionRow,
   type CvDocumentRow,
 } from '@piston/db'
 import {
@@ -19,17 +17,11 @@ import {
   type CvDocument,
   type CvDocumentSummary,
   type CvLanguageCode,
-  type CvRevision,
   type CvRevisionSource,
   type CvTemplateId,
   type UpdateCvDocumentBody,
 } from '@piston/shared'
-
-/** Revisions kept per document; older ones are deleted. */
-export const MAX_CV_REVISIONS = 50
-
-/** Autosaves create a checkpoint revision when the last one is older than this. */
-export const CV_CHECKPOINT_INTERVAL_MS = 15 * 60 * 1000
+import type { CvState, CvTx } from './cv-revisions'
 
 export const DEFAULT_CV_TITLE = 'Mon CV'
 
@@ -61,23 +53,6 @@ export function toCvDocument(row: CvDocumentRow): CvDocument {
   }
 }
 
-export function toCvRevision(
-  row: Pick<
-    CvDocumentRevisionRow,
-    'id' | 'label' | 'source' | 'generationId' | 'templateId' | 'createdAt'
-  >,
-): CvRevision {
-  return {
-    id: row.id,
-    label: row.label,
-    source: row.source,
-    generationId: row.generationId,
-    templateId: row.templateId,
-    createdAt: row.createdAt.toISOString(),
-  }
-}
-
-/** One of the user's CV documents, or a 404 (also for other users' documents). */
 export async function getUserCvDocument(userId: string, documentId: string) {
   const [row] = await useDb()
     .select()
@@ -128,71 +103,6 @@ export async function listCvDocuments(
   }))
 }
 
-/** JSON with sorted keys, so two equal states compare equal whatever their key order (jsonb reorders keys). */
-export function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, v]) => v !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`
-  }
-  return JSON.stringify(value)
-}
-
-interface CvState {
-  templateId: CvTemplateId
-  content: CvContent
-  design: CvDesign
-}
-
-const sameState = (a: CvState, b: CvState) =>
-  stableStringify({ t: a.templateId, c: a.content, d: a.design }) ===
-  stableStringify({ t: b.templateId, c: b.content, d: b.design })
-
-type Tx = Parameters<Parameters<ReturnType<typeof useDb>['transaction']>[0]>[0]
-
-async function insertRevision(
-  tx: Tx,
-  documentId: string,
-  userId: string,
-  state: CvState,
-  meta: { label: string; source: CvRevisionSource; generationId?: string | null },
-) {
-  await tx.insert(cvDocumentRevisions).values({
-    documentId,
-    userId,
-    label: meta.label,
-    source: meta.source,
-    generationId: meta.generationId ?? null,
-    templateId: state.templateId,
-    content: state.content,
-    design: state.design,
-  })
-}
-
-/** Deletes the oldest revisions beyond MAX_CV_REVISIONS. */
-async function pruneRevisions(tx: Tx, documentId: string) {
-  const old = await tx
-    .select({ id: cvDocumentRevisions.id })
-    .from(cvDocumentRevisions)
-    .where(eq(cvDocumentRevisions.documentId, documentId))
-    .orderBy(desc(cvDocumentRevisions.seq))
-    .offset(MAX_CV_REVISIONS)
-  if (old.length) {
-    await tx.delete(cvDocumentRevisions).where(
-      inArray(
-        cvDocumentRevisions.id,
-        old.map((row) => row.id),
-      ),
-    )
-  }
-}
-
-/**
- * Creates a document in a profile (the default one, created as « Principal »
- * if the user has none) with its first revision.
- */
 export async function createCvDocument(
   userId: string,
   input: {
@@ -223,7 +133,7 @@ export async function createCvDocument(
         ...state,
       })
       .returning()
-    await insertRevision(tx, row!.id, userId, state, {
+    await insertCvRevision(tx, row!.id, userId, state, {
       label: input.revisionLabel,
       source: 'created',
       generationId: input.generationId,
@@ -302,29 +212,29 @@ export async function updateCvDocument(
     const latest = latestRow && readCvRow(latestRow)
 
     if (body.snapshot) {
-      if (latest && !sameState(latest, before)) {
-        await insertRevision(tx, current.id, userId, before, {
+      if (latest && !sameCvState(latest, before)) {
+        await insertCvRevision(tx, current.id, userId, before, {
           label: 'Modifications manuelles',
           source: 'manual',
         })
       }
-      await insertRevision(tx, current.id, userId, after, body.snapshot)
+      await insertCvRevision(tx, current.id, userId, after, body.snapshot)
     } else if (
-      !sameState(before, after) &&
+      !sameCvState(before, after) &&
       (!latest || Date.now() - latest.createdAt.getTime() > CV_CHECKPOINT_INTERVAL_MS)
     ) {
-      await insertRevision(tx, current.id, userId, after, {
+      await insertCvRevision(tx, current.id, userId, after, {
         label: 'Modifications',
         source: 'manual',
       })
     }
-    await pruneRevisions(tx, current.id)
+    await pruneCvRevisions(tx, current.id)
     return row!
   })
 }
 
 /** Throws a 404 unless the generation is the user's. */
-async function getUserGenerationId(tx: Tx, userId: string, generationId: string) {
+async function getUserGenerationId(tx: CvTx, userId: string, generationId: string) {
   const found = await tx.query.generations.findFirst({
     columns: { id: true },
     where: (g, { and: all, eq: equals }) =>
@@ -333,53 +243,6 @@ async function getUserGenerationId(tx: Tx, userId: string, generationId: string)
   if (!found) throw createError({ statusCode: 404, message: 'Génération introuvable.' })
 }
 
-/** The revisions of one of the user's documents, newest first (without their content). */
-export async function listCvRevisions(userId: string, documentId: string): Promise<CvRevision[]> {
-  await getUserCvDocument(userId, documentId)
-  const rows = await useDb()
-    .select({
-      id: cvDocumentRevisions.id,
-      createdAt: cvDocumentRevisions.createdAt,
-      documentId: cvDocumentRevisions.documentId,
-      userId: cvDocumentRevisions.userId,
-      label: cvDocumentRevisions.label,
-      source: cvDocumentRevisions.source,
-      generationId: cvDocumentRevisions.generationId,
-      templateId: cvDocumentRevisions.templateId,
-    })
-    .from(cvDocumentRevisions)
-    .where(eq(cvDocumentRevisions.documentId, documentId))
-    .orderBy(desc(cvDocumentRevisions.seq))
-  return rows.map(toCvRevision)
-}
-
-/** Puts a revision's state back into the document, as a new « Restauration » revision. */
-export async function restoreCvRevision(userId: string, documentId: string, revisionId: string) {
-  const document = await getUserCvDocument(userId, documentId)
-  const [revision] = await useDb()
-    .select()
-    .from(cvDocumentRevisions)
-    .where(
-      and(eq(cvDocumentRevisions.id, revisionId), eq(cvDocumentRevisions.documentId, document.id)),
-    )
-  if (!revision)
-    throw createError({ statusCode: 404, message: 'Version de l’historique introuvable.' })
-  const restored = readCvRow(revision)
-
-  const date = new Intl.DateTimeFormat('fr-FR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'Europe/Paris',
-  }).format(revision.createdAt)
-  return updateCvDocument(userId, documentId, {
-    templateId: restored.templateId,
-    content: restored.content,
-    design: restored.design,
-    snapshot: { label: `Restauration : ${revision.label} (${date})`, source: 'restore' },
-  })
-}
-
-/** Copies a document (its current state, not its history), optionally dedicated to an offer. */
 export async function duplicateCvDocument(
   userId: string,
   documentId: string,

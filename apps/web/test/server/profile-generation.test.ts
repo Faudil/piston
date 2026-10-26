@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { eq, generations, jobOffers, resumeProfiles, resumes } from '@piston/db'
+import { eq, generations, resumeProfiles, resumes } from '@piston/db'
 import type { OfferAnalysisOutput } from '@piston/shared'
 import analysisRoute from '../../server/api/generate/offer-analysis.post'
 import coverLetterRoute from '../../server/api/generate/cover-letter.post'
 import reviewRoute from '../../server/api/generate/resume-review.post'
 import searchLeadsRoute from '../../server/api/generate/search-leads.post'
-import { callRoute, loginAsNewUser, mockClaude, readSse, resetTestState } from './helpers'
+import {
+  callRoute,
+  loginAsNewUser,
+  mockClaude,
+  readSse,
+  resetTestState,
+  insertOffer,
+} from './helpers'
 import { testState } from './state'
 
 /*
@@ -35,14 +42,6 @@ async function addMarketingProfile(userId: string) {
   return { profile: profile!, resume: resume! }
 }
 
-async function insertOffer(userId: string, profileId: string | null = null) {
-  const [offer] = await testState.db
-    .insert(jobOffers)
-    .values({ userId, title: 'Chargée de com', rawText: 'Offre.', profileId })
-    .returning()
-  return offer!
-}
-
 /** The `<cv>` block sent to the mocked Claude. */
 function sentResume(claude: ReturnType<typeof mockClaude>) {
   const messages = claude.calls[0]!.messages as Array<{ content: Array<{ text: string }> }>
@@ -66,7 +65,7 @@ describe('resume used by generations', () => {
   it("analyzes an offer against its profile's current version", async () => {
     const { user } = await loginAsNewUser()
     const marketing = await addMarketingProfile(user.id)
-    const offer = await insertOffer(user.id, marketing.profile.id)
+    const offer = await insertOffer(user.id, { profileId: marketing.profile.id })
     const claude = mockClaude({ text: JSON.stringify(analysisOutput), parsed: analysisOutput })
 
     const events = await readSse(
@@ -102,7 +101,7 @@ describe('resume used by generations', () => {
   it("writes letters from the offer's profile", async () => {
     const { user } = await loginAsNewUser()
     const marketing = await addMarketingProfile(user.id)
-    const offer = await insertOffer(user.id, marketing.profile.id)
+    const offer = await insertOffer(user.id, { profileId: marketing.profile.id })
     const claude = mockClaude({ text: 'Madame,\n\nParagraphe.' })
 
     await readSse(
