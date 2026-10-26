@@ -10,7 +10,14 @@ import {
 import type { CvAssets, CvRenderInput } from './types'
 import type { Region } from './engine/boxes'
 import type { BlockContext } from './engine/context'
-import { bandBlock, bandRegion, headerBlock, sideContactBlock } from './engine/header'
+import {
+  bandBlock,
+  bandRegion,
+  headerBlock,
+  sideContactBlock,
+  sidePhotoHeader,
+} from './engine/header'
+import { ornamentCanvas } from './engine/ornaments'
 import { keepTitlesWithContent, sectionBlock } from './engine/sections'
 import { clean } from './engine/text'
 import { computeTokens, readableOn, type CvTokens } from './engine/tokens'
@@ -114,13 +121,23 @@ export function renderResolved(
     const sideTokens: CvTokens = sideColumnTokens(t, design.palette.sidebarBg, onSide)
     const contactInSide = design.headerStyle === 'sidebar'
     const sideCtx = context(sideRegion, sideTokens)
+    const mainCtx = context(mainRegion)
+    // With the contact in the side column, the photo sits at the top of
+    // that column, beside the name.
+    const photoHeader =
+      contactInSide && !band
+        ? sidePhotoHeader(sideCtx, mainCtx, {
+            sideWidth,
+            sideFirst: left,
+            mainMargin: [MAIN_GAP, outer],
+          })
+        : null
     const side: Content[] = [
-      ...(contactInSide ? sideContactBlock(sideCtx, 'Contact') : []),
+      ...(contactInSide ? sideContactBlock(sideCtx, 'Contact', Boolean(photoHeader)) : []),
       ...sections
         .filter(isSide)
         .map((section, index) => sectionBlock(sideCtx, section, index === 0)),
     ]
-    const mainCtx = context(mainRegion)
     const main = sections
       .filter((section) => !isSide(section))
       .map((section, index) => sectionBlock(mainCtx, section, index === 0))
@@ -136,10 +153,12 @@ export function renderResolved(
           }),
           { left: 0, top: t.margins.top, right: 0 },
         )
-      : {
-          stack: headerBlock(mainCtx, { contactInSide, band: false }),
-          margin: [mainRegion.left, 0, W - mainRegion.right, t.space(18)],
-        }
+      : photoHeader
+        ? { stack: [photoHeader], margin: [0, 0, 0, t.space(18)] }
+        : {
+            stack: headerBlock(mainCtx, { contactInSide, band: false }),
+            margin: [mainRegion.left, 0, W - mainRegion.right, t.space(18)],
+          }
     const sideColumn: Column = {
       width: sideWidth,
       stack: [
@@ -162,11 +181,12 @@ export function renderResolved(
       // The main column first for a right sidebar, so it is read first.
       { columns: left ? [sideColumn, mainColumn] : [mainColumn, sideColumn], columnGap: 0 },
     ]
-    background = () => ({
+    background = (page: number) => ({
       // absolutePosition: without it, pdfmake refuses a canvas taller than the free space.
       absolutePosition: { x: 0, y: 0 },
       canvas: [
         { type: 'rect', x: sideX, y: 0, w: sideWidth, h: H, color: design.palette.sidebarBg },
+        ...ornamentCanvas(t, page, { avoid: { left: sideX, right: sideX + sideWidth } }),
       ],
     })
   } else {
@@ -208,6 +228,13 @@ export function renderResolved(
     } else {
       body = [...header, ...sections.map((section) => sectionBlock(context(full), section, false))]
     }
+  }
+
+  if (!background && (design.typography.ornament ?? 'none') !== 'none') {
+    background = (page: number) => ({
+      absolutePosition: { x: 0, y: 0 },
+      canvas: ornamentCanvas(t, page, {}),
+    })
   }
 
   const name = clean(content.header.fullName)

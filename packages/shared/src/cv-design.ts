@@ -48,6 +48,10 @@ export type CvHeaderStyle = z.infer<typeof CvHeaderStyle>
  * - `bar`: vertical bar on the left of the title.
  * - `plain`: uppercase colored title, nothing else.
  * - `smallcaps`: smaller, spaced capitals over a hairline.
+ * - `sidehead`: editorial: the title in a narrow left margin, the section
+ *   beside it, a hairline above (falls back to `smallcaps` in narrow columns).
+ * - `chip`: the section's icon in a filled circle of the primary color, the
+ *   title beside it (a plain dot when icons are off).
  */
 export const cvSectionTitleStyles = [
   'rule',
@@ -56,6 +60,8 @@ export const cvSectionTitleStyles = [
   'bar',
   'plain',
   'smallcaps',
+  'sidehead',
+  'chip',
 ] as const
 export const CvSectionTitleStyle = z.enum(cvSectionTitleStyles)
 export type CvSectionTitleStyle = z.infer<typeof CvSectionTitleStyle>
@@ -433,6 +439,8 @@ export const cvSectionTitleStyleLabels: Record<CvSectionTitleStyle, string> = {
   bar: 'Barre verticale',
   plain: 'Simple',
   smallcaps: 'Petites capitales',
+  sidehead: 'Titre en marge',
+  chip: 'Pastille avec icône',
 }
 
 export const cvItemStyleLabels: Record<CvItemStyle, string> = {

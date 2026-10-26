@@ -109,6 +109,13 @@ const gridClass = computed(
             <span class="text-xs text-muted">
               {{ cvTemplateCategoryLabels[cvTemplates[id].category] }}
             </span>
+            <span
+              v-if="cvTemplates[id].photo === 'feature'"
+              class="inline-flex items-center gap-1 text-xs text-muted"
+            >
+              <UIcon name="i-lucide-image" class="size-3.5" aria-hidden="true" />
+              Pensé pour une photo
+            </span>
             <UBadge
               :label="ATS_BADGE[cvTemplates[id].atsLevel].label"
               :color="ATS_BADGE[cvTemplates[id].atsLevel].color"

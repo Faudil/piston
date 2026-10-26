@@ -15,12 +15,13 @@ import {
   type CvLanguage,
   type CvSectionConfig,
   type CvSectionKey,
+  type CvSectionTitleStyle,
   type CvSkillGroup,
 } from '@piston/shared'
 import { cvContentId } from '../ids'
 import { tagBox } from './boxes'
 import { lineBox, margin, regionWidth, type BlockContext } from './context'
-import { iconSvg, type CvIconName } from './icons'
+import { CV_ICONS, iconSvg, type CvIconName } from './icons'
 import { clean, dateRange, displayUrl, headingRuns, join, linkTarget, linked } from './text'
 
 /**
@@ -61,11 +62,11 @@ export function sectionTitleBlock(
   id: string,
 ): Content {
   const { t, region } = ctx
-  const style = t.design.sectionTitleStyle
+  const style = titleStyle(ctx)
   // « Small capitals »: capitals set smaller and spaced, in one run so the text stays extractable.
   const fontSize =
     (region.side ? t.size.sideSectionTitle : t.size.sectionTitle) *
-    (style === 'smallcaps' ? 0.88 : 1)
+    (style === 'smallcaps' ? 0.88 : style === 'sidehead' ? 0.86 : 1)
   const width = regionWidth(region)
   const upper = style !== 'bar'
   const onBlock = style === 'block'
@@ -76,16 +77,32 @@ export function sectionTitleBlock(
     color,
     font: t.fonts.heading,
     fontSize,
-    characterSpacing: style === 'smallcaps' ? 0.9 : upper ? (style === 'underline' ? 0.8 : 0.6) : 0,
+    // Letter spacing in em: much more and PDF text extraction (what an ATS
+    // reads) splits the word into letters, « P R O F I L ».
+    characterSpacing:
+      fontSize *
+      (style === 'smallcaps' || style === 'sidehead'
+        ? 0.075
+        : upper
+          ? style === 'underline'
+            ? 0.075
+            : 0.055
+          : 0),
   }
-  const line: Content = t.design.showIcons
-    ? {
-        columns: [
-          { svg: iconSvg(icon, color), width: fontSize, height: fontSize, margin: [0, 0.5, 0, 0] },
-          { ...label, width: '*', margin: [fontSize * 0.45, 0, 0, 0] },
-        ],
-      }
-    : label
+  const line: Content =
+    t.design.showIcons && style !== 'chip'
+      ? {
+          columns: [
+            {
+              svg: iconSvg(icon, color),
+              width: fontSize,
+              height: fontSize,
+              margin: [0, 0.5, 0, 0],
+            },
+            { ...label, width: '*', margin: [fontSize * 0.45, 0, 0, 0] },
+          ],
+        }
+      : label
 
   let block: Content
   switch (style) {
@@ -164,10 +181,44 @@ export function sectionTitleBlock(
     case 'plain':
       block = { stack: [line], margin: [0, 0, 0, t.space(5)] }
       break
+    case 'sidehead':
+      // The layout of the row (title in the margin, section beside it) is sectionBlock's.
+      block = { stack: [line], margin: [0, 1, 0, t.space(4)] }
+      break
+    case 'chip': {
+      const diameter = Math.round(fontSize * 2.1)
+      block = {
+        columns: [
+          { svg: chipSvg(t.design.showIcons ? icon : null, t, diameter), width: diameter },
+          {
+            width: '*',
+            stack: [line],
+            margin: [fontSize * 0.7, (diameter - fontSize * 1.2) / 2, 0, 0],
+          },
+        ],
+        margin: [0, 0, 0, t.space(6)],
+      }
+      break
+    }
   }
   // With a rule under the title, the last position recorded is the rule's: the box ends there.
   const ruled = style === 'rule' || style === 'underline' || style === 'smallcaps'
   return tagBox(block, id, region, { lastLine: ruled ? 2 : lineBox(ctx, fontSize) })
+}
+
+/** The title style drawn in this column: `sidehead` needs a wide column, `smallcaps` replaces it elsewhere. */
+function titleStyle(ctx: BlockContext): CvSectionTitleStyle {
+  const style = ctx.t.design.sectionTitleStyle
+  return style === 'sidehead' && ctx.region.side ? 'smallcaps' : style
+}
+
+/** A filled circle of the primary color with the section's icon (or a dot) in the readable color. */
+function chipSvg(icon: CvIconName | null, t: BlockContext['t'], diameter: number): string {
+  const r = diameter / 2
+  const glyph = icon
+    ? `<g transform="translate(${r * 0.46} ${r * 0.46}) scale(${(r * 1.08) / 24})" fill="none" stroke="${t.colors.onPrimary}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${CV_ICONS[icon]}</g>`
+    : `<circle cx="${r}" cy="${r}" r="${r * 0.28}" fill="${t.colors.onPrimary}"/>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${diameter}" height="${diameter}" viewBox="0 0 ${diameter} ${diameter}"><circle cx="${r}" cy="${r}" r="${r}" fill="${t.colors.primary}"/>${glyph}</svg>`
 }
 
 // --- Bullets --------------------------------------------------------------------------
@@ -490,8 +541,13 @@ function lineBlocks(ctx: BlockContext, lines: Line[]): Content[] {
 
 /** A gauge: a bar filled to `ratio`, or five dots. */
 function gauge(ctx: BlockContext, ratio: number, kind: 'bars' | 'dots', width: number): Column {
-  const { t } = ctx
-  const empty = tintColor(t.colors.primary, 0.82)
+  const { t, region } = ctx
+  // On a dark side column a tint of the (lightened) accent would be as light as
+  // the accent itself: the empty part is a lighter shade of the column instead.
+  const dark = region.side && readableOn(t.design.palette.sidebarBg) === '#ffffff'
+  const empty = dark
+    ? mixColors(t.design.palette.sidebarBg, '#ffffff', 0.22)
+    : tintColor(t.colors.primary, 0.82)
   if (kind === 'bars') {
     return {
       width,
@@ -566,7 +622,12 @@ function skillBlocks(ctx: BlockContext, groups: CvSkillGroup[]): Content[] {
 
   return groups.map((group) => {
     let node: Content
-    switch (style) {
+    // Gauges need levels: a group without any (a v1 CV, skills not rated yet)
+    // reads better as a list than as a column of bare names.
+    const gauges = style === 'bars' || style === 'dots'
+    const groupStyle =
+      gauges && !group.items.some((skill) => clean(skill.name) && skill.level > 0) ? 'list' : style
+    switch (groupStyle) {
       case 'inline':
         node = {
           text: [
@@ -622,7 +683,7 @@ function skillBlocks(ctx: BlockContext, groups: CvSkillGroup[]): Content[] {
                         ctx,
                         { text: clean(skill.name), fontSize },
                         skill.level ? skill.level / CV_SKILL_MAX_LEVEL : null,
-                        style,
+                        groupStyle,
                       ),
                     ],
                     margin: [0, 0, 0, t.space(2)] as [number, number, number, number],
@@ -862,15 +923,81 @@ function sectionBody(ctx: BlockContext, section: CvSectionConfig): Content[] {
 export function sectionBlock(ctx: BlockContext, section: CvSectionConfig, first: boolean): Content {
   const ref = cvSectionRef(section)
   const title = cvSectionTitle(section, ctx.t.design.language, ctx.content.custom)
-  const head = sectionTitleBlock(ctx, title, SECTION_ICONS[section.key], cvContentId.section(ref))
-  const [firstItem, ...rest] = sectionBody(ctx, section)
   const anchor = (node: Content, prefix: string): Content =>
     node && typeof node === 'object' && !Array.isArray(node)
       ? Object.assign(node, { id: `${prefix}${ref}` })
       : node
+  if (titleStyle(ctx) === 'sidehead') return sideheadSection(ctx, section, title, first, anchor)
+  const head = sectionTitleBlock(ctx, title, SECTION_ICONS[section.key], cvContentId.section(ref))
+  const [firstItem, ...rest] = sectionBody(ctx, section)
   return {
     stack: [anchor(head, TITLE_ID), ...(firstItem ? [anchor(firstItem, FIRST_ID)] : []), ...rest],
     margin: [0, first ? 0 : ctx.t.space(10), 0, 0],
+  }
+}
+
+/** Width of the margin column holding the titles of `sidehead` sections, and the gap after it. */
+const SIDEHEAD_WIDTH = 104
+const SIDEHEAD_GAP = 18
+
+/**
+ * An editorial section: a hairline across the column, then the title in a
+ * margin column and the section beside it. The title is drawn first (reading
+ * order); the hairline carries the keep-with-first-item anchor.
+ */
+function sideheadSection(
+  ctx: BlockContext,
+  section: CvSectionConfig,
+  title: string,
+  first: boolean,
+  anchor: (node: Content, prefix: string) => Content,
+): Content {
+  const { t, region } = ctx
+  const ref = cvSectionRef(section)
+  const headCtx: BlockContext = {
+    ...ctx,
+    region: { left: region.left, right: region.left + SIDEHEAD_WIDTH, side: false },
+  }
+  const bodyCtx: BlockContext = {
+    ...ctx,
+    region: { left: region.left + SIDEHEAD_WIDTH + SIDEHEAD_GAP, right: region.right, side: false },
+  }
+  const head = sectionTitleBlock(
+    headCtx,
+    title,
+    SECTION_ICONS[section.key],
+    cvContentId.section(ref),
+  )
+  const [firstItem, ...rest] = sectionBody(bodyCtx, section)
+  const rule: Content = {
+    canvas: [
+      {
+        type: 'line',
+        x1: 0,
+        y1: 0,
+        x2: regionWidth(region),
+        y2: 0,
+        lineWidth: first ? 1.2 : 0.5,
+        lineColor: first ? t.colors.text : t.colors.secondary,
+      },
+    ],
+    margin: [0, 0, 0, t.space(8)],
+  }
+  return {
+    stack: [
+      anchor(rule, TITLE_ID),
+      {
+        columns: [
+          { width: SIDEHEAD_WIDTH, stack: [head] },
+          {
+            width: '*',
+            stack: [...(firstItem ? [anchor(firstItem, FIRST_ID)] : []), ...rest],
+          },
+        ],
+        columnGap: SIDEHEAD_GAP,
+      },
+    ],
+    margin: [0, first ? t.space(4) : t.space(10), 0, 0],
   }
 }
 

@@ -5,6 +5,7 @@ import { lineBox, margin, regionWidth, type BlockContext } from './context'
 import { iconSvg } from './icons'
 import { sectionTitleBlock } from './sections'
 import { clean, contactEntries, joinRuns, linked, type ContactEntry } from './text'
+import { ensureContrast, readableOn } from '@piston/shared'
 
 /**
  * The header: name, title, contact details and photo, in the design's
@@ -14,26 +15,61 @@ import { clean, contactEntries, joinRuns, linked, type ContactEntry } from './te
  */
 
 const PHOTO_SIZES = { s: 54, m: 68, l: 86 } as const
+/** Gap between the photo and the text beside it. */
+const PHOTO_GAP = 16
 
-/** The photo as a pdfmake node, or null (no photo, hidden, or its image is missing). */
-export function photoBlock(ctx: BlockContext, alignment?: 'center'): Content | null {
+/** The photo's drawn size: its own size × the template's scale, never wider than the column. */
+export function photoSize(ctx: BlockContext): number {
+  const photo = ctx.content.header.photo
+  if (!photo) return 0
+  const scale = ctx.t.design.typography.photoScale ?? 1
+  return Math.round(Math.min(PHOTO_SIZES[photo.size] * scale, regionWidth(ctx.region)))
+}
+
+/** The photo's image if it can be drawn (visible, PNG or JPEG data URL), else null. */
+function photoImage(ctx: BlockContext): string | null {
   const photo = ctx.content.header.photo
   if (!photo?.visible) return null
   const image = ctx.assets.images?.[photo.assetId]
   // pdfkit embeds PNG and JPEG only.
   if (!image || !/^data:image\/(png|jpe?g);base64,/i.test(image)) return null
-  const size = PHOTO_SIZES[photo.size]
+  return image
+}
+
+/**
+ * The photo as a pdfmake node, or null (no photo, hidden, or its image is
+ * missing). `ring` draws a border of that color around it (on a colored
+ * band or side column).
+ */
+export function photoBlock(
+  ctx: BlockContext,
+  alignment?: 'center',
+  options: { ring?: string } = {},
+): Content | null {
+  const photo = ctx.content.header.photo
+  const image = photoImage(ctx)
+  if (!photo || !image) return null
+  const size = photoSize(ctx)
   const box = (node: Content) =>
     tagBox(node, cvContentId.photo, ctx.region, { lastLine: size, fit: true })
-  if (photo.shape === 'square') {
+  const ring = options.ring
+  if (photo.shape === 'square' && !ring) {
     return box({ image, width: size, height: size, ...(alignment && { alignment }) })
   }
-  // Round and rounded corners: an SVG clip path around the image.
+  // Round and rounded corners (and rings): an SVG clip path around the image.
+  const border = ring ? Math.max(2, size * 0.035) : 0
+  const inner = size - 2 * border
+  const radius = photo.shape === 'round' ? inner / 2 : photo.shape === 'rounded' ? inner * 0.14 : 0
   const clip =
     photo.shape === 'round'
-      ? `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}"/>`
-      : `<rect width="${size}" height="${size}" rx="${size * 0.14}"/>`
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><defs><clipPath id="photo">${clip}</clipPath></defs><image width="${size}" height="${size}" preserveAspectRatio="xMidYMid slice" xlink:href="${image}" clip-path="url(#photo)"/></svg>`
+      ? `<circle cx="${size / 2}" cy="${size / 2}" r="${inner / 2}"/>`
+      : `<rect x="${border}" y="${border}" width="${inner}" height="${inner}" rx="${radius}"/>`
+  const outline = ring
+    ? photo.shape === 'round'
+      ? `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - border / 2}" fill="none" stroke="${ring}" stroke-width="${border}"/>`
+      : `<rect x="${border / 2}" y="${border / 2}" width="${size - border}" height="${size - border}" rx="${radius + border / 2}" fill="none" stroke="${ring}" stroke-width="${border}"/>`
+    : ''
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><defs><clipPath id="photo">${clip}</clipPath></defs><image x="${border}" y="${border}" width="${inner}" height="${inner}" preserveAspectRatio="xMidYMid slice" xlink:href="${image}" clip-path="url(#photo)"/>${outline}</svg>`
   return box({ svg, width: size, height: size, ...(alignment && { alignment }) })
 }
 
@@ -69,13 +105,16 @@ function identity(ctx: BlockContext, colors: HeaderColors, alignment?: 'center')
     )
   }
   if (title) {
+    const caps = t.design.typography.titleCaps
     blocks.push(
       tagBox(
         {
-          text: title,
-          fontSize: t.size.title,
+          text: caps ? title.toUpperCase() : title,
+          fontSize: caps ? t.size.title * 0.82 : t.size.title,
+          // Wider spacing makes PDF text extraction split the word into letters.
+          ...(caps && { characterSpacing: t.size.title * 0.82 * 0.075, bold: true }),
           color: colors.title,
-          margin: margin(0, t.space(4), 0, 0),
+          margin: margin(0, t.space(caps ? 7 : 4), 0, 0),
           ...(alignment && { alignment }),
         },
         cvContentId.header('title'),
@@ -143,7 +182,7 @@ function contactLine(ctx: BlockContext, colors: HeaderColors, alignment?: 'cente
   // With icons, details cannot share a text line: lay them out as rows of
   // columns, starting a new row when the estimated width runs out.
   const available = regionWidth(region)
-  const estimate = (entry: ContactEntry) => entry.text.length * fontSize * 0.52 + fontSize * 2.5
+  const estimate = (entry: ContactEntry) => entry.text.length * fontSize * 0.56 + fontSize * 2.5
   const rows: ContactEntry[][] = [[]]
   let used = 0
   for (const entry of entries) {
@@ -194,7 +233,7 @@ function withPhoto(ctx: BlockContext, block: Content[], photo: Content | null): 
   if (position === 'center') {
     return [{ stack: [photo], alignment: 'center', margin: [0, 0, 0, ctx.t.space(8)] }, ...block]
   }
-  const gap = 16
+  const gap = PHOTO_GAP
   const photoColumn: Column = { width: 'auto', stack: [photo] }
   const textColumn: Column = { width: '*', stack: block }
   return [
@@ -216,13 +255,9 @@ export function headerBlock(
 ): Content[] {
   const { t } = ctx
   const style = t.design.headerStyle
+  const band = bandColors(t)
   const colors: HeaderColors = options.band
-    ? {
-        name: t.colors.onPrimary,
-        title: t.colors.onPrimary,
-        contact: t.colors.onPrimary,
-        icon: t.colors.onPrimary,
-      }
+    ? { name: band.on, title: band.accent, contact: band.on, icon: band.accent }
     : {
         name: t.colors.text,
         title: t.colors.primaryText,
@@ -232,6 +267,13 @@ export function headerBlock(
   const centered = style === 'centered' ? 'center' : undefined
 
   if (options.contactInSide) return identity(ctx, colors)
+
+  const photo = photoBlock(ctx, centered, options.band ? { ring: '#ffffff' } : {})
+  const besidePhoto = photo && !centered && ctx.content.header.photo?.position !== 'center'
+  // Beside the photo, the text has the column minus the photo and the gap.
+  const textCtx: BlockContext = besidePhoto
+    ? { ...ctx, region: { ...ctx.region, right: ctx.region.right - photoSize(ctx) - PHOTO_GAP } }
+    : ctx
 
   let block: Content[]
   if (style === 'inline') {
@@ -258,7 +300,7 @@ export function headerBlock(
         ctx.region,
         { lastLine: t.size.name * 1.15 },
       ),
-      ...contactLine(ctx, colors).map(
+      ...contactLine(textCtx, colors).map(
         (node) => ({ ...(node as object), margin: [0, t.space(4), 0, 0] }) as Content,
       ),
     ]
@@ -272,16 +314,22 @@ export function headerBlock(
       },
     ]
   } else {
-    block = [...identity(ctx, colors, centered), ...contactLine(ctx, colors, centered)]
+    block = [...identity(textCtx, colors, centered), ...contactLine(textCtx, colors, centered)]
   }
-  const photo = photoBlock(ctx, centered)
   return centered && photo
     ? [{ stack: [photo], alignment: 'center', margin: [0, 0, 0, t.space(8)] }, ...block]
     : withPhoto(ctx, block, photo)
 }
 
-/** Photo and contact details at the top of the side column (`sidebar` header style). */
-export function sideContactBlock(ctx: BlockContext, contactTitle: string): Content[] {
+/**
+ * Contact details at the top of the side column (`sidebar` header style),
+ * after the photo unless `photoInHeader` (the layout put it beside the name).
+ */
+export function sideContactBlock(
+  ctx: BlockContext,
+  contactTitle: string,
+  photoInHeader = false,
+): Content[] {
   const { t } = ctx
   const colors: HeaderColors = {
     name: t.colors.text,
@@ -289,7 +337,7 @@ export function sideContactBlock(ctx: BlockContext, contactTitle: string): Conte
     contact: t.colors.text,
     icon: t.colors.primaryText,
   }
-  const photo = photoBlock(ctx, 'center')
+  const photo = photoInHeader ? null : photoBlock(ctx, 'center', { ring: '#ffffff' })
   const contact = contactStack(ctx, colors)
   return [
     ...(photo
@@ -307,7 +355,62 @@ export function sideContactBlock(ctx: BlockContext, contactTitle: string): Conte
 }
 
 /**
- * A full-width band of the primary color around `inner`, bleeding to the
+ * The header band's colors: its fill (the primary color, or the side
+ * column's color when the template says so), the text on it, and an accent
+ * for the job title and icons that reads on it (4.5:1).
+ */
+export function bandColors(t: BlockContext['t']): { fill: string; on: string; accent: string } {
+  if (t.design.typography.bandFill !== 'sidebar') {
+    return { fill: t.colors.primary, on: t.colors.onPrimary, accent: t.colors.onPrimary }
+  }
+  const fill = t.design.palette.sidebarBg
+  return { fill, on: readableOn(fill), accent: ensureContrast(t.colors.primary, fill) }
+}
+
+/**
+ * The photo beside the name and title, for two-column layouts whose side
+ * column holds the contact details: one row, the photo centered over the
+ * side column, the name in the main column, vertically centered on the
+ * photo. The name stays the first text drawn. Null without a drawable photo.
+ */
+export function sidePhotoHeader(
+  sideCtx: BlockContext,
+  mainCtx: BlockContext,
+  options: { sideWidth: number; sideFirst: boolean; mainMargin: [number, number] },
+): Content | null {
+  const photo = photoBlock(sideCtx, 'center', { ring: '#ffffff' })
+  if (!photo) return null
+  const { t } = mainCtx
+  const size = photoSize(sideCtx)
+  const blocks = identity(mainCtx, {
+    name: t.colors.text,
+    title: t.colors.primaryText,
+    contact: t.colors.muted,
+    icon: t.colors.primaryText,
+  })
+  const titleLines = clean(mainCtx.content.header.title) ? lineBox(mainCtx, t.size.title) + 4 : 0
+  const nameLines = Math.ceil(
+    (clean(mainCtx.content.header.fullName).length * t.size.name * 0.56) /
+      Math.max(1, regionWidth(mainCtx.region)),
+  )
+  const height = Math.max(1, nameLines) * t.size.name * 1.15 + titleLines
+  const top = Math.max(0, (size - height) / 2)
+  const [inner, outer] = options.mainMargin
+  const side: Column = { width: options.sideWidth, stack: [photo], alignment: 'center' }
+  const main: Column = {
+    width: '*',
+    stack: [
+      {
+        stack: blocks,
+        margin: options.sideFirst ? [inner, top, outer, 0] : [outer, top, inner, 0],
+      },
+    ],
+  }
+  return { columns: options.sideFirst ? [side, main] : [main, side], columnGap: 0 }
+}
+
+/**
+ * A full-width band (see `bandColors`) around `inner`, bleeding to the
  * page edges: negative margins cancel the page margins.
  */
 export function bandBlock(
@@ -317,14 +420,18 @@ export function bandBlock(
 ): Content {
   const { t } = ctx
   const padX = Math.max(t.margins.x, 36)
+  const { fill } = bandColors(t)
+  // A band that is not the accent gets a line of the accent under it.
+  const accentLine = fill !== t.colors.primary ? 3 : 0
   return {
     table: {
       widths: ['*'],
       body: [[{ stack: inner, margin: [padX, t.space(26), padX, t.space(22)] }]],
     },
     layout: {
-      fillColor: () => t.colors.primary,
-      hLineWidth: () => 0,
+      fillColor: () => fill,
+      hLineWidth: (index: number) => (index === 1 ? accentLine : 0),
+      hLineColor: () => t.colors.primary,
       vLineWidth: () => 0,
       paddingLeft: () => 0,
       paddingRight: () => 0,

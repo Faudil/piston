@@ -2,8 +2,16 @@ import { statSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   CvContent,
+  CvDesign,
   applyTemplateSectionOrder,
+  contrastRatio,
+  cvSampleAssets,
   cvSampleContent,
+  cvTemplateSampleContent,
+  ensureContrast,
+  isTwoColumnLayout,
+  readableOn,
+  resolveCvDesign,
   cvTemplates,
   createCvItem,
   cvBulletStyles,
@@ -20,6 +28,7 @@ import {
 import {
   cvContentId,
   cvFontFiles,
+  computeTokens,
   cvPairingFamilies,
   parseCvContentId,
   render,
@@ -27,6 +36,7 @@ import {
   type CvRenderResult,
 } from '../src'
 import { CV_FONTS_DIR } from '../src/node'
+import { bandColors } from '../src/engine/header'
 import {
   PHOTO_DATA_URL,
   longContent,
@@ -326,7 +336,7 @@ describe('fonts', () => {
   })
 })
 
-describe('the twelve templates', () => {
+describe('every template', () => {
   const photoContent = () => withPhoto(cvSampleContent())
   const fixturesByName: Record<string, () => CvContent> = {
     demo: cvSampleContent,
@@ -336,22 +346,37 @@ describe('the twelve templates', () => {
     stress: stressContent,
   }
 
-  it('has twelve templates', () => {
-    expect(cvTemplateIds).toHaveLength(12)
+  it('has eighteen templates', () => {
+    expect(cvTemplateIds).toHaveLength(18)
   })
 
   for (const templateId of cvTemplateIds) {
     describe(templateId, () => {
-      it('renders the demo CV on one or two pages, name first, sections in order', async () => {
-        const result = await renderPdf(sampleInput(templateId, {}, cvSampleContent()), {}, engine)
-        expect(result.pageCount).toBeLessThanOrEqual(2)
+      it('renders the demo CV on one page, photo included, name first, sections in order', async () => {
+        const content = cvTemplateSampleContent(cvTemplates[templateId])
+        const result = await renderPdf(
+          sampleInput(templateId, {}, content),
+          cvSampleAssets(),
+          engine,
+        )
+        // The gallery's sample fits one page in every template.
+        expect(result.pageCount).toBe(1)
+        if (cvTemplates[templateId].photo !== 'none') {
+          expect(raw(result)).toMatch(/\/Subtype \/Image/)
+          expect(result.boxes.some((box) => box.id === cvContentId.photo)).toBe(true)
+        }
         const text = squash(await pdfText(result.pdf))
         expect(text.indexOf('Léa Marchand')).toBe(0)
-        // The reading order: profile, experience, then the rest, whatever the layout.
+        // The reading order: profile, then the sections in the document's order, whatever the layout.
         const at = (needle: string) => text.toUpperCase().indexOf(needle)
+        const titles = { experiences: 'EXPÉRIENCE PROFESSIONNELLE', education: 'FORMATION' }
+        const [firstTitle, secondTitle] = content.sections
+          .map((section) => section.key)
+          .filter((key): key is keyof typeof titles => key in titles)
+          .map((key) => titles[key])
         expect(at('PROFIL')).toBeGreaterThan(-1)
-        expect(at('PROFIL')).toBeLessThan(at('EXPÉRIENCE PROFESSIONNELLE'))
-        expect(at('EXPÉRIENCE PROFESSIONNELLE')).toBeLessThan(at('FORMATION'))
+        expect(at('PROFIL')).toBeLessThan(at(firstTitle!))
+        expect(at(firstTitle!)).toBeLessThan(at(secondTitle!))
         for (const expected of [
           'Cheffe de projet digital',
           'lea.marchand@exemple.fr',
@@ -368,7 +393,21 @@ describe('the twelve templates', () => {
           const result = await renderPdf(sampleInput(templateId, {}, make()), assets, engine)
           const text = await flat(result)
           expect(raw(result).startsWith('%PDF-'), name).toBe(true)
-          if (name === 'long') expect(result.pageCount, name).toBeGreaterThanOrEqual(2)
+          if (name === 'long') {
+            expect(result.pageCount, name).toBeGreaterThanOrEqual(2)
+            // Page breaks behave: every section title shares its page with its first item.
+            const firstPage = (id: string) => result.boxes.find((box) => box.id === id)?.page
+            for (const [section, first] of [
+              ['experiences', 'x0'],
+              ['education', 'd1'],
+              ['skills', 's1'],
+              ['projects', 'p1'],
+            ] as const) {
+              expect(firstPage(cvContentId.item(first)), `${name} ${section}`).toBe(
+                firstPage(cvContentId.section(section)),
+              )
+            }
+          }
           if (name === 'empty') {
             expect(result.pageCount, name).toBe(1)
             expect(text, name).toContain('Marie Petit')
@@ -396,6 +435,104 @@ describe('the twelve templates', () => {
       })
     })
   }
+
+  it('keeps every text color of every template at 4.5:1 on what it is drawn on', () => {
+    for (const templateId of cvTemplateIds) {
+      const t = computeTokens(resolveCvDesign(cvTemplates[templateId], CvDesign.parse({})))
+      const pairs: Array<[string, string, string]> = [
+        ['text', t.colors.text, '#ffffff'],
+        ['muted', t.colors.muted, '#ffffff'],
+        ['accent text', t.colors.primaryText, '#ffffff'],
+        ['on primary (block titles, chips, band)', t.colors.onPrimary, t.colors.primary],
+      ]
+      const band = bandColors(t)
+      pairs.push(['band text', band.on, band.fill], ['band accent', band.accent, band.fill])
+      if (isTwoColumnLayout(t.design.layout)) {
+        const side = t.design.palette.sidebarBg
+        pairs.push(
+          ['side text', readableOn(side), side],
+          ['side accent', ensureContrast(t.colors.primary, side), side],
+        )
+      }
+      for (const [what, color, background] of pairs) {
+        expect(contrastRatio(color, background), `${templateId}: ${what}`).toBeGreaterThanOrEqual(
+          4.5,
+        )
+      }
+    }
+  })
+
+  it('draws unrated skills as a list, not as a column of bare names', async () => {
+    const content = cvSampleContent()
+    for (const skill of content.skills[1]!.items) skill.level = 0
+    const result = await renderPdf(sampleInput('moderne', {}, content), {}, engine)
+    expect(await flat(result)).toContain('Jira · Figma · Notion · Google Analytics')
+    // The rated group keeps its gauges: one skill per box.
+    expect(result.boxes.some((box) => box.id === cvContentId.skill('s1a'))).toBe(true)
+    expect(result.boxes.some((box) => box.id === cvContentId.skill('s2a'))).toBe(false)
+  })
+
+  it('puts the photo beside the name at the top of the side column', async () => {
+    const result = await renderPdf(
+      sampleInput('portrait', {}, cvSampleContent()),
+      cvSampleAssets(),
+      engine,
+    )
+    const photo = result.boxes.find((box) => box.id === cvContentId.photo)!
+    const name = result.boxes.find((box) => box.id === cvContentId.header('fullName'))!
+    const sideWidth = cvTemplates.portrait.typography.sidebarWidth
+    // Large, inside the side column, on the same row as the name.
+    expect(photo.width).toBeGreaterThan(100)
+    expect(photo.x + photo.width).toBeLessThanOrEqual(sideWidth)
+    expect(name.x).toBeGreaterThan(sideWidth)
+    expect(name.y).toBeLessThan(photo.y + photo.height)
+    // Never wider than its column, whatever its size.
+    const large = cvSampleContent()
+    large.header.photo!.size = 'l'
+    const big = await renderPdf(sampleInput('portrait', {}, large), cvSampleAssets(), engine)
+    const bigPhoto = big.boxes.find((box) => box.id === cvContentId.photo)!
+    expect(bigPhoto.width).toBeLessThanOrEqual(sideWidth - 44 + 0.5)
+    expect((await pdfText(big.pdf)).indexOf('Léa Marchand')).toBe(0)
+  })
+
+  it('draws ornaments and bands without adding text', async () => {
+    const definition = render(sampleInput('geometrie', {}, cvSampleContent()))
+    const background = definition.background as (page: number) => { canvas: unknown[] }
+    expect(background(1).canvas.length).toBeGreaterThan(2)
+    expect(background(2).canvas.length).toBeGreaterThan(0)
+    expect(JSON.stringify(background(1))).not.toContain('"text"')
+    const strip = render(sampleInput('etudiant', {}, cvSampleContent()))
+    expect((strip.background as (page: number) => { canvas: unknown[] })(1).canvas).toHaveLength(2)
+    // A charcoal band with the accent under it, title in spaced capitals that still extract as words.
+    const direction = await renderPdf(
+      sampleInput('direction', {}, cvSampleContent()),
+      cvSampleAssets(),
+      engine,
+    )
+    const text = await pdfText(direction.pdf)
+    expect(text).toContain('CHEFFE DE PROJET DIGITAL')
+    expect(text.indexOf('Léa Marchand')).toBe(0)
+  })
+
+  it('puts editorial titles in the margin, read before their section', async () => {
+    const result = await renderPdf(sampleInput('editorial', {}, cvSampleContent()), {}, engine)
+    const title = result.boxes.find((box) => box.id === cvContentId.section('experiences'))!
+    const item = result.boxes.find((box) => box.id === cvContentId.item('e1'))!
+    expect(title.x + title.width).toBeLessThanOrEqual(item.x)
+    expect(Math.abs(title.y - item.y)).toBeLessThan(4)
+    const text = squash(await pdfText(result.pdf))
+    expect(text.indexOf('PROFIL')).toBeLessThan(text.indexOf('Cheffe de projet digital avec'))
+    expect(text.indexOf('EXPÉRIENCE PROFESSIONNELLE')).toBeLessThan(
+      text.indexOf('Atelier Rhône Numérique'),
+    )
+    // In a narrow column the margin title becomes small capitals.
+    const split = await renderPdf(
+      sampleInput('duo', { sectionTitleStyle: 'sidehead' }, cvSampleContent()),
+      {},
+      engine,
+    )
+    expect(squash(await pdfText(split.pdf))).toContain('COMPÉTENCES')
+  })
 
   it('puts « Étudiant » sections in the order the template recommends, only at creation', () => {
     const content = applyTemplateSectionOrder(cvSampleContent(), cvTemplates.etudiant)

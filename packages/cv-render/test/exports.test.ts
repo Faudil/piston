@@ -42,7 +42,8 @@ describe('matching cover letter PDF', () => {
       const text = await pdfText(pdf)
       // The CV's header block, the date, the recipient and every paragraph, accents intact.
       expect(text).toContain('Élodie Wiśniewska-Lefèvre')
-      expect(text).toContain('Chargée de communication événementielle')
+      // Case-insensitive: editorial headers set the job title in capitals.
+      expect(text.toLowerCase()).toContain('chargée de communication événementielle')
       expect(text).toContain('elodie@example.com')
       expect(text).toContain('Besançon, le 3 mars 2026')
       expect(text).toContain("Théâtre de l'Œuvre")

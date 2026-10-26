@@ -1,7 +1,7 @@
 import type { CvAssets, CvRenderInput } from '@piston/cv-render'
 import {
-  applyTemplateSectionOrder,
-  cvSampleContent,
+  cvSampleAssets,
+  cvTemplateSampleContent,
   cvTemplates,
   type CvDesign,
   type CvTemplateId,
@@ -19,7 +19,7 @@ import {
  */
 
 /** Bump to invalidate every cached thumbnail (renderer changes). */
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 const THUMBNAIL_WIDTH = 360
 const MEMORY_LIMIT = 80
 
@@ -131,9 +131,9 @@ export function useCvThumbnails() {
   const { render } = useCvRenderWorker()
   let queue: Promise<unknown> = Promise.resolve()
 
-  /** The sample CV, in the template's recommended section order. */
+  /** The sample CV, in the template's recommended section order, with its drawn photo. */
   function sampleContent(templateId: CvTemplateId) {
-    return applyTemplateSectionOrder(cvSampleContent(), cvTemplates[templateId])
+    return cvTemplateSampleContent(cvTemplates[templateId])
   }
 
   function cacheKey(source: CvThumbnailSource, own: boolean): string {
@@ -172,7 +172,8 @@ export function useCvThumbnails() {
         design: source.design,
         templateId: source.templateId,
       }
-      const result = await render(input, source.assets ?? {}, `thumb:${source.templateId}`)
+      const assets = source.assets ?? (own ? {} : cvSampleAssets())
+      const result = await render(input, assets, `thumb:${source.templateId}`)
       if (!result) return null
       const url = await firstPageImage(result.pdf)
       remember(key, url)

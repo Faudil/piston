@@ -281,10 +281,10 @@ describe('design v2', () => {
       fontPairing: 'inter',
       language: 'fr',
       pageFormat: 'A4',
-      palette: { primary: '#c8410b', text: '#1c1917' },
+      palette: { primary: '#1e40af', text: '#1c1917' },
     })
     // Derived colors follow the primary color.
-    expect(resolved.palette.sidebarBg).toBe('#faece7')
+    expect(resolved.palette.sidebarBg).toBe('#e9ecf7')
 
     const custom = resolveCvDesign(
       cvTemplates.moderne,

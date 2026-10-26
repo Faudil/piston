@@ -28,6 +28,7 @@ export * from './cv-colors'
  * has code of its own. See CONTRIBUTING.md (« Adding a CV template »).
  */
 
+/** In gallery order: ATS first, then modern, creative, one-page. */
 export const cvTemplateIds = [
   'sobre',
   'classique',
@@ -37,8 +38,14 @@ export const cvTemplateIds = [
   'ardoise',
   'chronologie',
   'duo',
+  'portrait',
+  'rivage',
+  'direction',
   'horizon',
   'creatif',
+  'impact',
+  'editorial',
+  'geometrie',
   'compact',
   'etudiant',
 ] as const
@@ -115,7 +122,33 @@ export interface CvTemplateTypography {
   sidebarWidth: number
   /** Sections placed in the side column when their `column` is `auto` (two-column layouts). */
   sideSections: readonly CvSectionKey[]
+  /**
+   * Photo size multiplier (1 = the photo's own size). Templates built around
+   * the photo enlarge it; it never exceeds the column it sits in.
+   */
+  photoScale?: number
+  /**
+   * Fill of the header band (`band` header style, `banner` layout): the
+   * primary color, or the side column's color (`palette.sidebarBg`), e.g. a
+   * charcoal band with an accent line under it.
+   */
+  bandFill?: 'primary' | 'sidebar'
+  /** Job title in spaced capitals (editorial headers). */
+  titleCaps?: boolean
+  /**
+   * Decorative shapes drawn behind the page (never text): `strip`, a band of
+   * the primary color along the left edge; `shapes`, tinted circles in the
+   * corners of the first page and a small one on the next pages.
+   */
+  ornament?: 'none' | 'strip' | 'shapes'
 }
+
+/**
+ * How a template treats the photo: `feature` (built around it: large, in a
+ * colored area), `fits` (it has a natural place), `none` (a plain template:
+ * the gallery shows it without the sample photo; a user's photo is still drawn).
+ */
+export type CvTemplatePhoto = 'feature' | 'fits' | 'none'
 
 export interface CvTemplateMeta {
   id: CvTemplateId
@@ -131,6 +164,7 @@ export interface CvTemplateMeta {
    * Sections not listed keep their usual place after the listed ones.
    */
   sectionOrder?: readonly CvSectionKey[]
+  photo: CvTemplatePhoto
   defaults: CvDesignTokens
   typography: CvTemplateTypography
 }
@@ -187,13 +221,21 @@ const BASE_TOKENS: CvDesignTokens = {
   showIcons: false,
 }
 
+const BASE_TYPOGRAPHY: CvTemplateTypography = {
+  baseSize: 10,
+  nameSize: 26,
+  titleSize: 12.5,
+  sidebarWidth: 180,
+  sideSections: SIDEBAR_SECTIONS,
+}
+
 const withPalette = (palette: Partial<CvTemplatePalette>): CvTemplatePalette => ({
   ...BASE_TOKENS.palette,
   ...palette,
 })
 
-const COLUMNS_NOTE =
-  'a deux colonnes : certains logiciels de recrutement (ATS) les lisent dans le désordre. Préfère « Sobre » ou « Classique » pour les candidatures en ligne.'
+const columnsNote = (label: string) =>
+  `Le modèle « ${label} » a deux colonnes : certains logiciels de recrutement (ATS) les lisent dans le désordre. Préfère « Sobre » ou « Classique » pour les candidatures en ligne.`
 
 const STUDENT_ORDER: readonly CvSectionKey[] = [
   'summary',
@@ -208,63 +250,66 @@ const STUDENT_ORDER: readonly CvSectionKey[] = [
   'interests',
 ]
 
-const more: Record<Exclude<CvTemplateId, 'sobre' | 'moderne' | 'compact'>, CvTemplateMeta> = {
-  classique: {
-    id: 'classique',
-    label: 'Classique',
-    description: 'Police à empattement, en-tête centré : sobre et intemporel.',
+type TemplateEntry = Omit<CvTemplateMeta, 'id' | 'defaults' | 'typography'> & {
+  defaults: Partial<CvDesignTokens>
+  typography?: Partial<CvTemplateTypography>
+}
+
+const entries: Record<CvTemplateId, TemplateEntry> = {
+  // --- Sobre / ATS: one column, standard headings -----------------------------------
+  sobre: {
+    label: 'Sobre',
+    description:
+      'Une colonne, titres soulignés : le plus lisible par les logiciels de recrutement.',
     category: 'ats',
     atsLevel: 'optimal',
     atsNote: null,
+    photo: 'none',
+    defaults: { palette: withPalette({ secondary: { tint: 0 } }) },
+    typography: { nameSize: 24, titleSize: 13 },
+  },
+  classique: {
+    label: 'Classique',
+    description: 'Garamond, en-tête centré, filets fins : sobre et intemporel.',
+    category: 'ats',
+    atsLevel: 'optimal',
+    atsNote: null,
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
-      palette: withPalette({ primary: '#1f3a5f' }),
-      fontPairing: 'source-serif',
+      palette: withPalette({ primary: '#1f3a5f', secondary: { tint: 0.6 } }),
+      fontPairing: 'eb-garamond',
       headerStyle: 'centered',
       sectionTitleStyle: 'rule',
     },
-    typography: {
-      baseSize: 10.5,
-      nameSize: 26,
-      titleSize: 12.5,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
-    },
+    typography: { baseSize: 10.5, nameSize: 29, titleSize: 13 },
   },
   executif: {
-    id: 'executif',
     label: 'Exécutif',
     description: 'Retenu et élégant : petites capitales, grandes marges, contact à droite.',
     category: 'ats',
     atsLevel: 'optimal',
     atsNote: null,
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
       palette: withPalette({ primary: '#8a1c2b', muted: '#52525b' }),
-      fontPairing: 'playfair-source-sans',
+      fontPairing: 'lora-source-sans',
       margins: 'wide',
       headerStyle: 'split',
       sectionTitleStyle: 'smallcaps',
       bulletStyle: 'dash',
     },
-    typography: {
-      baseSize: 10,
-      nameSize: 26,
-      titleSize: 12,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
-    },
+    typography: { nameSize: 27, titleSize: 12 },
   },
   minimal: {
-    id: 'minimal',
     label: 'Minimal',
-    description: 'Beaucoup d’air, des filets fins et une seule couleur sobre.',
+    description: 'Beaucoup d’air, des titres discrets et une seule couleur sobre.',
     category: 'ats',
     atsLevel: 'optimal',
     atsNote: null,
+    photo: 'none',
     defaults: {
-      ...BASE_TOKENS,
-      palette: withPalette({ primary: '#404040', muted: '#6b6b6b', secondary: '#d4d4d4' }),
+      palette: withPalette({ primary: '#3f3f46', muted: '#636369', secondary: '#d4d4d8' }),
+      fontPairing: 'ibm-plex',
       lineHeight: 'relaxed',
       spacing: 'comfortable',
       margins: 'wide',
@@ -272,23 +317,38 @@ const more: Record<Exclude<CvTemplateId, 'sobre' | 'moderne' | 'compact'>, CvTem
       itemStyle: 'dates-below',
       bulletStyle: 'dash',
     },
-    typography: {
-      baseSize: 9.5,
-      nameSize: 28,
-      titleSize: 12,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
+    typography: { baseSize: 9.5, nameSize: 30, titleSize: 12 },
+  },
+
+  // --- Moderne ----------------------------------------------------------------------------
+  moderne: {
+    label: 'Moderne',
+    description:
+      'Colonne latérale colorée : photo, contact, compétences en barres et langues en un coup d’œil.',
+    category: 'moderne',
+    atsLevel: 'limite',
+    atsNote: columnsNote('Moderne'),
+    photo: 'fits',
+    defaults: {
+      layout: 'sidebar-left',
+      palette: withPalette({ primary: '#1e40af' }),
+      headerStyle: 'sidebar',
+      sectionTitleStyle: 'underline',
+      itemStyle: 'dates-below',
+      skillStyle: 'bars',
+      languageStyle: 'dots',
+      showIcons: true,
     },
+    typography: { baseSize: 9.5, nameSize: 27, sidebarWidth: 190, photoScale: 1.4 },
   },
   ardoise: {
-    id: 'ardoise',
     label: 'Ardoise',
     description: 'Colonne latérale sombre à texte clair, contact et compétences en un coup d’œil.',
     category: 'moderne',
     atsLevel: 'limite',
-    atsNote: `Le modèle « Ardoise » ${COLUMNS_NOTE}`,
+    atsNote: columnsNote('Ardoise'),
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
       layout: 'sidebar-left',
       palette: withPalette({ primary: '#0e7490', sidebarBg: '#1f2937' }),
       fontPairing: 'poppins-inter',
@@ -296,101 +356,158 @@ const more: Record<Exclude<CvTemplateId, 'sobre' | 'moderne' | 'compact'>, CvTem
       sectionTitleStyle: 'underline',
       itemStyle: 'dates-below',
       skillStyle: 'dots',
-      languageStyle: 'dots',
+      languageStyle: 'bars',
       showIcons: true,
     },
-    typography: {
-      baseSize: 9.5,
-      nameSize: 25,
-      titleSize: 12.5,
-      sidebarWidth: 200,
-      sideSections: SIDEBAR_SECTIONS,
-    },
+    typography: { baseSize: 9.5, nameSize: 26, sidebarWidth: 200, photoScale: 1.4 },
   },
   chronologie: {
-    id: 'chronologie',
     label: 'Chronologie',
-    description: 'Les dates dans une colonne, reliées par une ligne du temps.',
+    description: 'Les dates dans une colonne, reliées par une ligne du temps ; titres à icônes.',
     category: 'moderne',
     atsLevel: 'bon',
     atsNote:
       'Les dates sont dans une colonne à part : la plupart des logiciels de recrutement les lisent bien, mais « Sobre » reste le plus sûr.',
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
       palette: withPalette({ primary: '#4338ca' }),
       fontPairing: 'lora-source-sans',
+      headerStyle: 'split',
       sectionTitleStyle: 'plain',
       itemStyle: 'timeline',
+      skillStyle: 'tags',
+      languageStyle: 'cefr',
+      showIcons: true,
     },
-    typography: {
-      baseSize: 10,
-      nameSize: 26,
-      titleSize: 13,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
-    },
+    typography: { nameSize: 27, titleSize: 13 },
   },
   duo: {
-    id: 'duo',
     label: 'Duo',
-    description: 'Deux colonnes égales : le parcours à gauche, les compétences à droite.',
+    description: 'Deux colonnes égales : le parcours à gauche, les compétences notées à droite.',
     category: 'moderne',
     atsLevel: 'limite',
-    atsNote: `Le modèle « Duo » ${COLUMNS_NOTE}`,
+    atsNote: columnsNote('Duo'),
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
       layout: 'split',
       palette: withPalette({ primary: '#0f4c5c' }),
       fontPairing: 'source',
       margins: 'narrow',
       headerStyle: 'centered',
+      sectionTitleStyle: 'smallcaps',
       itemStyle: 'dates-below',
-      skillStyle: 'list',
-      languageStyle: 'list',
+      skillStyle: 'dots',
+      languageStyle: 'cefr',
+    },
+    typography: { baseSize: 9.5, nameSize: 28 },
+  },
+  portrait: {
+    label: 'Portrait',
+    description:
+      'Construit autour de la photo : grand portrait rond dans une colonne colorée, le nom à côté.',
+    category: 'moderne',
+    atsLevel: 'limite',
+    atsNote: columnsNote('Portrait'),
+    photo: 'feature',
+    defaults: {
+      layout: 'sidebar-left',
+      palette: withPalette({ primary: '#4d7c0f', sidebarBg: { tint: 0.86 } }),
+      fontPairing: 'montserrat-open-sans',
+      headerStyle: 'sidebar',
+      sectionTitleStyle: 'bar',
+      itemStyle: 'dates-below',
+      skillStyle: 'bars',
+      languageStyle: 'cefr',
+      showIcons: true,
     },
     typography: {
       baseSize: 9.5,
-      nameSize: 26,
-      titleSize: 12.5,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
+      nameSize: 32,
+      titleSize: 13.5,
+      sidebarWidth: 200,
+      photoScale: 1.9,
     },
   },
+  rivage: {
+    label: 'Rivage',
+    description:
+      'Colonne colorée à droite : photo, jauges de compétences et points de langues ; le parcours à gauche.',
+    category: 'moderne',
+    atsLevel: 'limite',
+    atsNote: columnsNote('Rivage'),
+    photo: 'feature',
+    defaults: {
+      layout: 'sidebar-right',
+      palette: withPalette({ primary: '#0369a1', sidebarBg: '#0c4a6e' }),
+      fontPairing: 'poppins-inter',
+      headerStyle: 'sidebar',
+      sectionTitleStyle: 'rule',
+      itemStyle: 'dates-right',
+      skillStyle: 'bars',
+      languageStyle: 'dots',
+      showIcons: true,
+    },
+    typography: { baseSize: 9.5, nameSize: 28, sidebarWidth: 196, photoScale: 1.6 },
+  },
+  direction: {
+    label: 'Direction',
+    description:
+      'Bandeau anthracite et filet de couleur, ligne du temps nette : pour les postes d’encadrement.',
+    category: 'moderne',
+    atsLevel: 'bon',
+    atsNote:
+      'Le bandeau sombre est lu comme du texte normal par la plupart des logiciels de recrutement ; « Sobre » reste le plus sûr pour les portails.',
+    photo: 'fits',
+    defaults: {
+      layout: 'banner',
+      palette: withPalette({ primary: '#b45309', sidebarBg: '#262b33' }),
+      fontPairing: 'source',
+      margins: 'narrow',
+      headerStyle: 'band',
+      sectionTitleStyle: 'smallcaps',
+      itemStyle: 'timeline',
+      bulletStyle: 'dash',
+      skillStyle: 'list',
+      languageStyle: 'cefr',
+    },
+    typography: {
+      baseSize: 9.5,
+      nameSize: 28,
+      titleSize: 12.5,
+      bandFill: 'sidebar',
+      titleCaps: true,
+    },
+  },
+
+  // --- Créatif ----------------------------------------------------------------------------
   horizon: {
-    id: 'horizon',
     label: 'Horizon',
-    description: 'Un bandeau coloré en tête, puis une colonne claire et aérée.',
+    description: 'Un bandeau clair teinté en tête, puis une colonne aérée aux titres à barre.',
     category: 'creatif',
     atsLevel: 'bon',
     atsNote:
-      'Le bandeau coloré est lu comme du texte normal par la plupart des logiciels de recrutement ; vérifie que l’export reste lisible en noir et blanc.',
+      'Le bandeau est lu comme du texte normal par la plupart des logiciels de recrutement ; vérifie que l’export reste lisible en noir et blanc.',
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
       layout: 'banner',
-      palette: withPalette({ primary: '#0f766e' }),
+      palette: withPalette({ primary: '#15803d', sidebarBg: { tint: 0.88 } }),
       fontPairing: 'montserrat-open-sans',
       headerStyle: 'band',
       sectionTitleStyle: 'bar',
       skillStyle: 'tags',
       languageStyle: 'cefr',
+      showIcons: true,
     },
-    typography: {
-      baseSize: 10,
-      nameSize: 27,
-      titleSize: 13,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
-    },
+    typography: { baseSize: 9.5, nameSize: 28, titleSize: 13, bandFill: 'sidebar' },
   },
   creatif: {
-    id: 'creatif',
     label: 'Créatif',
     description: 'Bandeau et titres en aplats de couleur, compétences en étiquettes.',
     category: 'creatif',
     atsLevel: 'limite',
-    atsNote: `Le modèle « Créatif » ${COLUMNS_NOTE}`,
+    atsNote: columnsNote('Créatif'),
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
       layout: 'sidebar-right',
       palette: withPalette({ primary: '#7c3aed', sidebarBg: { tint: 0.92 } }),
       fontPairing: 'poppins-inter',
@@ -400,25 +517,98 @@ const more: Record<Exclude<CvTemplateId, 'sobre' | 'moderne' | 'compact'>, CvTem
       languageStyle: 'dots',
       showIcons: true,
     },
-    typography: {
-      baseSize: 9.5,
-      nameSize: 27,
-      titleSize: 13,
-      sidebarWidth: 190,
-      sideSections: SIDEBAR_SECTIONS,
+    typography: { baseSize: 9.5, nameSize: 28, titleSize: 13, sidebarWidth: 190 },
+  },
+  impact: {
+    label: 'Impact',
+    description: 'Grand bandeau de couleur avec photo et contacts à icônes, puis deux colonnes.',
+    category: 'creatif',
+    atsLevel: 'limite',
+    atsNote: columnsNote('Impact'),
+    photo: 'feature',
+    defaults: {
+      layout: 'split',
+      palette: withPalette({ primary: '#b91c1c' }),
+      fontPairing: 'montserrat-open-sans',
+      margins: 'narrow',
+      headerStyle: 'band',
+      sectionTitleStyle: 'underline',
+      itemStyle: 'dates-below',
+      skillStyle: 'bars',
+      languageStyle: 'dots',
+      showIcons: true,
     },
+    typography: { baseSize: 9.5, nameSize: 30, titleSize: 13.5, photoScale: 1.3 },
+  },
+  editorial: {
+    label: 'Éditorial',
+    description:
+      'Mise en page de magazine : nom en très grand, titres en marge, filets fins et beaucoup de blanc.',
+    category: 'creatif',
+    atsLevel: 'bon',
+    atsNote:
+      'Les titres sont dans une marge à gauche des sections : la plupart des logiciels de recrutement les lisent dans l’ordre, mais « Sobre » reste le plus sûr.',
+    photo: 'fits',
+    defaults: {
+      palette: withPalette({ primary: '#9a3412', secondary: '#d6d3d1' }),
+      fontPairing: 'playfair-source-sans',
+      sectionTitleStyle: 'sidehead',
+      itemStyle: 'dates-below',
+      bulletStyle: 'dash',
+      skillStyle: 'list',
+      languageStyle: 'list',
+    },
+    typography: { baseSize: 9.5, nameSize: 44, titleSize: 12, titleCaps: true },
+  },
+  geometrie: {
+    label: 'Géométrie',
+    description:
+      'Formes géométriques en fond, titres en pastilles à icône et compétences en étiquettes.',
+    category: 'creatif',
+    atsLevel: 'bon',
+    atsNote:
+      'Les icônes et les formes décoratives ne gênent pas la plupart des logiciels de recrutement, mais « Sobre » reste le plus sûr.',
+    photo: 'fits',
+    defaults: {
+      palette: withPalette({ primary: '#c026d3' }),
+      fontPairing: 'poppins-inter',
+      sectionTitleStyle: 'chip',
+      itemStyle: 'dates-right',
+      skillStyle: 'tags',
+      languageStyle: 'dots',
+      showIcons: true,
+    },
+    typography: { nameSize: 30, titleSize: 13, ornament: 'shapes' },
+  },
+
+  // --- Une page -------------------------------------------------------------------------
+  compact: {
+    label: 'Compact',
+    description: 'Une colonne serrée, dates sur la ligne du poste : pensé pour tenir sur une page.',
+    category: 'une-page',
+    atsLevel: 'optimal',
+    atsNote: null,
+    photo: 'none',
+    defaults: {
+      palette: withPalette({ primary: '#334155' }),
+      lineHeight: 'tight',
+      spacing: 'compact',
+      margins: 'narrow',
+      headerStyle: 'inline',
+      itemStyle: 'compact',
+    },
+    typography: { baseSize: 9, nameSize: 19, titleSize: 11.5, sidebarWidth: 170 },
   },
   etudiant: {
-    id: 'etudiant',
     label: 'Étudiant',
-    description: 'La formation et les projets d’abord, sur une page.',
+    description: 'La formation et les projets d’abord, sur une page, avec un liseré de couleur.',
     category: 'une-page',
     atsLevel: 'bon',
     atsNote: null,
     sectionOrder: STUDENT_ORDER,
+    photo: 'fits',
     defaults: {
-      ...BASE_TOKENS,
-      palette: withPalette({ primary: '#2563eb' }),
+      palette: withPalette({ primary: '#0d9488' }),
       fontPairing: 'lato',
       margins: 'narrow',
       spacing: 'compact',
@@ -426,140 +616,22 @@ const more: Record<Exclude<CvTemplateId, 'sobre' | 'moderne' | 'compact'>, CvTem
       skillStyle: 'tags',
       languageStyle: 'cefr',
     },
-    typography: {
-      baseSize: 10,
-      nameSize: 25,
-      titleSize: 12.5,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
-    },
+    typography: { nameSize: 26, ornament: 'strip' },
   },
 }
 
-export const cvTemplates: Record<CvTemplateId, CvTemplateMeta> = {
-  sobre: {
-    id: 'sobre',
-    label: 'Sobre',
-    description:
-      'Une colonne, titres soulignés : le plus lisible par les logiciels de recrutement.',
-    category: 'ats',
-    atsLevel: 'optimal',
-    atsNote: null,
-    defaults: {
-      layout: 'single',
-      palette: {
-        primary: '#c8410b',
-        secondary: { tint: 0 },
-        text: '#1c1917',
-        muted: '#57534e',
-        sidebarBg: { tint: 0.9 },
-      },
-      fontPairing: 'inter',
-      fontSize: 0,
-      lineHeight: 'normal',
-      spacing: 'normal',
-      margins: 'normal',
-      headerStyle: 'left',
-      sectionTitleStyle: 'rule',
-      itemStyle: 'dates-right',
-      bulletStyle: 'dot',
-      skillStyle: 'inline',
-      languageStyle: 'inline',
-      showIcons: false,
-    },
-    typography: {
-      baseSize: 10,
-      nameSize: 24,
-      titleSize: 13,
-      sidebarWidth: 180,
-      sideSections: SIDEBAR_SECTIONS,
-    },
-  },
-  classique: more.classique,
-  executif: more.executif,
-  minimal: more.minimal,
-  moderne: {
-    id: 'moderne',
-    label: 'Moderne',
-    description: 'Une colonne latérale colorée pour le contact, les compétences et les langues.',
-    category: 'moderne',
-    atsLevel: 'limite',
-    atsNote:
-      'Le modèle « Moderne » a deux colonnes : certains logiciels de recrutement (ATS) les lisent dans le désordre. Préfère « Sobre » ou « Compact » pour les candidatures en ligne.',
-    defaults: {
-      layout: 'sidebar-left',
-      palette: {
-        primary: '#c8410b',
-        secondary: { tint: 0.55 },
-        text: '#1c1917',
-        muted: '#57534e',
-        sidebarBg: { tint: 0.9 },
-      },
-      fontPairing: 'inter',
-      fontSize: 0,
-      lineHeight: 'normal',
-      spacing: 'normal',
-      margins: 'normal',
-      headerStyle: 'sidebar',
-      sectionTitleStyle: 'underline',
-      itemStyle: 'dates-below',
-      bulletStyle: 'dot',
-      skillStyle: 'list',
-      languageStyle: 'list',
-      showIcons: false,
-    },
-    typography: {
-      baseSize: 9.5,
-      nameSize: 24,
-      titleSize: 12.5,
-      sidebarWidth: 190,
-      sideSections: SIDEBAR_SECTIONS,
-    },
-  },
-  ardoise: more.ardoise,
-  chronologie: more.chronologie,
-  duo: more.duo,
-  horizon: more.horizon,
-  creatif: more.creatif,
-  compact: {
-    id: 'compact',
-    label: 'Compact',
-    description: 'Une colonne serrée, dates sur la ligne du poste : pensé pour tenir sur une page.',
-    category: 'une-page',
-    atsLevel: 'optimal',
-    atsNote: null,
-    defaults: {
-      layout: 'single',
-      palette: {
-        primary: '#c8410b',
-        secondary: { tint: 0.55 },
-        text: '#1c1917',
-        muted: '#57534e',
-        sidebarBg: { tint: 0.9 },
-      },
-      fontPairing: 'inter',
-      fontSize: 0,
-      lineHeight: 'tight',
-      spacing: 'compact',
-      margins: 'narrow',
-      headerStyle: 'inline',
-      sectionTitleStyle: 'rule',
-      itemStyle: 'compact',
-      bulletStyle: 'dot',
-      skillStyle: 'inline',
-      languageStyle: 'inline',
-      showIcons: false,
-    },
-    typography: {
-      baseSize: 9,
-      nameSize: 19,
-      titleSize: 11.5,
-      sidebarWidth: 170,
-      sideSections: SIDEBAR_SECTIONS,
-    },
-  },
-  etudiant: more.etudiant,
-}
+export const cvTemplates = Object.fromEntries(
+  cvTemplateIds.map((id) => {
+    const { defaults, typography, ...meta } = entries[id]
+    const template: CvTemplateMeta = {
+      id,
+      ...meta,
+      defaults: { ...BASE_TOKENS, ...defaults },
+      typography: { ...BASE_TYPOGRAPHY, ...typography },
+    }
+    return [id, template]
+  }),
+) as Record<CvTemplateId, CvTemplateMeta>
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
