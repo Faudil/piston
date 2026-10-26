@@ -105,6 +105,7 @@ export function coverLetterPrompt(ctx: CoverLetterContext): string {
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - ${template.frame}
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: ${BANNED_PHRASES.map((p) => `"${p}"`).join(', ')}. Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it.`,

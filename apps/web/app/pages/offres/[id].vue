@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Generation, JobOffer, OfferAnalysisOutput } from '@piston/shared'
+import type { Application, Generation, JobOffer, OfferAnalysisOutput } from '@piston/shared'
 
 const route = useRoute()
 const router = useRouter()
@@ -9,8 +9,12 @@ const offerId = route.params.id as string
 const { data: offer, error: offerError } = await useFetch<JobOffer>(`/api/offers/${offerId}`)
 const { data: previous } = await useFetch<{
   analysis: Generation<'offer_analysis'> | null
-  coverLetter: Generation<'cover_letter'> | null
 }>(`/api/offers/${offerId}/generations`)
+// The offer's application, if it is tracked (one application per offer).
+const { data: applications } = await useFetch<Application[]>('/api/applications', {
+  default: () => [],
+})
+const application = computed(() => applications.value.find((a) => a.jobOfferId === offerId) ?? null)
 
 useSeoMeta({ title: () => offer.value?.title ?? 'Offre' })
 
@@ -37,7 +41,7 @@ async function changeProfile(profileId: string | null) {
       icon: 'i-lucide-check',
     })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     savingProfile.value = false
   }
@@ -81,46 +85,41 @@ onMounted(() => {
 })
 
 async function onDeleted() {
-  toast.add({ title: 'Offre supprimée', icon: 'i-lucide-trash-2' })
+  toast.add({ title: 'Offre supprimée', icon: 'i-lucide-check' })
   await navigateTo('/offres')
 }
 
-/** "lettre-acme" for the exported letter file. */
-const letterFilename = computed(() => {
-  const name = offer.value?.company || offer.value?.title || 'motivation'
-  const slug = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-  return `lettre-${slug || 'motivation'}`
-})
+// --- Letter ---------------------------------------------------------------------
+
+/** The letter shown by the editor, for the next-step card. */
+const letter = shallowRef<Generation<'cover_letter'> | null>(null)
+const letterFile = computed(() => letterFilename(offer.value?.company || offer.value?.title))
+
+function scrollToLetter() {
+  document.getElementById('letter-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const hasAnalysis = computed(() => Boolean(analysis.generation.value ?? previous.value?.analysis))
 
 // --- Application ------------------------------------------------------------
 
 const adding = ref(false)
-const goToApplications = [{ label: 'Voir', to: '/candidatures', color: 'neutral' as const }]
 
 async function addToApplications() {
   adding.value = true
   try {
-    await $fetch('/api/applications', { method: 'POST', body: { jobOfferId: offerId } })
+    const created = await $fetch<Application>('/api/applications', {
+      method: 'POST',
+      body: { jobOfferId: offerId },
+    })
+    applications.value = [created, ...applications.value]
     toast.add({
-      title: 'Ajoutée aux candidatures',
-      icon: 'i-lucide-kanban',
-      actions: goToApplications,
+      title: 'Ajoutée à tes candidatures',
+      icon: 'i-lucide-check',
+      actions: [{ label: 'Voir', to: `/candidatures?candidature=${created.id}`, color: 'neutral' }],
     })
   } catch (err) {
-    if ((err as { statusCode?: number }).statusCode === 409) {
-      toast.add({
-        title: 'Cette offre est déjà dans tes candidatures.',
-        icon: 'i-lucide-info',
-        actions: goToApplications,
-      })
-    } else {
-      toast.add({ title: apiErrorMessage(err), color: 'error' })
-    }
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     adding.value = false
   }
@@ -148,6 +147,15 @@ async function addToApplications() {
     </template>
     <template v-if="offer" #actions>
       <UButton
+        v-if="application"
+        :to="`/candidatures?candidature=${application.id}`"
+        label="Voir la candidature"
+        icon="i-lucide-kanban"
+        color="neutral"
+        variant="outline"
+      />
+      <UButton
+        v-else
         label="Ajouter aux candidatures"
         icon="i-lucide-kanban"
         color="neutral"
@@ -167,6 +175,18 @@ async function addToApplications() {
     />
 
     <div v-else class="space-y-12">
+      <OfferNextSteps
+        :offer="offer"
+        :application="application"
+        :has-analysis="hasAnalysis"
+        :letter-id="letter?.id ?? null"
+        :analyzing="analysis.pending.value"
+        :tracking="adding"
+        @analyze="analyze"
+        @write-letter="scrollToLetter"
+        @track="addToApplications"
+      />
+
       <UCollapsible
         class="rounded-2xl border border-default bg-default"
         :ui="{ content: 'px-4 pb-4 sm:px-5 sm:pb-5' }"
@@ -240,7 +260,11 @@ async function addToApplications() {
               <ULink to="/cv" class="underline">Aller à la page CV</ULink>
             </template>
           </UAlert>
-          <StreamingIndicator v-if="analysis.pending.value" />
+          <StreamingIndicator
+            v-if="analysis.pending.value"
+            text="Claude analyse l'offre…"
+            @stop="analysis.abort()"
+          />
           <div aria-live="polite">
             <OfferAnalysisResult v-if="shownAnalysis" :output="shownAnalysis" />
             <ResultSkeleton v-else-if="analysis.pending.value" />
@@ -257,30 +281,24 @@ async function addToApplications() {
         </div>
       </section>
 
-      <section aria-labelledby="letter-title">
+      <section aria-labelledby="letter-title" class="scroll-mt-6">
         <AppSectionHeading
           id="letter-title"
           title="Lettre de motivation"
           icon="i-lucide-pen-line"
-          description="Choisis un ton, ajoute jusqu'à trois points à mettre en avant, puis retouche chaque paragraphe."
+          :description="
+            application
+              ? 'Choisis un modèle et un ton, puis retouche chaque paragraphe. Les notes de ta candidature sont prises en compte.'
+              : 'Choisis un modèle et un ton, ajoute jusqu\'à trois points à mettre en avant, puis retouche chaque paragraphe.'
+          "
         />
-        <UCard>
-          <CoverLetterEditor
-            :offer-id="offerId"
-            :filename="letterFilename"
-            :initial="previous?.coverLetter ?? null"
-          />
-        </UCard>
+        <LettersEditor
+          :offer-id="offerId"
+          :application-id="application?.id ?? null"
+          :filename="letterFile"
+          @change="letter = $event"
+        />
       </section>
-
-      <UButton
-        label="Ajouter aux candidatures"
-        icon="i-lucide-kanban"
-        size="xl"
-        block
-        :loading="adding"
-        @click="addToApplications"
-      />
     </div>
   </AppPage>
 </template>

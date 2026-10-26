@@ -2,6 +2,7 @@
 import {
   applicationStatusLabels,
   type Application,
+  type CvDocumentSummary,
   type Generation,
   type JobOffer,
   type Paginated,
@@ -17,22 +18,28 @@ const { webSearch } = useFeatures()
 const { profiles, defaultProfile } = await useResumeProfiles()
 
 // Failed calls fall back to empty data (`default`) so the dashboard never crashes.
-const [{ data: resumes }, { data: reviews }, { data: applications }, { data: offers }] =
-  await Promise.all([
-    useFetch<Resume[]>('/api/resumes', {
-      query: computed(() => ({ profileId: defaultProfile.value?.id })),
-      default: () => [],
-    }),
-    useFetch<Paginated<Generation<'resume_review'>>>('/api/generations', {
-      query: computed(() => ({
-        kind: 'resume_review',
-        pageSize: 1,
-        profileId: defaultProfile.value?.id,
-      })),
-    }),
-    useFetch<Application[]>('/api/applications', { default: () => [] }),
-    useFetch<JobOffer[]>('/api/offers', { default: () => [] }),
-  ])
+const [
+  { data: resumes },
+  { data: reviews },
+  { data: applications },
+  { data: offers },
+  { data: cvDocuments },
+] = await Promise.all([
+  useFetch<Resume[]>('/api/resumes', {
+    query: computed(() => ({ profileId: defaultProfile.value?.id })),
+    default: () => [],
+  }),
+  useFetch<Paginated<Generation<'resume_review'>>>('/api/generations', {
+    query: computed(() => ({
+      kind: 'resume_review',
+      pageSize: 1,
+      profileId: defaultProfile.value?.id,
+    })),
+  }),
+  useFetch<Application[]>('/api/applications', { default: () => [] }),
+  useFetch<JobOffer[]>('/api/offers', { default: () => [] }),
+  useFetch<CvDocumentSummary[]>('/api/cv-documents', { default: () => [] }),
+])
 
 const firstName = computed(() => user.value?.displayName.trim().split(/\s+/)[0] ?? '')
 const currentResume = computed(() => resumes.value.find((r) => r.isCurrent))
@@ -74,7 +81,31 @@ const stats = computed(() => [
   },
 ])
 
-/** The single most useful thing to do now, depending on where the user is. */
+/** Days after which a sent application deserves a follow-up. */
+const FOLLOW_UP_AFTER_DAYS = 10
+
+const lastChange = (application: Application) =>
+  application.statusHistory.at(-1)?.at ?? application.updatedAt
+
+/** Applications waiting to be sent, oldest first: the one to finish first. */
+const toSend = computed(() =>
+  applications.value
+    .filter((a) => a.status === 'to_send')
+    .sort((a, b) => lastChange(a).localeCompare(lastChange(b))),
+)
+const toFollowUp = computed(() => {
+  const limit = Date.now() - FOLLOW_UP_AFTER_DAYS * 24 * 3_600_000
+  return applications.value.find(
+    (a) => a.status === 'sent' && new Date(lastChange(a)).getTime() < limit,
+  )
+})
+const where = (application: Application) =>
+  application.offer.company ? `chez ${application.offer.company}` : `« ${application.offer.title} »`
+
+/**
+ * The single most useful thing to do now, following the main flow: a resume,
+ * its review, an offer, then the applications waiting on the user.
+ */
 const nextStep = computed(() => {
   if (!currentResume.value)
     return {
@@ -90,16 +121,56 @@ const nextStep = computed(() => {
       text: 'Quatre notes, tes points forts, ce qui coince et une réécriture ligne par ligne.',
       action: { label: 'Critiquer mon CV', to: '/cv', icon: 'i-lucide-sparkles' },
     }
+  if (!offers.value.length)
+    return {
+      icon: 'i-lucide-target',
+      title: 'Ajoute ta première offre',
+      text: 'Claude la compare à ton CV, puis t’aide à écrire la lettre et à adapter ton CV.',
+      action: { label: 'Nouvelle offre', to: '/offres?new=1', icon: 'i-lucide-plus' },
+    }
+  const first = toSend.value[0]
+  if (first) {
+    const others = toSend.value.length - 1
+    return {
+      icon: 'i-lucide-send',
+      title: `Envoie ta candidature ${where(first)}`,
+      text:
+        'Termine la lettre, adapte ton CV à l’offre, puis passe la carte dans « Envoyée ».' +
+        (others
+          ? ` ${others} autre${others > 1 ? 's' : ''} candidature${others > 1 ? 's' : ''} à envoyer.`
+          : ''),
+      action: {
+        label: 'Ouvrir l’offre',
+        to: `/offres/${first.offer.id}`,
+        icon: 'i-lucide-arrow-right',
+      },
+    }
+  }
+  if (toFollowUp.value)
+    return {
+      icon: 'i-lucide-bell-ring',
+      title: `Relance ta candidature ${where(toFollowUp.value)}`,
+      text: `Envoyée il y a plus de ${FOLLOW_UP_AFTER_DAYS} jours, sans nouvelle. Une relance courte et polie suffit.`,
+      action: {
+        label: 'Voir la candidature',
+        to: `/candidatures?candidature=${toFollowUp.value.id}`,
+        icon: 'i-lucide-arrow-right',
+      },
+    }
+  if (!cvDocuments.value.length)
+    return {
+      icon: 'i-lucide-file-pen-line',
+      title: 'Mets ton CV en page avec Piston',
+      text: 'Des modèles lisibles par les logiciels de recrutement, et une copie adaptée à chaque offre en un clic.',
+      action: { label: 'Créer mon CV', to: '/cv#cv-builder', icon: 'i-lucide-plus' },
+    }
   return {
     icon: 'i-lucide-target',
-    title: 'Une offre te tente ?',
+    title: 'Une autre offre te tente ?',
     text: 'Ajoute-la : Claude la compare à ton CV et prépare ta lettre de motivation.',
     action: { label: 'Nouvelle offre', to: '/offres?new=1', icon: 'i-lucide-plus' },
   }
 })
-
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' })
-const formatDate = (iso: string) => dateFormat.format(new Date(iso))
 </script>
 
 <template>
@@ -190,10 +261,10 @@ const formatDate = (iso: string) => dateFormat.format(new Date(iso))
               <div class="min-w-0">
                 <p class="truncate font-medium text-highlighted">{{ currentResume.title }}</p>
                 <p class="text-sm text-muted">
-                  Ajouté le {{ formatDate(currentResume.createdAt) }}
+                  Ajouté le {{ formatDate(currentResume.createdAt, 'long') }}
                 </p>
                 <p v-if="lastReview" class="text-sm text-muted">
-                  Critiqué le {{ formatDate(lastReview.createdAt) }}
+                  Critiqué le {{ formatDate(lastReview.createdAt, 'long') }}
                 </p>
                 <p v-if="profiles.length > 1" class="text-sm text-muted">
                   Profil par défaut parmi

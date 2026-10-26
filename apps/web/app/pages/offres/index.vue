@@ -31,8 +31,6 @@ function closeForm() {
   importUrl.value = undefined
   void router.replace({ query: {} })
 }
-
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
 </script>
 
 <template>
@@ -60,6 +58,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
         variant="subtle"
         icon="i-lucide-circle-alert"
         title="Impossible de charger tes offres."
+        :description="apiErrorMessage(error)"
       />
 
       <section v-else-if="offers?.length" aria-labelledby="offers-list">
@@ -84,7 +83,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
                 <span class="block truncate font-medium text-highlighted">{{ offer.title }}</span>
                 <span class="block truncate text-sm text-muted">
                   <template v-if="offer.company">{{ offer.company }} · </template>
-                  {{ dateFormat.format(new Date(offer.createdAt)) }}
+                  {{ formatDate(offer.createdAt) }}
                 </span>
               </span>
               <UIcon

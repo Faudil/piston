@@ -18,10 +18,16 @@
     "db:migrate": "cd packages/db && bun run migrate",
     "db:seed": "cd packages/db && bun run seed",
     "prepare": "husky",
-    "db:invite": "cd packages/db && bun run invite"
+    "db:invite": "cd packages/db && bun run invite",
+    "user:list": "cd packages/db && bun run user list",
+    "user:reset-password": "cd packages/db && bun run user reset-password",
+    "e2e": "bun run e2e:build && bun run e2e:run",
+    "e2e:build": "cd apps/web && NUXT_E2E_BUILD_DIR=.nuxt-e2e bun --bun nuxt build",
+    "e2e:run": "playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@nuxt/eslint-config": "^1.17.0",
+    "@playwright/test": "1.64.1",
     "@types/bun": "^1.4.3",
     "eslint": "^10.13.0",
     "husky": "^9.1.7",

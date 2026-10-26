@@ -2,6 +2,8 @@
 import {
   applicationStatusLabels,
   type Application,
+  type Generation,
+  type JobOffer,
   type UpdateApplicationBody,
 } from '@piston/shared'
 
@@ -26,6 +28,16 @@ const outcome = computed({
     emit('save', { outcome: value === 'none' ? null : (value as 'accepted' | 'rejected') }),
 })
 
+// For the next-step card: the offer (its resume profile) and its latest letter.
+const { data: offer } = useFetch<JobOffer>(() => `/api/offers/${props.application.jobOfferId}`, {
+  lazy: true,
+  server: false,
+})
+const { data: letters } = useFetch<Generation<'cover_letter'>[]>(
+  () => `/api/offers/${props.application.jobOfferId}/letters`,
+  { lazy: true, server: false, default: () => [] },
+)
+
 // Newest first: the current status is what the user looks for.
 const history = computed(() => [...props.application.statusHistory].reverse())
 </script>
@@ -42,11 +54,22 @@ const history = computed(() => [...props.application.statusHistory].reverse())
       />
     </div>
 
+    <OfferNextSteps
+      v-if="offer"
+      :offer="offer"
+      :application="application"
+      :letter-id="letters[0]?.id ?? null"
+      :letter-to="`/candidatures/${application.id}/lettre`"
+    />
+    <USkeleton v-else class="h-40 w-full rounded-2xl" />
+
     <div class="grid gap-2 sm:grid-cols-2">
       <UButton
         :to="`/candidatures/${application.id}/lettre`"
         icon="i-lucide-pen-line"
         label="Lettre de motivation"
+        color="neutral"
+        variant="outline"
         block
       />
       <UButton

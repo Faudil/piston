@@ -28,9 +28,6 @@ watch(kind, () => {
 })
 watch(page, () => (expanded.value = null))
 
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' })
-const formatDate = (iso: string) => dateFormat.format(new Date(iso))
-
 const kindIcons: Record<string, string> = {
   resume_review: 'i-lucide-file-search',
   offer_analysis: 'i-lucide-scan-search',
@@ -65,6 +62,7 @@ function toggle(id: string) {
         variant="subtle"
         icon="i-lucide-circle-alert"
         title="Impossible de charger l'historique."
+        :description="apiErrorMessage(error)"
       />
 
       <UEmpty
@@ -87,7 +85,7 @@ function toggle(id: string) {
               </span>
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-highlighted">{{ generationKindLabels[item.kind] }}</p>
-                <p class="text-sm text-muted">{{ formatDate(item.createdAt) }}</p>
+                <p class="text-sm text-muted">{{ formatDateTime(item.createdAt) }}</p>
               </div>
               <div class="flex w-full items-center gap-2 sm:w-auto">
                 <UButton
@@ -120,7 +118,7 @@ function toggle(id: string) {
                 v-else-if="item.kind === 'offer_analysis'"
                 :output="item.output"
               />
-              <CoverLetterView v-else-if="item.kind === 'cover_letter'" :output="item.output" />
+              <LettersView v-else-if="item.kind === 'cover_letter'" :output="item.output" />
               <CvGenerationSummary
                 v-else-if="item.kind === 'cv_draft' || item.kind === 'cv_edit'"
                 :generation="asCvGeneration(item)"

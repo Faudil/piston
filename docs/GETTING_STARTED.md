@@ -100,6 +100,60 @@ Open the link, choose a name, e-mail and password, and you are in. From then on,
 
 Each user can run 30 Claude calls per rolling 24 hours (`DAILY_GENERATION_LIMIT`; offer imports count) and 50 web searches or imports, and can create 5 invitations per week. See [Limiting costs](#limiting-costs) for the server-wide caps.
 
+## Operations
+
+Everything below is for the server running the Docker Compose stack. If you start it with `docker-compose.proxy.yml`, run `export COMPOSE_FILE=docker-compose.yml:docker-compose.proxy.yml` first so that every `docker compose` command and script sees the same services.
+
+### Backups
+
+The `backup` service dumps the database every day at `BACKUP_HOUR` (03:00 UTC by default) into the `piston-backups` volume, as `piston-YYYYMMDD-HHMMSS.sql.gz`, and deletes dumps older than `BACKUP_KEEP_DAYS` (14). A dump is checked (`gzip -t`) before it replaces the temporary file, and each run logs one line:
+
+```bash
+docker compose logs backup        # [backup] ... OK piston-20261026-030000.sql.gz (36.0K)
+scripts/backup-now.sh             # take a backup now and list the ones kept
+```
+
+**Off-site copy.** The volume lives on the same disk as the database, so it does not protect you from losing the server. Set `BACKUP_S3_URL` (for example `s3://my-bucket/piston`) with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_DEFAULT_REGION` in `.env`, and every dump is also uploaded. Any S3-compatible provider works (Cloudflare R2, Backblaze B2, Scaleway...): add `AWS_ENDPOINT_URL`. The service installs the `aws-cli` Alpine package when it starts with this option; a failed upload is logged and never deletes the local copy. Rotation in the bucket is the provider's job (a lifecycle rule that expires objects after N days).
+
+**Restore** (replaces all current data; the app is stopped during the restore):
+
+```bash
+scripts/restore-backup.sh piston-20261026-030000.sql.gz     # a dump kept in the volume
+scripts/restore-backup.sh ./downloaded-dump.sql.gz          # a file on the server (e.g. from the bucket)
+```
+
+The script checks that the file is readable, asks you to type `restore`, stops `web`, replays the dump (stopping at the first SQL error) and starts `web` again. Restore a fresh dump on a test database from time to time: a backup you never restored is a hope, not a backup.
+
+### Lost password
+
+There is no « forgot my password » e-mail: Piston sends no e-mail. Whoever has shell access to the server resets passwords, and the user then changes it in « Mon compte »:
+
+```bash
+docker compose exec web bun cli/user.js list
+docker compose exec web bun cli/user.js reset-password ada@example.com
+# New temporary password for ada@example.com (shown once):
+# Xk7pQ...
+```
+
+In development, the same commands are `bun run user:list` and `bun run user:reset-password <email>`. A reset logs the user out of every device. The image carries the tool as a single bundled file (`/app/cli/user.js`) because the runtime image has no sources; it needs no network port or token, which is why it is the only way in.
+
+### Security
+
+- **Login throttling.** 10 failed logins per e-mail and 30 per IP address in 15 minutes lock that key (« Trop de tentatives, réessaie dans quelques minutes. », HTTP 429); a successful login resets the e-mail counter. Failed sign-ups with an unusable invitation (10 per IP) and invitation link checks (60 per IP) are limited the same way. Counters live in the `auth_attempts` table, so they survive restarts. Behind a reverse proxy the app only sees the proxy's address: `TRUST_PROXY=true` (already set by `docker-compose.proxy.yml`) makes it read the client address that the proxy appends to `X-Forwarded-For`. Enable it only when the app is reachable exclusively through that single proxy; with a CDN in front of the proxy, every visitor would share the CDN's address.
+- **Sessions.** The cookie is encrypted, `httpOnly`, `secure` and `sameSite=lax`, and expires `SESSION_MAX_AGE` seconds after login (30 days by default). Changing or resetting a password invalidates every other session at once.
+- **Headers.** Every response carries `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` and `Cross-Origin-Opener-Policy`; HTTPS responses add `Strict-Transport-Security` (one year). Pages carry a Content-Security-Policy that allows only the app's own origin, plus `data:` and `blob:` images and workers for the CV preview and photo crop, and a per-request nonce for the inline scripts Nuxt renders. After an upgrade, if something misbehaves in the browser, set `CSP_REPORT_ONLY=true`, restart, and read the console: it lists what the policy would have blocked.
+
+### Monitoring
+
+- **Logs.** Unexpected server errors (HTTP 5xx) are written as one JSON line each: `time`, `level`, `requestId`, `method`, `route` (opaque tokens removed), `status`, `userHash` (a keyed hash, never the user), `name`, `message` (first line only) and a short stack. Request bodies, query strings, e-mails and document content are never logged. Every response has an `X-Request-Id` header: a user quoting it lets you find the line.
+
+  ```bash
+  docker compose logs web | grep '"level":"error"'
+  ```
+
+- **Health.** `GET /api/health` answers `{ "status": "ok", "db": "ok", "disk": { "freePercent": 41 } }`. The status is `degraded` below 5 % free disk and the HTTP status is 503 when the database is unreachable.
+- **Uptime monitor.** Point [Uptime Kuma](https://github.com/louislam/uptime-kuma) (or any HTTP monitor) at `https://your-domain/api/health` with the keyword `"status":"ok"`, and send alerts to the channel you read. There is no Sentry integration: for a small self-hosted app, JSON logs plus an uptime monitor cover what matters without sending error data to a third party.
+
 ## Limiting costs
 
 Piston calls two paid APIs on your account. Every call is recorded in a usage ledger (before it starts, so aborted and failed calls count) and checked against these limits, all configurable in `.env`:
@@ -128,6 +182,8 @@ Those provider-side limits are the only protection against a bug in the app.
 | `DATABASE_URL is not set`                       | Run the commands from the repository root, where `.env` lives.                                                    |
 | `ECONNREFUSED 127.0.0.1:5432`                   | The dev database is not running: `docker compose -f docker-compose.dev.yml up -d`.                                |
 | Login works locally but not through your domain | Serve the app over HTTPS: the session cookie is `secure` in production.                                           |
+| « Trop de tentatives » when logging in          | Wait 15 minutes. Behind a proxy, check `TRUST_PROXY=true` (see Operations), or all visitors share one address.    |
+| Icons or fonts missing, CSP errors in console   | Set `CSP_REPORT_ONLY=true`, restart, and read the console to see which source the policy blocks.                  |
 | « La clé API Claude du serveur est invalide »   | Check `ANTHROPIC_API_KEY` in `.env`, then restart (`docker compose up -d`).                                       |
 | The CV preview stays empty                      | The browser could not load pdf.js (old browser or blocked script): download the PDF instead, it is the same file. |
 | PDF import says the file looks like an image    | The PDF is a scan without a text layer: paste the text instead.                                                   |

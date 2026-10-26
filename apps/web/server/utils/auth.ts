@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { H3Event } from 'h3'
-import { and, count, eq, gte, invites, isNull, sql, type UserRow } from '@piston/db'
+import { and, count, eq, gte, invites, isNull, sql, users, type UserRow } from '@piston/db'
 import { LIMITS } from '@piston/shared'
 
 /** Returns the logged-in user, or throws a 401. Use at the top of every protected route. */
@@ -13,8 +13,27 @@ export async function requireUser(event: H3Event) {
 export async function startSession(event: H3Event, user: UserRow) {
   await setUserSession(event, {
     user: { id: user.id, email: user.email, displayName: user.displayName },
+    // Checked against users.session_version: changing the password invalidates every older session.
+    sessionVersion: user.sessionVersion,
     loggedInAt: new Date().toISOString(),
   })
+}
+
+/**
+ * Whether a session cookie is still valid for its user: the user exists and
+ * has not changed their password since the cookie was issued. Cookies from
+ * before this check existed carry no version and count as version 0.
+ */
+export async function isSessionCurrent(session: {
+  user?: { id: string }
+  sessionVersion?: number
+}) {
+  if (!session.user) return false
+  const [row] = await useDb()
+    .select({ sessionVersion: users.sessionVersion })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+  return row !== undefined && row.sessionVersion === (session.sessionVersion ?? 0)
 }
 
 export async function createInvite(createdBy: string | null) {

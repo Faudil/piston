@@ -16,6 +16,10 @@ export default defineNuxtConfig({
   // prompt, which would hang non-interactive runs (CI, Docker builds).
   telemetry: false,
 
+  // The end-to-end build (`bun run e2e:build`) uses its own folder, so it
+  // never overwrites the .nuxt of a running `bun dev`.
+  buildDir: process.env.NUXT_E2E_BUILD_DIR || '.nuxt',
+
   modules: ['@nuxt/ui', '@nuxt/eslint', 'nuxt-auth-utils'],
 
   css: ['~/assets/css/main.css'],
@@ -46,6 +50,14 @@ export default defineNuxtConfig({
     tavilyMonthlyCredits: Number(process.env.TAVILY_MONTHLY_CREDITS || 1000),
     // Optional: enables job search and offer import from a link.
     tavilyApiKey: process.env.TAVILY_API_KEY ?? '',
+    // Read the client IP from X-Forwarded-For (set TRUST_PROXY=true only behind
+    // exactly one reverse proxy, see server/utils/throttle.ts).
+    trustProxy: process.env.TRUST_PROXY === 'true',
+    // Send the CSP as report-only (see server/middleware/01-security-headers.ts).
+    cspReportOnly: process.env.CSP_REPORT_ONLY === 'true',
+    // Merged into nuxt-auth-utils' defaults (httpOnly, secure, sameSite=lax).
+    // maxAge is in seconds and counted from login, not renewed on activity.
+    session: { maxAge: Number(process.env.SESSION_MAX_AGE || 60 * 60 * 24 * 30) },
   },
 
   nitro: {

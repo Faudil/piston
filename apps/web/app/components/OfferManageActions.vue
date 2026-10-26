@@ -37,7 +37,7 @@ async function save(event: FormSubmitEvent<UpdateOfferBody>) {
     emit('updated', offer)
     toast.add({ title: 'Offre modifiée', icon: 'i-lucide-check' })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     busy.value = false
   }
@@ -50,27 +50,27 @@ async function remove() {
     deleteOpen.value = false
     emit('deleted')
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     busy.value = false
   }
 }
 
 const items = [
-  [{ label: 'Modifier', icon: 'i-lucide-pencil', onSelect: openEdit }],
+  [{ label: 'Modifier', icon: 'i-lucide-pencil', onSelect: () => afterMenuCloses(openEdit) }],
   [
     {
       label: 'Supprimer',
       icon: 'i-lucide-trash-2',
       color: 'error' as const,
-      onSelect: () => (deleteOpen.value = true),
+      onSelect: () => afterMenuCloses(() => (deleteOpen.value = true)),
     },
   ],
 ]
 </script>
 
 <template>
-  <UDropdownMenu :items="items" :content="{ align: 'end' }">
+  <UDropdownMenu :items="items" :modal="false" :content="{ align: 'end' }">
     <UButton
       icon="i-lucide-ellipsis"
       color="neutral"

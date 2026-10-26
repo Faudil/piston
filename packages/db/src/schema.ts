@@ -58,7 +58,28 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   displayName: text('display_name').notNull(),
   passwordHash: text('password_hash').notNull(),
+  /**
+   * Bumped on password change or reset: sessions carrying an older number are
+   * rejected (« log out everywhere »). See server/middleware/auth.ts.
+   */
+  sessionVersion: integer('session_version').notNull().default(0),
 })
+
+/**
+ * One row per throttled event (a failed login, a sign-up attempt, an invite
+ * check). `bucket` says what is counted, e.g. `login-ip:203.0.113.7` or
+ * `login-email:ada@example.com`. Stored in Postgres so limits survive restarts.
+ * Old rows are purged opportunistically (server/utils/throttle.ts).
+ */
+export const authAttempts = pgTable(
+  'auth_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    bucket: text('bucket').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('auth_attempts_bucket_created_idx').on(t.bucket, t.createdAt)],
+)
 
 export const invites = pgTable('invites', {
   ...base,

@@ -60,10 +60,9 @@ function searchFor(jobTitle: string) {
 }
 defineExpose({ searchFor })
 
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
-function formatDate(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : dateFormat.format(date)
+/** Publication dates come from the job boards: some are missing or unparsable. */
+function publishedDate(value: string) {
+  return Number.isNaN(new Date(value).getTime()) ? null : formatDate(value)
 }
 const hostname = (source: string) => source.replace(/^www\./, '')
 const importLink = (url: string) => `/offres?new=1&url=${encodeURIComponent(url)}`
@@ -159,10 +158,10 @@ const importLink = (url: string) => `/offres?new=1&url=${encodeURIComponent(url)
                     <UIcon name="i-lucide-globe" class="size-3.5" />
                     {{ hostname(result.source) }}
                   </span>
-                  <template v-if="result.publishedDate && formatDate(result.publishedDate)">
+                  <template v-if="result.publishedDate && publishedDate(result.publishedDate)">
                     <span aria-hidden="true">·</span>
                     <time :datetime="result.publishedDate">
-                      {{ formatDate(result.publishedDate) }}
+                      {{ publishedDate(result.publishedDate) }}
                     </time>
                   </template>
                 </p>

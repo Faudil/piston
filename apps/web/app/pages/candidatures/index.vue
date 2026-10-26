@@ -25,7 +25,15 @@ function groupByStatus(list: Application[]) {
 const columns = ref(groupByStatus(applications.value))
 const rebuild = () => (columns.value = groupByStatus(applications.value))
 
-const selectedId = ref<string>()
+// `?candidature=<id>` (links from an offer page) opens that application's details.
+const route = useRoute()
+const router = useRouter()
+const selectedId = ref<string | undefined>(
+  typeof route.query.candidature === 'string' ? route.query.candidature : undefined,
+)
+watch(selectedId, (id) => {
+  if (!id && route.query.candidature) void router.replace({ query: {} })
+})
 const selected = computed(() => applications.value.find((a) => a.id === selectedId.value))
 const detailOpen = computed({
   get: () => Boolean(selected.value),
@@ -48,7 +56,7 @@ async function update(id: string, patch: UpdateApplicationBody) {
     return true
   } catch (error) {
     rebuild() // roll back the optimistic move
-    toast.add({ title: apiErrorMessage(error), color: 'error' })
+    toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
     return false
   }
 }
@@ -71,7 +79,9 @@ function onDropped(status: ApplicationStatus) {
 async function save(patch: UpdateApplicationBody) {
   if (!selected.value) return
   saving.value = true
-  if (await update(selected.value.id, patch)) toast.add({ title: 'Candidature mise à jour.' })
+  if (await update(selected.value.id, patch)) {
+    toast.add({ title: 'Candidature mise à jour', icon: 'i-lucide-check' })
+  }
   saving.value = false
 }
 

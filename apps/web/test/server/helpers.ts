@@ -25,6 +25,8 @@ export async function resetTestState() {
   if (testState.db) await truncateAll(testState.db)
   else testState.db = await createTestDb()
   testState.user = null
+  testState.sessionVersion = 0
+  testState.config.trustProxy = false
   testState.config.dailyGenerationLimit = 30
   testState.config.tavilyApiKey = 'test-tavily-key'
   testState.config.claudeGlobalDailyLimit = 300

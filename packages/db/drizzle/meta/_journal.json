@@ -64,6 +64,13 @@
       "when": 1793017360509,
       "tag": "0008_slimy_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793018244049,
+      "tag": "0009_auth_hardening",
+      "breakpoints": true
     }
   ]
 }

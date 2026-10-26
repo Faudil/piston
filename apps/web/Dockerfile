@@ -22,6 +22,9 @@ COPY tsconfig.base.json ./
 COPY packages packages
 COPY apps/web apps/web
 RUN cd apps/web && bun --bun nuxt build
+# Admin CLI (list users, reset a password) as one self-contained file, since the
+# runtime image has no sources or node_modules: `docker compose exec web bun cli/user.js ...`
+RUN bun build packages/db/src/user-cli.ts --target=bun --outfile=/app/cli/user.js
 
 # ---- Runtime stage ---------------------------------------------------------
 FROM oven/bun:1-slim
@@ -31,9 +34,10 @@ ENV NODE_ENV=production \
     NITRO_HOST=0.0.0.0 \
     MIGRATIONS_DIR=/app/drizzle
 
-# Only the self-contained Nitro bundle and the SQL migrations.
+# Only the self-contained Nitro bundle, the SQL migrations and the admin CLI.
 COPY --from=build --chown=bun:bun /app/apps/web/.output ./.output
 COPY --from=build --chown=bun:bun /app/packages/db/drizzle ./drizzle
+COPY --from=build --chown=bun:bun /app/cli ./cli
 
 USER bun
 EXPOSE 3000

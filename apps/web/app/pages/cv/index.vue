@@ -66,10 +66,12 @@ async function setCurrent(resume: Resume) {
     await $fetch(`/api/resumes/${resume.id}/current`, { method: 'PATCH' })
     await refreshAll()
     toast.add({
-      title: `« ${resume.title} » est maintenant la version actuelle de « ${selectedProfile.value?.name} ».`,
+      title: 'Version actuelle changée',
+      description: `« ${resume.title} » est maintenant la version actuelle de « ${selectedProfile.value?.name} ».`,
+      icon: 'i-lucide-check',
     })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   }
 }
 
@@ -85,7 +87,7 @@ async function onCreated(resume: Resume) {
 
 // --- Review of the selected profile -------------------------------------------
 
-const { start, reset, partial, generation, pending, error } = useGeneration('resume_review')
+const { start, abort, reset, partial, generation, pending, error } = useGeneration('resume_review')
 const reviewedResumeId = ref<string | null>(null)
 
 // The last saved review of this profile is shown until a new one starts.
@@ -163,7 +165,7 @@ async function submitName() {
     }
     nameModal.open = false
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     busy.value = false
   }
@@ -175,9 +177,13 @@ async function makeDefault() {
   try {
     await $fetch(`/api/profiles/${profile.id}`, { method: 'PATCH', body: { isDefault: true } })
     await refreshProfiles()
-    toast.add({ title: `« ${profile.name} » est maintenant ton profil par défaut.` })
+    toast.add({
+      title: 'Profil par défaut changé',
+      description: `« ${profile.name} » sert désormais aux offres pour lesquelles tu n’en choisis pas d’autre.`,
+      icon: 'i-lucide-check',
+    })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   }
 }
 
@@ -193,15 +199,16 @@ async function deleteSelected() {
     await refreshAll()
     toast.add({ title: `Profil « ${profile.name} » supprimé`, icon: 'i-lucide-check' })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     busy.value = false
   }
 }
 
+// Items that open a dialog wait for the menu to close (see utils/menus.ts).
 const profileMenu = computed(() => [
   [
-    { label: 'Renommer', icon: 'i-lucide-pencil', onSelect: openRename },
+    { label: 'Renommer', icon: 'i-lucide-pencil', onSelect: () => afterMenuCloses(openRename) },
     ...(selectedProfile.value?.isDefault
       ? []
       : [{ label: 'Définir par défaut', icon: 'i-lucide-star', onSelect: makeDefault }]),
@@ -211,7 +218,7 @@ const profileMenu = computed(() => [
       label: 'Supprimer le profil',
       icon: 'i-lucide-trash-2',
       color: 'error' as const,
-      onSelect: () => (deleteOpen.value = true),
+      onSelect: () => afterMenuCloses(() => (deleteOpen.value = true)),
     },
   ],
 ])
@@ -286,7 +293,7 @@ const deleteDescription = computed(() => {
               />
             </UFormField>
           </div>
-          <UDropdownMenu :items="profileMenu" :content="{ align: 'end' }">
+          <UDropdownMenu :items="profileMenu" :modal="false" :content="{ align: 'end' }">
             <UButton
               icon="i-lucide-ellipsis"
               color="neutral"
@@ -407,11 +414,11 @@ const deleteDescription = computed(() => {
           />
 
           <div class="flex flex-wrap items-center gap-3">
-            <StreamingIndicator v-if="pending" />
+            <StreamingIndicator v-if="pending" text="Claude critique ton CV…" @stop="abort" />
             <p v-if="shown && shownResume" class="text-sm text-muted">
               Critique de « {{ shownResume.title }} »
               <template v-if="!pending && !generation && saved">
-                du {{ new Date(saved.createdAt).toLocaleDateString('fr-FR') }}
+                du {{ formatDate(saved.createdAt, 'long') }}
               </template>
             </p>
           </div>

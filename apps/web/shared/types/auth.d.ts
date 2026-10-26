@@ -7,4 +7,11 @@ declare module '#auth-utils' {
   }
 }
 
+declare module '#auth-utils' {
+  interface UserSession {
+    /** users.session_version at login; see isSessionCurrent(). */
+    sessionVersion?: number
+  }
+}
+
 export {}

@@ -13,6 +13,8 @@ services:
     environment:
       VIRTUAL_HOST: ${PISTON_DOMAIN:?Set PISTON_DOMAIN in .env}
       VIRTUAL_PORT: 3000
+      # Behind the proxy the client IP is in X-Forwarded-For (login throttling).
+      NUXT_TRUST_PROXY: 'true'
       LETSENCRYPT_HOST: ${PISTON_DOMAIN}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:?Set LETSENCRYPT_EMAIL in .env}
     networks:

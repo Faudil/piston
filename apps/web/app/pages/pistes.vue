@@ -4,7 +4,7 @@ import type { Generation, Paginated, SearchLeadsOutput } from '@piston/shared'
 useSeoMeta({ title: 'Pistes' })
 
 const { webSearch } = useFeatures()
-const { start, reset, partial, generation, pending, error } = useGeneration('search_leads')
+const { start, abort, reset, partial, generation, pending, error } = useGeneration('search_leads')
 const jobSearch = useTemplateRef('jobSearch')
 
 // Leads are suggested from one resume profile (the default one unless another is picked).
@@ -81,7 +81,7 @@ const hasResult = computed(() => Boolean(shown.value) || Boolean(saved.value))
           </template>
         </UAlert>
 
-        <StreamingIndicator v-if="pending" />
+        <StreamingIndicator v-if="pending" text="Claude cherche des pistes…" @stop="abort" />
 
         <div aria-live="polite">
           <SearchLeadsResult

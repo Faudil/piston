@@ -73,7 +73,11 @@ async function onSubmit(event: FormSubmitEvent<CreateOfferBody>) {
     // The offer page starts the analysis right away: one less tap on a phone.
     await navigateTo(`/offres/${offer.id}?analyze=1`)
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err, "Impossible d'enregistrer l'offre."), color: 'error' })
+    toast.add({
+      title: apiErrorMessage(err, "Impossible d'enregistrer l'offre."),
+      color: 'error',
+      icon: 'i-lucide-circle-alert',
+    })
   } finally {
     submitting.value = false
   }
@@ -126,7 +130,7 @@ async function onSubmit(event: FormSubmitEvent<CreateOfferBody>) {
           />
         </div>
       </UFormField>
-      <p v-if="importing" class="mt-3"><StreamingIndicator text="Lecture de l'annonce…" /></p>
+      <StreamingIndicator v-if="importing" text="Lecture de l'annonce…" class="mt-3" />
     </form>
 
     <UForm :schema="CreateOfferBody" :state="state" class="space-y-5" @submit="onSubmit">

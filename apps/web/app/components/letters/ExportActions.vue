@@ -1,15 +1,18 @@
 <script setup lang="ts">
 /**
  * Export actions of a cover letter: save it as a .txt file, open the print
- * view (the browser's "Save as PDF" gives a PDF), or download a PDF in the style
- * of one of the user's CVs. The print view loads the
- * saved letter, so `generationId` is only needed for that button.
+ * view (the browser's « Enregistrer au format PDF » gives a PDF), or download
+ * a PDF in the style of one of the user's CVs. The print view and the
+ * matching PDF read the saved letter, so they need `generationId`, which the
+ * editor leaves out while there are unsaved edits.
  */
 const props = defineProps<{
   paragraphs: string[]
   /** File name without extension, e.g. "lettre-acme". */
   filename: string
   generationId?: string | null
+  /** The letter's offer: its tailored CV comes first in the matching PDF menu. */
+  offerId?: string
 }>()
 
 function downloadTxt() {
@@ -36,14 +39,14 @@ function downloadTxt() {
       @click="downloadTxt"
     />
     <UButton
-      v-if="generationId"
       label="Imprimer / PDF"
       icon="i-lucide-printer"
       color="neutral"
       variant="outline"
-      :to="`/impression/lettre/${generationId}`"
+      :to="generationId ? `/impression/lettre/${generationId}` : undefined"
       target="_blank"
+      :disabled="!generationId"
     />
-    <LettersMatchingLetterButton v-if="generationId" :generation-id="generationId" />
+    <LettersMatchingLetterButton :generation-id="generationId ?? null" :offer-id="offerId" />
   </div>
 </template>

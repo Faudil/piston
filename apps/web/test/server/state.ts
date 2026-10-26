@@ -6,10 +6,13 @@ export const testState = {
   db: undefined as unknown as Database,
   claude: undefined as unknown as Anthropic,
   user: null as { id: string; email: string; displayName: string } | null,
+  /** session_version stored in the fake session cookie. */
+  sessionVersion: 0,
   config: {
     anthropicApiKey: 'test-key',
     claudeModel: 'claude-sonnet-5-5',
     databaseUrl: '',
+    trustProxy: false,
     dailyGenerationLimit: 30,
     claudeGlobalDailyLimit: 300,
     claudeMonthlyBudgetUsd: 25,

@@ -26,7 +26,7 @@ watch(open, async (isOpen) => {
   try {
     offers.value = await $fetch<JobOffer[]>('/api/offers')
   } catch (error) {
-    toast.add({ title: apiErrorMessage(error), color: 'error' })
+    toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     loading.value = false
   }
@@ -43,7 +43,7 @@ async function submit() {
     emit('created', created)
     open.value = false
   } catch (error) {
-    toast.add({ title: apiErrorMessage(error), color: 'error' })
+    toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     submitting.value = false
   }

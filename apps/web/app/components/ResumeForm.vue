@@ -35,7 +35,7 @@ async function submitPasted() {
     })
     emit('created', resume)
   } catch (error) {
-    toast.add({ title: apiErrorMessage(error), color: 'error' })
+    toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     pasting.value = false
   }
@@ -75,7 +75,7 @@ async function submitPdf() {
     })
     emit('created', resume)
   } catch (error) {
-    toast.add({ title: apiErrorMessage(error), color: 'error' })
+    toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     importing.value = false
   }

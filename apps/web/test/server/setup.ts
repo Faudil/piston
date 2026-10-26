@@ -24,6 +24,7 @@ import * as cvCoach from '../../server/utils/cv-coach'
 import * as cvAssets from '../../server/utils/cv-assets'
 import * as cvDocuments from '../../server/utils/cv-documents'
 import * as cvDocx from '../../server/utils/cv-docx'
+import * as fakeAi from '../../server/utils/fake-ai'
 import * as cvShare from '../../server/utils/cv-share'
 import * as letterPdf from '../../server/utils/letter-pdf'
 import * as cvPdf from '../../server/utils/cv-pdf'
@@ -32,6 +33,7 @@ import * as offers from '../../server/utils/offers'
 import * as pdf from '../../server/utils/pdf'
 import * as profiles from '../../server/utils/profiles'
 import * as importOffer from '../../server/utils/import-offer'
+import * as throttle from '../../server/utils/throttle'
 import * as tavily from '../../server/utils/tavily'
 import * as usage from '../../server/utils/usage'
 import * as resumes from '../../server/utils/resumes'
@@ -54,6 +56,7 @@ for (const util of [
   cvDocuments,
   cvDocx,
   cvShare,
+  fakeAi,
   letterPdf,
   cvPdf,
   generation,
@@ -64,6 +67,7 @@ for (const util of [
   serialize,
   importOffer,
   tavily,
+  throttle,
   usage,
 ]) {
   for (const [name, value] of Object.entries(util)) vi.stubGlobal(name, value)
@@ -83,15 +87,21 @@ vi.stubGlobal('useStorage', (base: string) => ({
 }))
 
 // nuxt-auth-utils doubles: the "session" is whatever user the test logged in.
-vi.stubGlobal('getUserSession', async () => (testState.user ? { user: testState.user } : {}))
+vi.stubGlobal('getUserSession', async () =>
+  testState.user ? { user: testState.user, sessionVersion: testState.sessionVersion } : {},
+)
 vi.stubGlobal('requireUserSession', async () => {
   if (!testState.user)
     throw h3.createError({ statusCode: 401, message: 'Connecte-toi pour continuer.' })
-  return { user: testState.user }
+  return { user: testState.user, sessionVersion: testState.sessionVersion }
 })
-vi.stubGlobal('setUserSession', async (_event: unknown, data: { user: typeof testState.user }) => {
-  testState.user = data.user
-})
+vi.stubGlobal(
+  'setUserSession',
+  async (_event: unknown, data: { user: typeof testState.user; sessionVersion?: number }) => {
+    testState.user = data.user
+    testState.sessionVersion = data.sessionVersion ?? 0
+  },
+)
 vi.stubGlobal('clearUserSession', async () => {
   testState.user = null
 })

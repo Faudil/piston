@@ -1,5 +1,5 @@
 import { wrapNotes } from '@piston/prompts'
-import { and, desc, eq, generations, inArray, jobOffers, sql } from '@piston/db'
+import { and, applications, desc, eq, generations, inArray, jobOffers, sql } from '@piston/db'
 import type { CoverLetterOutput, Generation, LetterSummary } from '@piston/shared'
 
 /*
@@ -105,6 +105,26 @@ export async function listApplicationLetters(userId: string, applicationId: stri
   return rows.map((row) => toGeneration(row) as Generation<'cover_letter'>)
 }
 
+/**
+ * Every cover letter of one offer, newest first, whichever page it was written
+ * from: an offer has at most one application, so its letters are a single
+ * history shared by the offer page and the application's letter page.
+ */
+export async function listOfferLetters(userId: string, offerId: string) {
+  const rows = await useDb()
+    .select()
+    .from(generations)
+    .where(
+      and(
+        eq(generations.userId, userId),
+        eq(generations.kind, 'cover_letter'),
+        sql`${generations.inputRefs}->>'offerId' = ${offerId}`,
+      ),
+    )
+    .orderBy(desc(generations.createdAt))
+  return rows.map((row) => toGeneration(row) as Generation<'cover_letter'>)
+}
+
 /** Returns one of the user's cover letters, or throws a 404. */
 export async function getUserCoverLetter(userId: string, generationId: string) {
   const generation = await useDb().query.generations.findFirst({
@@ -119,10 +139,12 @@ export async function getUserCoverLetter(userId: string, generationId: string) {
 }
 
 /**
- * Every cover letter of the user, grouped into one entry per application (or
- * per offer for letters written from an offer page), newest activity first.
- * A ~10-user app has at most a few hundred letters: grouping in memory keeps
- * this readable without a GROUP BY over JSON fields.
+ * Every cover letter of the user, grouped into one entry per offer (the offer
+ * page and the application's letter page share one history), newest activity
+ * first. `applicationId` is the offer's application when it is tracked, so
+ * the entry opens the letter page of the application. A ~10-user app has at
+ * most a few hundred letters: grouping in memory keeps this readable without
+ * a GROUP BY over JSON fields.
  */
 export async function listLetterSummaries(userId: string): Promise<LetterSummary[]> {
   const rows = await useDb()
@@ -131,29 +153,35 @@ export async function listLetterSummaries(userId: string): Promise<LetterSummary
     .where(and(eq(generations.userId, userId), eq(generations.kind, 'cover_letter')))
     .orderBy(desc(generations.createdAt))
 
-  // Rows are newest first, so the first row seen for a key is its latest version.
+  // Rows are newest first, so the first row seen for an offer is its latest version.
   const groups = new Map<string, { latest: (typeof rows)[number]; versions: number }>()
   for (const row of rows) {
-    const { applicationId, offerId } = row.inputRefs
+    const { offerId } = row.inputRefs
     if (!offerId) continue
-    const key = applicationId ? `application:${applicationId}` : `offer:${offerId}`
-    const group = groups.get(key)
+    const group = groups.get(offerId)
     if (group) group.versions++
-    else groups.set(key, { latest: row, versions: 1 })
+    else groups.set(offerId, { latest: row, versions: 1 })
   }
 
-  const offerIds = [...new Set([...groups.values()].map((g) => g.latest.inputRefs.offerId!))]
-  const offers = offerIds.length
-    ? await useDb()
-        .select({ id: jobOffers.id, title: jobOffers.title, company: jobOffers.company })
-        .from(jobOffers)
-        .where(and(eq(jobOffers.userId, userId), inArray(jobOffers.id, offerIds)))
-    : []
+  const offerIds = [...groups.keys()]
+  const [offers, tracked] = offerIds.length
+    ? await Promise.all([
+        useDb()
+          .select({ id: jobOffers.id, title: jobOffers.title, company: jobOffers.company })
+          .from(jobOffers)
+          .where(and(eq(jobOffers.userId, userId), inArray(jobOffers.id, offerIds))),
+        useDb()
+          .select({ id: applications.id, offerId: applications.jobOfferId })
+          .from(applications)
+          .where(and(eq(applications.userId, userId), inArray(applications.jobOfferId, offerIds))),
+      ])
+    : [[], []]
   const offersById = new Map(offers.map((offer) => [offer.id, offer]))
+  const applicationByOffer = new Map(tracked.map((row) => [row.offerId, row.id]))
 
-  return [...groups.values()].flatMap(({ latest, versions }) => {
+  return [...groups.entries()].flatMap(([offerId, { latest, versions }]) => {
     // Letters of a deleted offer stay in the history but have no page to open.
-    const offer = offersById.get(latest.inputRefs.offerId!)
+    const offer = offersById.get(offerId)
     if (!offer) return []
     const { paragraphs } = latest.output as CoverLetterOutput
     // Skip the salutation ("Madame, Monsieur,") to show actual content.
@@ -162,7 +190,7 @@ export async function listLetterSummaries(userId: string): Promise<LetterSummary
       {
         generationId: latest.id,
         offer,
-        applicationId: latest.inputRefs.applicationId ?? null,
+        applicationId: applicationByOffer.get(offerId) ?? null,
         template: latest.inputRefs.template ?? null,
         versions,
         excerpt: body.slice(0, 160),

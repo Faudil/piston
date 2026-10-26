@@ -51,7 +51,9 @@ const lastChange = computed(
       />
       <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-xs text-muted">
         <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
-        <time :datetime="lastChange">{{ formatDateTime(lastChange) }}</time>
+        <time :datetime="lastChange" :title="formatDateTime(lastChange)">
+          {{ formatDate(lastChange) }}
+        </time>
         <UBadge
           v-if="application.status === 'closed' && application.outcome"
           :label="outcomeLabels[application.outcome]"

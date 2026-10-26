@@ -1,4 +1,4 @@
-import { eq, users } from '@piston/db'
+import { eq, sql, users } from '@piston/db'
 import { ChangePasswordBody } from '@piston/shared'
 
 /** Changes the password after checking the current one. */
@@ -12,9 +12,16 @@ export default defineEventHandler(async (event) => {
   if (!(await verifyPassword(user.passwordHash, currentPassword))) {
     throw createError({ statusCode: 400, message: 'Le mot de passe actuel est incorrect.' })
   }
-  await useDb()
+  // Bumping the version logs the user out of every other device; this one
+  // gets a fresh session right away.
+  const [updated] = await useDb()
     .update(users)
-    .set({ passwordHash: await hashPassword(newPassword) })
+    .set({
+      passwordHash: await hashPassword(newPassword),
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+    })
     .where(eq(users.id, user.id))
+    .returning()
+  await startSession(event, updated!)
   return { ok: true }
 })

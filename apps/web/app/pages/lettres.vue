@@ -8,8 +8,6 @@ const { data: applications } = await useFetch<Application[]>('/api/applications'
   default: () => [],
 })
 
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' })
-
 /** Letters written from an application open its letter page; the others, their offer page. */
 function letterLink(letter: LetterSummary) {
   return letter.applicationId
@@ -49,6 +47,7 @@ async function startLetter() {
       variant="subtle"
       icon="i-lucide-circle-alert"
       title="Impossible de charger tes lettres."
+      :description="apiErrorMessage(error)"
     />
 
     <section v-else-if="letters?.length" aria-labelledby="letters-list">
@@ -75,7 +74,7 @@ async function startLetter() {
               </span>
               <span class="block truncate text-sm text-muted">
                 <template v-if="letter.offer.company">{{ letter.offer.company }} · </template>
-                {{ dateFormat.format(new Date(letter.updatedAt)) }}
+                {{ formatDate(letter.updatedAt) }}
               </span>
               <span v-if="letter.excerpt" class="line-clamp-2 block text-sm text-toned">
                 {{ letter.excerpt }}…

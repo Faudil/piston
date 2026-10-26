@@ -16,7 +16,7 @@ async function copy(keyword: string) {
     await navigator.clipboard.writeText(keyword)
     toast.add({ title: `« ${keyword} » copié`, icon: 'i-lucide-copy' })
   } catch {
-    toast.add({ title: 'Impossible de copier.', color: 'error' })
+    toast.add({ title: 'Impossible de copier.', color: 'error', icon: 'i-lucide-circle-alert' })
   }
 }
 </script>

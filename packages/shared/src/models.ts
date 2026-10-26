@@ -184,7 +184,7 @@ export interface LetterSummary {
   /** Id of the latest version. */
   generationId: string
   offer: Pick<JobOffer, 'id' | 'title' | 'company'>
-  /** Set when the letter was written from an application: it opens /candidatures/:id/lettre. */
+  /** The offer's application when it is tracked: the entry opens /candidatures/:id/lettre. */
   applicationId: string | null
   template: CoverLetterTemplate | null
   versions: number

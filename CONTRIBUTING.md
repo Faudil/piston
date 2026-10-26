@@ -51,6 +51,20 @@ Run from the repository root:
 
 Tests do not need Docker or an API key: the database is an in-memory PostgreSQL ([PGlite](https://pglite.dev)) with the real migrations applied, and the Anthropic SDK is mocked.
 
+## Testing
+
+- **Unit and API tests** (`bun run test`): no Docker, no API key. See above.
+- **End-to-end tests** (`bun run e2e`): [Playwright](https://playwright.dev) drives the real, built app in Chromium (a 390 px phone project and a 1440 px desktop project) through the main journeys: login and invitation, resume review, offer analysis and cover letter, the applications board, the CV builder (template, PDF and Word export) and share links.
+
+  ```bash
+  docker compose -f docker-compose.dev.yml up -d   # Postgres on localhost:5432
+  bunx playwright install chromium                  # once
+  bun run e2e                                       # build once, then run
+  bun run e2e:run                                   # re-run without rebuilding
+  ```
+
+  The tests use their own database `piston_e2e` (created and reset on every run; the script refuses any name that does not end with `_e2e`, so your development database is safe) and their own server on port 3200. Set `E2E_DATABASE_URL` to use another Postgres. They need no Anthropic or Tavily key: the server starts with `NUXT_E2E_FAKE_AI=1`, which swaps in the canned answers of `apps/web/server/utils/fake-ai.ts` (see [DECISIONS](docs/DECISIONS.md)). The run also fails on any Content-Security-Policy violation reported by the browser. CI runs the same suite in the `e2e` job and uploads the report and traces when it fails.
+
 ## Conventions
 
 - **Language.** Code, comments, commit messages and documentation are in English. Everything the user sees (UI, API error messages, Claude's answers) is in French, addressing the user as « tu ».

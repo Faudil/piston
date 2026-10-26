@@ -35,7 +35,7 @@ async function createBlank() {
     })
     await router.push(`/cv/editeur/${document.id}`)
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     creatingBlank.value = false
   }
@@ -51,8 +51,6 @@ function newDocumentLink(mode: 'import' | 'interview', resumeId?: string) {
     },
   }
 }
-
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
 </script>
 
 <template>
@@ -72,7 +70,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
             <span class="block truncate font-medium text-highlighted">{{ document.title }}</span>
             <span class="block truncate text-sm text-muted">
               {{ document.fullName || 'Sans nom' }} · {{ cvTemplates[document.templateId].label }} ·
-              {{ dateFormat.format(new Date(document.updatedAt)) }}
+              {{ formatDate(document.updatedAt) }}
             </span>
             <UBadge
               v-if="document.offer"
@@ -92,7 +90,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
       v-else
       icon="i-lucide-file-pen-line"
       title="Crée un CV mis en page avec Piston"
-      description="Un CV structuré, trois modèles lisibles par les logiciels de recrutement, et Claude pour proposer des améliorations que tu valides une par une."
+      description="Un CV structuré, des modèles lisibles par les logiciels de recrutement, et Claude pour proposer des améliorations que tu valides une par une."
       :actions="[
         { label: 'Créer mon CV', icon: 'i-lucide-plus', onClick: () => (createOpen = true) },
       ]"

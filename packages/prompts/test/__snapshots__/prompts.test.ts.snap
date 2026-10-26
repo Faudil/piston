@@ -24,6 +24,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -53,6 +54,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - The first line is the subject, written as "Objet : " followed by a precise subject of at most 10 words, on its own paragraph. Then start with "Bonjour," on its own line and end with "Bien cordialement," followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -82,6 +84,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a one-line polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -115,6 +118,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -147,6 +151,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -176,6 +181,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a one-line polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it.
@@ -220,6 +226,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -249,6 +256,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -278,6 +286,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it."
@@ -307,6 +316,7 @@ Format:
 - Plain text only: no Markdown, no title, no placeholder for addresses or dates.
 - Start with "Madame, Monsieur," on its own line and end with a polite closing followed by the signature.
 - Separate paragraphs with one blank line.
+- The subject line (if any), the salutation, the closing formula (one sentence) and the signature (the name alone) each stand in their own paragraph: the app shows them apart from the body paragraphs.
 - Never use these hollow phrases or their variants: "dynamique", "motivé", "motivée", "force de proposition", "rigoureux", "rigoureuse", "passionné", "passionnée", "esprit d'équipe", "je me permets de", "votre entreprise leader". Show the quality with a fact from the resume instead.
 - Every paragraph about the candidate must connect a precise need of the offer with a precise experience of the resume.
 Output only the letter, nothing before or after it.

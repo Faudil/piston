@@ -9,6 +9,8 @@
     "./schema": "./src/schema.ts",
     "./migrate": "./src/migrate.ts",
     "./fixtures": "./src/fixtures/sample-resume.ts",
+    "./password": "./src/password.ts",
+    "./admin": "./src/admin.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
@@ -18,7 +20,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -p .",
     "test": "bun --bun vitest run",
-    "invite": "bun --env-file=../../.env src/invite-cli.ts"
+    "invite": "bun --env-file=../../.env src/invite-cli.ts",
+    "user": "bun --env-file=../../.env src/user-cli.ts"
   },
   "dependencies": {
     "@adonisjs/hash": "^9.1.1",

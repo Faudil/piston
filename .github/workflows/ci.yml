@@ -15,6 +15,43 @@ jobs:
       # Tests use an in-memory PGlite database: no Postgres service needed.
       - run: bun run test
 
+  # End-to-end tests: Playwright drives the built app against a real Postgres,
+  # with the fake Claude/Tavily of server/utils/fake-ai.ts (no API key needed).
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: piston
+          POSTGRES_PASSWORD: piston
+          POSTGRES_DB: piston_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U piston"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgres://piston:piston@localhost:5432/piston_e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run e2e:build
+      - run: bun run e2e:run
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+
   docker:
     needs: check
     runs-on: ubuntu-latest

@@ -61,11 +61,10 @@ watch(
   },
   { immediate: true },
 )
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' })
 const resumeItems = computed(() =>
   resumes.value.map((resume) => ({
     value: resume.id,
-    label: `${resume.title}${resume.isCurrent ? ' (actuelle)' : ''} · ${dateFormat.format(new Date(resume.createdAt))}`,
+    label: `${resume.title}${resume.isCurrent ? ' (actuelle)' : ''} · ${formatDate(resume.createdAt)}`,
   })),
 )
 
@@ -94,7 +93,7 @@ const LIMITS: Record<keyof typeof answers, number> = {
 
 // --- Generation ------------------------------------------------------------------------
 
-const { start, partial, pending, error } = useGeneration('cv_draft')
+const { start, abort, partial, pending, error } = useGeneration('cv_draft')
 const creating = ref(false)
 const draftPreview = computed(() => partial.value as Partial<CvDraftOutput> | undefined)
 
@@ -123,7 +122,7 @@ async function run() {
       icon: 'i-lucide-sparkles',
     })
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     creating.value = false
   }
@@ -265,7 +264,7 @@ const canRun = computed(() =>
         <p v-if="mode === 'interview' && interviewError && !pending" class="text-sm text-muted">
           {{ interviewError }}
         </p>
-        <StreamingIndicator v-if="pending" text="Claude structure ton CV…" />
+        <StreamingIndicator v-if="pending" text="Claude structure ton CV…" @stop="abort" />
         <p v-else-if="creating" class="text-sm text-muted" role="status">Création du CV…</p>
       </div>
 

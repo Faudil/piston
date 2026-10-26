@@ -5,11 +5,10 @@
  *
  *   bun run db:seed
  */
-import { Hash } from '@adonisjs/hash'
-import { Scrypt } from '@adonisjs/hash/drivers/scrypt'
 import { eq } from 'drizzle-orm'
 import { createDb } from './client'
 import { sampleResume } from './fixtures/sample-resume'
+import { hashPassword } from './password'
 import { resumeProfiles, resumes, users } from './schema'
 
 const DEMO_EMAIL = 'demo@example.com'
@@ -27,8 +26,7 @@ const existing = await db.query.users.findFirst({ where: eq(users.email, DEMO_EM
 if (existing) {
   console.log(`Demo user already exists: ${DEMO_EMAIL}`)
 } else {
-  // Same algorithm and format as nuxt-auth-utils' hashPassword(), so the app can verify it.
-  const passwordHash = await new Hash(new Scrypt({})).make(DEMO_PASSWORD)
+  const passwordHash = await hashPassword(DEMO_PASSWORD)
   const [user] = await db
     .insert(users)
     .values({ email: DEMO_EMAIL, displayName: 'Camille (démo)', passwordHash })

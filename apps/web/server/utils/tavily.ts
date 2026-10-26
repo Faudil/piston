@@ -35,7 +35,7 @@ interface TavilyExtractResponse {
 
 /** True when a Tavily API key is configured: job search and offer import are available. */
 export function isWebSearchEnabled(): boolean {
-  return Boolean(useRuntimeConfig().tavilyApiKey)
+  return isFakeAi() || Boolean(useRuntimeConfig().tavilyApiKey)
 }
 
 /**
@@ -51,7 +51,7 @@ async function tavilyRequest<T extends { usage?: { credits?: number } }>(
   body: object,
 ): Promise<T> {
   const { tavilyApiKey } = useRuntimeConfig()
-  if (!tavilyApiKey) {
+  if (!tavilyApiKey && !isFakeAi()) {
     throw createError({
       statusCode: 503,
       message: "La recherche web n'est pas configurée sur ce serveur.",
@@ -59,6 +59,12 @@ async function tavilyRequest<T extends { usage?: { credits?: number } }>(
   }
 
   const usageId = await reserveUsage(userId, 'tavily', path.slice(1))
+
+  // End-to-end tests only (see fake-ai.ts): canned answer, ledger still real.
+  if (isFakeAi()) {
+    await settleUsage(usageId, { status: 'done', credits: TAVILY_CREDITS_PER_CALL })
+    return fakeTavilyResponse(path) as unknown as T
+  }
 
   let response: Response
   try {

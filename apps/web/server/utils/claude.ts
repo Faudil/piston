@@ -7,6 +7,8 @@ let client: Anthropic | undefined
  * which only exists on the server: it never reaches the browser.
  */
 export function useClaude(): Anthropic {
+  // End-to-end tests only (see fake-ai.ts); throws in production.
+  if (isFakeAi()) return (client ??= fakeClaudeClient())
   if (!client) {
     const { anthropicApiKey } = useRuntimeConfig()
     if (!anthropicApiKey) {

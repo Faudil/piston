@@ -20,5 +20,10 @@ export default defineEventHandler(async (event) => {
   if (event.method === 'GET' && PUBLIC_API_PREFIXES.some((prefix) => path.startsWith(prefix)))
     return
 
-  await requireUserSession(event, { message: 'Connecte-toi pour continuer.' })
+  const session = await requireUserSession(event, { message: 'Connecte-toi pour continuer.' })
+  if (!(await isSessionCurrent(session))) {
+    // Deleted account, or password changed elsewhere: the cookie is dead.
+    await clearUserSession(event)
+    throw createError({ statusCode: 401, message: 'Ta session a expiré, reconnecte-toi.' })
+  }
 })

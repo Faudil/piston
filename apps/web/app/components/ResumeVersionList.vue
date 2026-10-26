@@ -49,7 +49,7 @@ async function run(action: () => Promise<unknown>, success: string) {
     renaming.value = null
     deleting.value = null
   } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error' })
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
   } finally {
     busy.value = false
   }
@@ -78,7 +78,11 @@ function menuItems(resume: Resume) {
         external: true,
         download: true,
       },
-      { label: 'Renommer', icon: 'i-lucide-pencil', onSelect: () => startRename(resume) },
+      {
+        label: 'Renommer',
+        icon: 'i-lucide-pencil',
+        onSelect: () => afterMenuCloses(() => startRename(resume)),
+      },
     ],
     [
       {
@@ -95,13 +99,11 @@ function menuItems(resume: Resume) {
         label: 'Supprimer',
         icon: 'i-lucide-trash-2',
         color: 'error' as const,
-        onSelect: () => (deleting.value = resume),
+        onSelect: () => afterMenuCloses(() => (deleting.value = resume)),
       },
     ],
   ]
 }
-
-const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' })
 </script>
 
 <template>
@@ -134,7 +136,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeSty
             />
           </p>
           <p class="truncate text-sm text-muted">
-            {{ dateFormat.format(new Date(resume.createdAt)) }}
+            {{ formatDateTime(resume.createdAt) }}
             <template v-if="resume.sourceFilename"> · {{ resume.sourceFilename }}</template>
           </p>
         </div>
@@ -159,7 +161,7 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeSty
           :aria-label="`Critiquer « ${resume.title} »`"
           @click="emit('review', resume)"
         />
-        <UDropdownMenu :items="menuItems(resume)" :content="{ align: 'end' }">
+        <UDropdownMenu :items="menuItems(resume)" :modal="false" :content="{ align: 'end' }">
           <UButton
             icon="i-lucide-ellipsis"
             color="neutral"
