@@ -18,6 +18,8 @@ import { testState } from './state'
 beforeEach(resetTestState)
 
 interface StreamParams {
+  model: string
+  fallbacks?: unknown
   system: Array<{ text: string }>
   messages: Array<{ content: Array<{ text: string; cache_control?: unknown }> }>
   output_config: { format?: { type: string; schema: unknown } }
@@ -81,6 +83,9 @@ describe('POST /api/generate/cv-draft', () => {
     })
 
     const params = claude.calls[0] as unknown as StreamParams
+    // A light task: the fast model, without the refusal fallback Haiku does not support.
+    expect(params.model).toBe(testState.config.claudeFastModel)
+    expect(params).not.toHaveProperty('fallbacks')
     expect(params.system[0]!.text).toContain('faithful transcription')
     expect(params.system[0]!.text).toContain('Never invent anything')
     const [documentBlock, request] = params.messages[0]!.content

@@ -25,6 +25,35 @@ export function useClaude(): Anthropic {
 }
 
 /**
+ * Tasks that run on the fast, cheaper model (Claude Haiku 5.5 by default,
+ * 10-15x cheaper per call than Sonnet on these tasks, measured). They extract,
+ * structure or rephrase what the user already wrote, and every edit is
+ * reviewed by the user before it applies. The judgment calls (resume review,
+ * offer analysis, search leads) and the cover letters, read by recruiters,
+ * stay on the main model: on a thin resume Haiku proposed generic job titles
+ * where Sonnet declined to invent any.
+ */
+export const FAST_OPERATIONS: ReadonlySet<string> = new Set([
+  'import_offer', // pull the offer out of a web page
+  'cv_draft', // file an existing resume or interview answers into sections
+  'cv_edit', // small, reviewable edit proposals in the CV builder
+])
+
+/** The model for one operation (a generation kind or 'import_offer'). */
+export function claudeModelFor(operation: string): string {
+  const { claudeModel, claudeFastModel } = useRuntimeConfig()
+  return FAST_OPERATIONS.has(operation) && claudeFastModel ? claudeFastModel : claudeModel
+}
+
+/**
+ * Whether the server-side refusal fallback can be requested for this model:
+ * Haiku models have none, and sending the parameter would fail the call.
+ */
+export function supportsServerFallback(model: string): boolean {
+  return !model.startsWith('claude-haiku')
+}
+
+/**
  * Turns any error thrown while talking to Claude into a French message that
  * can be shown to the user, and logs the technical details (with the
  * request id, which Anthropic support asks for) on the server.

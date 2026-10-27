@@ -60,7 +60,7 @@ export async function streamGeneration<K extends GenerationKind>(
   const send = (payload: GenerationEvent) =>
     eventStream.push({ event: payload.type, data: JSON.stringify(payload) })
 
-  const { claudeModel } = useRuntimeConfig(event)
+  const model = claudeModelFor(spec.kind)
   const { output: outputSpec } = spec
   // The lenient mode sends the schema as plain JSON Schema, so the SDK does
   // not reject the whole answer when one part of it fails validation.
@@ -73,12 +73,14 @@ export async function streamGeneration<K extends GenerationKind>(
 
   const startClaudeStream = () => {
     return useClaude().beta.messages.stream({
-      model: claudeModel,
+      model,
       max_tokens: 16000,
       // If the model declines for policy reasons, the API retries on its default
-      // fallback model inside the same call instead of failing.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      // fallback model inside the same call instead of failing (not on Haiku).
+      ...(supportsServerFallback(model) && {
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default' as const,
+      }),
       output_config: {
         effort: 'medium',
         ...(format && { format }),

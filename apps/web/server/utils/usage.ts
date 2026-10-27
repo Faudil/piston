@@ -78,13 +78,13 @@ function reservationEstimate(provider: ApiProvider, operation: string) {
   if (provider === 'tavily') {
     return { credits: TAVILY_CREDITS_PER_CALL, estimatedCostMicros: 0, model: null }
   }
-  const { claudeModel } = useRuntimeConfig()
+  const model = claudeModelFor(operation)
   const tokens =
     operation === 'import_offer' ? RESERVATION_TOKENS.import_offer : RESERVATION_TOKENS.generation
   return {
     credits: 0,
-    estimatedCostMicros: estimateCostMicros(claudeModel, tokens),
-    model: claudeModel,
+    estimatedCostMicros: estimateCostMicros(model, tokens),
+    model,
   }
 }
 

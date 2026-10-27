@@ -63,7 +63,9 @@ describe('POST /api/generate/resume-review', () => {
       messages: Array<{ content: Array<{ text: string; cache_control?: unknown }> }>
       output_config: { format?: unknown }
     }
+    // The review stays on the main model, with the server-side refusal fallback.
     expect(params.model).toBe(testState.config.claudeModel)
+    expect(params).toMatchObject({ fallbacks: 'default' })
     expect(params.system[0]!.text).toContain('senior recruiter')
     expect(params.system[0]!.text).toContain('Camille')
     expect(params.system[0]!.cache_control).toEqual({ type: 'ephemeral' })

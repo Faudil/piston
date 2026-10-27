@@ -53,6 +53,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
     claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5',
+    // Cheaper model for the light tasks (see FAST_OPERATIONS in server/utils/claude.ts).
+    // Set CLAUDE_FAST_MODEL to the main model's id to run everything on it.
+    claudeFastModel: process.env.CLAUDE_FAST_MODEL || 'claude-haiku-5-5',
     databaseUrl: process.env.DATABASE_URL ?? '',
     dailyGenerationLimit: Number(process.env.DAILY_GENERATION_LIMIT || 30),
     // Global caps over all users (see server/utils/usage.ts).

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { invites, users } from '@piston/db'
+import { apiUsage, invites, users } from '@piston/db'
 import { estimateCostMicros, RESERVATION_TOKENS } from '@piston/shared'
 import createInviteRoute from '../../server/api/invites.post'
 import usageRoute from '../../server/api/usage.get'
@@ -30,7 +30,7 @@ const ledger = () => testState.db.query.apiUsage.findMany()
 /** A minimal generation route: the same streamGeneration path as the real ones. */
 const generateRoute = defineEventHandler((event) =>
   streamGeneration(event, {
-    kind: 'search_leads',
+    kind: 'offer_analysis',
     userId: testState.user!.id,
     system: 'system',
     resume: '<cv>cv</cv>',
@@ -50,6 +50,22 @@ async function createUser(email: string) {
 }
 
 describe('reserveUsage', () => {
+  it('reserves a light task at the fast model price, a main task at the main model price', async () => {
+    const { user } = await loginAsNewUser()
+    await reserveUsage(user.id, 'anthropic', 'cv_edit')
+    await reserveUsage(user.id, 'anthropic', 'resume_review')
+    const rows = await testState.db.select().from(apiUsage)
+    const byOperation = Object.fromEntries(rows.map((row) => [row.operation, row]))
+    expect(byOperation.cv_edit).toMatchObject({
+      model: 'claude-haiku-5-5',
+      estimatedCostMicros: estimateCostMicros('claude-haiku-5-5', RESERVATION_TOKENS.generation),
+    })
+    expect(byOperation.resume_review).toMatchObject({
+      model: 'claude-sonnet-5-5',
+      estimatedCostMicros: estimateCostMicros('claude-sonnet-5-5', RESERVATION_TOKENS.generation),
+    })
+  })
+
   it('limits each user to 30 Claude calls per rolling 24 hours, counting every status', async () => {
     const { user } = await loginAsNewUser()
     await seedUsage(user.id, 10, { status: 'failed' })
@@ -58,13 +74,13 @@ describe('reserveUsage', () => {
     // Old rows are outside the window.
     await seedUsage(user.id, 5, { createdAt: new Date(Date.now() - 25 * 3600_000) })
 
-    await expect(reserveUsage(user.id, 'anthropic', 'cv_edit')).rejects.toMatchObject({
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).rejects.toMatchObject({
       statusCode: 429,
       message: 'Tu as atteint la limite de 30 générations sur 24 heures. Reviens demain !',
     })
     // Another user is unaffected.
     const other = await createUser('other@example.com')
-    await expect(reserveUsage(other.id, 'anthropic', 'cv_edit')).resolves.toEqual(
+    await expect(reserveUsage(other.id, 'anthropic', 'offer_analysis')).resolves.toEqual(
       expect.any(String),
     )
   })
@@ -75,7 +91,7 @@ describe('reserveUsage', () => {
     const b = await createUser('b@example.com')
     await seedUsage(a.id, 3)
     await seedUsage(b.id, 2)
-    await expect(reserveUsage(a.id, 'anthropic', 'cv_edit')).rejects.toMatchObject({
+    await expect(reserveUsage(a.id, 'anthropic', 'offer_analysis')).rejects.toMatchObject({
       statusCode: 429,
       message: 'Le quota quotidien du serveur est atteint, réessaie demain.',
     })
@@ -86,9 +102,9 @@ describe('reserveUsage', () => {
     const one = estimateCostMicros('claude-sonnet-5-5', RESERVATION_TOKENS.generation)
     // Room for exactly two reservations.
     testState.config.claudeMonthlyBudgetUsd = (one * 2) / 1_000_000
-    await reserveUsage(user.id, 'anthropic', 'cv_edit')
-    await reserveUsage(user.id, 'anthropic', 'cv_edit')
-    await expect(reserveUsage(user.id, 'anthropic', 'cv_edit')).rejects.toMatchObject({
+    await reserveUsage(user.id, 'anthropic', 'offer_analysis')
+    await reserveUsage(user.id, 'anthropic', 'offer_analysis')
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).rejects.toMatchObject({
       statusCode: 503,
       message: "Le budget mensuel de l'IA de ce serveur est atteint. Préviens l'administrateur.",
     })
@@ -98,7 +114,7 @@ describe('reserveUsage', () => {
     const user = await createUser('a@example.com')
     const one = estimateCostMicros('claude-sonnet-5-5', RESERVATION_TOKENS.generation)
     testState.config.claudeMonthlyBudgetUsd = (one * 1.5) / 1_000_000
-    const id = await reserveUsage(user.id, 'anthropic', 'cv_edit')
+    const id = await reserveUsage(user.id, 'anthropic', 'offer_analysis')
     await settleUsage(id, {
       status: 'done',
       usage: { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 10_000 },
@@ -106,7 +122,9 @@ describe('reserveUsage', () => {
     const [row] = await ledger()
     // 1000 x 2 + 500 x 10 + 10 000 x 0.2 = 9000 micro-dollars.
     expect(row).toMatchObject({ status: 'done', inputTokens: 1000, estimatedCostMicros: 9000 })
-    await expect(reserveUsage(user.id, 'anthropic', 'cv_edit')).resolves.toEqual(expect.any(String))
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).resolves.toEqual(
+      expect.any(String),
+    )
   })
 
   it('prices an unknown model like the most expensive one', () => {
@@ -121,7 +139,7 @@ describe('reserveUsage', () => {
     const user = await createUser('a@example.com')
     const one = estimateCostMicros('claude-sonnet-5-5', RESERVATION_TOKENS.generation)
     testState.config.claudeMonthlyBudgetUsd = (one * 10) / 1_000_000
-    for (let i = 0; i < 9; i++) await reserveUsage(user.id, 'anthropic', 'cv_edit')
+    for (let i = 0; i < 9; i++) await reserveUsage(user.id, 'anthropic', 'offer_analysis')
     expect(console.warn).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('anthropic monthly budget'))
   })
@@ -130,7 +148,7 @@ describe('reserveUsage', () => {
     const user = await createUser('a@example.com')
     testState.config.claudeGlobalDailyLimit = 8
     const results = await Promise.allSettled(
-      Array.from({ length: 10 }, () => reserveUsage(user.id, 'anthropic', 'cv_edit')),
+      Array.from({ length: 10 }, () => reserveUsage(user.id, 'anthropic', 'offer_analysis')),
     )
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(8)
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(2)
@@ -144,7 +162,9 @@ describe('reserveUsage', () => {
     await expect(reserveUsage(user.id, 'tavily', 'search')).rejects.toMatchObject({
       statusCode: 429,
     })
-    await expect(reserveUsage(user.id, 'anthropic', 'cv_edit')).resolves.toEqual(expect.any(String))
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).resolves.toEqual(
+      expect.any(String),
+    )
   })
 
   it('budgets Tavily in credits', async () => {
@@ -162,7 +182,7 @@ describe('reserveUsage', () => {
 
   it('keeps ledger rows when the account is deleted', async () => {
     const user = await createUser('a@example.com')
-    await reserveUsage(user.id, 'anthropic', 'cv_edit')
+    await reserveUsage(user.id, 'anthropic', 'offer_analysis')
     await testState.db.delete(users)
     expect(await ledger()).toMatchObject([{ userId: null }])
   })
@@ -179,7 +199,7 @@ describe('streamGeneration', () => {
     expect(await ledger()).toMatchObject([
       {
         provider: 'anthropic',
-        operation: 'search_leads',
+        operation: 'offer_analysis',
         status: 'done',
         model: 'claude-sonnet-5-5',
         inputTokens: 100,

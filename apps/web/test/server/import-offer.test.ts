@@ -88,7 +88,8 @@ describe('POST /api/offers/import-url', () => {
       output_config: { effort: string }
       messages: Array<{ content: string }>
     }>
-    expect(params.model).toBe('claude-sonnet-5-5')
+    // Extraction is a light task: the fast model.
+    expect(params.model).toBe('claude-haiku-5-5')
     expect(params.output_config.effort).toBe('low')
     // The page is wrapped and capped at 60 000 characters.
     const sent = params.messages[0]!.content

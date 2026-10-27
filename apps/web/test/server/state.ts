@@ -11,6 +11,7 @@ export const testState = {
   config: {
     anthropicApiKey: 'test-key',
     claudeModel: 'claude-sonnet-5-5',
+    claudeFastModel: 'claude-haiku-5-5',
     databaseUrl: '',
     trustProxy: false,
     dailyGenerationLimit: 30,

@@ -61,12 +61,10 @@ export async function importOffer(userId: string, url: URL): Promise<ImportedOff
     await settleUsage(usageId, { status: 'failed', usage: NO_USAGE }) // Claude was never called
     throw error
   }
-  const { claudeModel } = useRuntimeConfig()
-
   let output: ImportedOfferOutput | null
   try {
     const message = await useClaude().messages.parse({
-      model: claudeModel,
+      model: claudeModelFor('import_offer'),
       max_tokens: 8000,
       output_config: { effort: 'low', format: zodOutputFormat(ImportedOfferOutput) },
       system: importOfferPrompt(),
