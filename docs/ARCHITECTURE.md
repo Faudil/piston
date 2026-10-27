@@ -43,6 +43,7 @@ In tests, `apps/web/test/server/setup.ts` stands in for Nitro's auto-imports so 
 | CV builder               | `cv/nouveau`, `cv/editeur/[id]`        | `cv-documents/**`, `generate/cv-draft`, `generate/cv-edit` | `cv-documents.ts`, `cv-revisions.ts`, `cv-ai.ts`, `cv-pdf.ts`, `cv-docx.ts`, `cv-share.ts`, `cv-assets.ts` |
 | Shared CV links          | `partage/[token]`                      | `partage/*`, `cv-documents/[id]/share*`                    | `cv-share.ts`                                                                                              |
 | History, usage           | `historique`, `compte`                 | `generations*`, `usage`                                    | `usage.ts`                                                                                                 |
+| Administration           | `admin`, `demande`                     | `admin/*`, `access-requests`                               | `admin.ts`, `auth.ts` (`requireAdmin`)                                                                     |
 
 Page-level state lives in the page; reusable pieces are components (`app/components/`), composables (`app/composables/`, stateful, `use*`) and plain helpers (`app/utils/`, pure).
 

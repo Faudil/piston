@@ -76,7 +76,8 @@ async function onSubmit(event: FormSubmitEvent<LoginBody>) {
     </UForm>
 
     <p class="mt-6 border-t border-default pt-5 text-center text-sm text-muted">
-      Pas de compte ? Piston fonctionne sur invitation : demande un lien à un membre.
+      Pas de compte ? Demande un lien d’invitation à un membre, ou
+      <ULink to="/demande" class="font-medium text-primary">demande un accès</ULink>.
     </p>
   </UCard>
 </template>

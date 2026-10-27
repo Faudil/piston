@@ -9,10 +9,26 @@ export async function requireUser(event: H3Event) {
   return user
 }
 
+/**
+ * Returns the logged-in user if they are an admin, or throws a 403. The flag
+ * is read from the database, never trusted from the cookie.
+ */
+export async function requireAdmin(event: H3Event) {
+  const user = await requireUser(event)
+  const [row] = await useDb()
+    .select({ isAdmin: users.isAdmin })
+    .from(users)
+    .where(eq(users.id, user.id))
+  if (!row?.isAdmin) {
+    throw createError({ statusCode: 403, message: 'Réservé aux administrateurs.' })
+  }
+  return user
+}
+
 /** Stores the user in the session cookie. Never put the password hash in there. */
 export async function startSession(event: H3Event, user: UserRow) {
   await setUserSession(event, {
-    user: { id: user.id, email: user.email, displayName: user.displayName },
+    user: { id: user.id, email: user.email, displayName: user.displayName, isAdmin: user.isAdmin },
     // Checked against users.session_version: changing the password invalidates every older session.
     sessionVersion: user.sessionVersion,
     loggedInAt: new Date().toISOString(),
@@ -20,20 +36,22 @@ export async function startSession(event: H3Event, user: UserRow) {
 }
 
 /**
- * Whether a session cookie is still valid for its user: the user exists and
- * has not changed their password since the cookie was issued. Cookies from
- * before this check existed carry no version and count as version 0.
+ * Checks that a session cookie is still valid for its user: the user exists
+ * and has not changed their password since the cookie was issued. Cookies
+ * from before this check existed carry no version and count as version 0.
+ * Returns the user's current admin flag, or null for a dead session.
  */
-export async function isSessionCurrent(session: {
+export async function currentSessionUser(session: {
   user?: { id: string }
   sessionVersion?: number
-}) {
-  if (!session.user) return false
+}): Promise<{ isAdmin: boolean } | null> {
+  if (!session.user) return null
   const [row] = await useDb()
-    .select({ sessionVersion: users.sessionVersion })
+    .select({ sessionVersion: users.sessionVersion, isAdmin: users.isAdmin })
     .from(users)
     .where(eq(users.id, session.user.id))
-  return row !== undefined && row.sessionVersion === (session.sessionVersion ?? 0)
+  if (!row || row.sessionVersion !== (session.sessionVersion ?? 0)) return null
+  return { isAdmin: row.isAdmin }
 }
 
 export async function createInvite(createdBy: string | null) {

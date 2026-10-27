@@ -71,6 +71,13 @@
       "when": 1793018244049,
       "tag": "0009_auth_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793120775321,
+      "tag": "0010_admin",
+      "breakpoints": true
     }
   ]
 }

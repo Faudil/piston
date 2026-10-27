@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 
-const links: NavigationMenuItem[] = [
+const baseLinks: NavigationMenuItem[] = [
   { label: 'Accueil', icon: 'i-lucide-house', to: '/' },
   { label: 'CV', icon: 'i-lucide-file-user', to: '/cv' },
   { label: 'Offres', icon: 'i-lucide-briefcase', to: '/offres' },
@@ -10,6 +10,26 @@ const links: NavigationMenuItem[] = [
   { label: 'Pistes', icon: 'i-lucide-compass', to: '/pistes' },
   { label: 'Historique', icon: 'i-lucide-history', to: '/historique' },
 ]
+
+const route = useRoute()
+const admin = useAdminBadge()
+// Admins get one more entry, with the number of access requests waiting.
+watch(() => route.path, admin.refresh)
+onMounted(admin.refresh)
+
+const links = computed<NavigationMenuItem[][]>(() => [
+  baseLinks,
+  admin.isAdmin.value
+    ? [
+        {
+          label: 'Administration',
+          icon: 'i-lucide-shield-check',
+          to: '/admin',
+          badge: admin.pending.value > 0 ? String(admin.pending.value) : undefined,
+        },
+      ]
+    : [],
+])
 </script>
 
 <template>

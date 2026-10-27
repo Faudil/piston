@@ -45,7 +45,7 @@ cp .env.example .env   # set ANTHROPIC_API_KEY, NUXT_SESSION_PASSWORD and POSTGR
 docker compose up -d --build
 ```
 
-Optionally set `TAVILY_API_KEY` to enable job search and offer import from a link. Piston is now on port 3000. There is no public sign-up: get the first invitation link from the logs with `docker compose logs web | grep invite`, then invite your friends from the app. Serve it over HTTPS behind a reverse proxy.
+Optionally set `TAVILY_API_KEY` to enable job search and offer import from a link. Piston is now on port 3000. There is no open sign-up: get the first invitation link from the logs with `docker compose logs web | grep invite`, make yourself an admin with `docker compose exec web bun cli/user.js make-admin <email>`, then invite your friends from the app or accept their access requests in « Administration ». Serve it over HTTPS behind a reverse proxy.
 
 See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for local development, configuration and troubleshooting.
 

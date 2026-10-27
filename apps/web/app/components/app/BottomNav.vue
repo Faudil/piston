@@ -14,17 +14,28 @@ const tabs = [
   { label: 'Offres', icon: 'i-lucide-briefcase', to: '/offres' },
   { label: 'Candidatures', icon: 'i-lucide-kanban', to: '/candidatures' },
 ]
-const more = [
+const admin = useAdminBadge()
+const more = computed(() => [
   { label: 'Lettres', icon: 'i-lucide-pen-line', to: '/lettres' },
   { label: 'Pistes', icon: 'i-lucide-compass', to: '/pistes' },
   { label: 'Historique', icon: 'i-lucide-history', to: '/historique' },
-]
+  ...(admin.isAdmin.value
+    ? [
+        {
+          label:
+            admin.pending.value > 0 ? `Administration (${admin.pending.value})` : 'Administration',
+          icon: 'i-lucide-shield-check',
+          to: '/admin',
+        },
+      ]
+    : []),
+])
 
 // The CV editor has its own action bar on phones, in this one's place.
 const hidden = computed(() => route.path.startsWith('/cv/editeur/'))
 
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
-const moreActive = computed(() => more.some((item) => isActive(item.to)))
+const moreActive = computed(() => more.value.some((item) => isActive(item.to)))
 
 // « Installer l'application »: the native prompt, or iOS instructions in a dialog.
 const installPrompt = useInstallPrompt()
@@ -49,7 +60,7 @@ const installItems = computed<DropdownMenuItem[][]>(() =>
 )
 
 const moreItems = computed<DropdownMenuItem[][]>(() => [
-  more.map((item) => ({ ...item, active: isActive(item.to) })),
+  more.value.map((item) => ({ ...item, active: isActive(item.to) })),
   ...installItems.value,
   ...accountItems.value,
 ])

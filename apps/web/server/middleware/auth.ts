@@ -6,6 +6,7 @@
 const PUBLIC_API_ROUTES = [
   '/api/auth/login',
   '/api/auth/register',
+  '/api/access-requests',
   '/api/health',
   // Built-in nuxt-auth-utils endpoint used by useUserSession() to read the session.
   '/api/_auth/session',
@@ -21,9 +22,15 @@ export default defineEventHandler(async (event) => {
     return
 
   const session = await requireUserSession(event, { message: 'Connecte-toi pour continuer.' })
-  if (!(await isSessionCurrent(session))) {
+  const current = await currentSessionUser(session)
+  if (!current) {
     // Deleted account, or password changed elsewhere: the cookie is dead.
     await clearUserSession(event)
     throw createError({ statusCode: 401, message: 'Ta session a expiré, reconnecte-toi.' })
+  }
+  // Admin routes also check the flag themselves (requireAdmin): this is the
+  // first line, so no admin handler ever runs for a regular member.
+  if (path.startsWith('/api/admin/') && !current.isAdmin) {
+    throw createError({ statusCode: 403, message: 'Réservé aux administrateurs.' })
   }
 })

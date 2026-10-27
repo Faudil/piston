@@ -4,6 +4,8 @@ declare module '#auth-utils' {
     id: string
     email: string
     displayName: string
+    /** Display hint only (shows the Administration link): the server reads users.is_admin. */
+    isAdmin?: boolean
   }
 }
 

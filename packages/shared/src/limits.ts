@@ -10,4 +10,6 @@ export const LIMITS = {
   invitesPerUserPerWeek: 5,
   /** Tavily calls (searches and page imports) per user per rolling 24 hours. */
   webCallsPerUserPerDay: 50,
+  /** Pending access requests kept at once: past this, /demande refuses new ones (spam guard). */
+  maxPendingAccessRequests: 30,
 } as const

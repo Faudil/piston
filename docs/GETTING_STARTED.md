@@ -67,7 +67,7 @@ To deploy on every push to `main` once the CI passes, enable the `deploy` job of
 
 ## 3. Create the first account
 
-Piston has no public sign-up: every account is created from an invitation link, valid 7 days and usable once. On a fresh install there is nobody to invite you yet, so create the first link from the command line.
+Piston has no open sign-up: an account is created either from an invitation link (valid 7 days, usable once) or from an access request (« Demander un accès » on the login page) that an admin accepts. On a fresh install there is nobody to invite you yet, so create the first link from the command line.
 
 **Development:**
 
@@ -87,6 +87,15 @@ docker compose logs web | grep invite
 Prefix it with your public URL (for example `https://piston.example.com/invite/2f9c...`). If it expired, restart the container to get a new one.
 
 Open the link, choose a name, e-mail and password, and you are in. From then on, any logged-in user can invite friends with the « Inviter un ami » button in the sidebar, which copies a fresh link to the clipboard.
+
+Then make yourself an admin, so you can review access requests and see the totals in « Administration » (`/admin`):
+
+```bash
+docker compose exec web bun cli/user.js make-admin you@example.com   # production
+bun run user:make-admin you@example.com                              # development
+```
+
+The link appears in your menu at once. An admin can then grant the role to others from the « Membres » tab; `revoke-admin` removes it from the command line.
 
 ## 4. First steps in the app
 
@@ -124,9 +133,18 @@ scripts/restore-backup.sh ./downloaded-dump.sql.gz          # a file on the serv
 
 The script checks that the file is readable, asks you to type `restore`, stops `web`, replays the dump (stopping at the first SQL error) and starts `web` again. Restore a fresh dump on a test database from time to time: a backup you never restored is a hope, not a backup.
 
+### Administration
+
+The « Administration » page (admins only) has four tabs:
+
+- **Aperçu** — members, active members over 7 days, applications per kanban column, AI generations, and the server's spending: Claude cost this month against `CLAUDE_MONTHLY_BUDGET_USD`, calls in the last 24 h against the global daily cap, the same for Tavily, the cost per feature and a 30-day activity chart. Amounts are the ledger's estimates (see [Limiting costs](#limiting-costs)).
+- **Demandes** — access requests sent from `/demande`. The requester chooses their password up front, so « Accepter » creates the account and they can log in at once (tell them: Piston sends no e-mail). Until then, logging in answers that the request is pending. A rejected request has its password hash erased. At most 30 requests can wait at once and one IP address may send 5 per 15 minutes, so the form cannot be used to fill the database. The sidebar shows how many are waiting.
+- **Membres** — every account with its offers, applications, Claude calls and estimated cost over 30 days, and the last activity. Actions: grant or remove the admin role, reset a password (a temporary password shown once, all sessions closed), delete an account. An admin cannot remove their own role or delete their own account here.
+- **Invitations** — create links outside the members' weekly quota, and revoke a link that has not been used.
+
 ### Lost password
 
-There is no « forgot my password » e-mail: Piston sends no e-mail. Whoever has shell access to the server resets passwords, and the user then changes it in « Mon compte »:
+There is no « forgot my password » e-mail: Piston sends no e-mail. An admin resets it from « Administration › Membres », or whoever has shell access to the server does it from the command line; the user then changes it in « Mon compte »:
 
 ```bash
 docker compose exec web bun cli/user.js list

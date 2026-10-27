@@ -21,6 +21,8 @@
     "db:invite": "cd packages/db && bun run invite",
     "user:list": "cd packages/db && bun run user list",
     "user:reset-password": "cd packages/db && bun run user reset-password",
+    "user:make-admin": "cd packages/db && bun run user make-admin",
+    "user:revoke-admin": "cd packages/db && bun run user revoke-admin",
     "e2e": "bun run e2e:build && bun run e2e:run",
     "e2e:build": "cd apps/web && NUXT_E2E_BUILD_DIR=.nuxt-e2e bun --bun nuxt build",
     "e2e:run": "playwright test --config e2e/playwright.config.ts"

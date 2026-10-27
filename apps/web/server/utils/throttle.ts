@@ -14,6 +14,8 @@ export const THROTTLE = {
   registerIp: { name: 'register-ip', limit: 10 },
   /** Invitation link checks from one IP address (every call counts: a guessing oracle). */
   inviteCheckIp: { name: 'invite-check-ip', limit: 60 },
+  /** Access requests sent from one IP address (every call counts). */
+  accessRequestIp: { name: 'access-request-ip', limit: 5 },
 } as const
 
 export type ThrottleRule = (typeof THROTTLE)[keyof typeof THROTTLE]

@@ -5,7 +5,7 @@ import type { Database } from '@piston/db'
 export const testState = {
   db: undefined as unknown as Database,
   claude: undefined as unknown as Anthropic,
-  user: null as { id: string; email: string; displayName: string } | null,
+  user: null as { id: string; email: string; displayName: string; isAdmin?: boolean } | null,
   /** session_version stored in the fake session cookie. */
   sessionVersion: 0,
   config: {

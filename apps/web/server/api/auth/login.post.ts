@@ -18,6 +18,14 @@ export default defineEventHandler(async (event) => {
   const valid = await verifyPassword(user?.passwordHash ?? dummyHash, password)
 
   if (!user || !valid) {
+    // Right password for a request still waiting: say so rather than « incorrect ».
+    if (!user && (await hasPendingRequest(email, password))) {
+      throw createError({
+        statusCode: 403,
+        message:
+          "Ta demande d'accès est en attente : tu pourras te connecter dès qu'elle sera acceptée.",
+      })
+    }
     await recordAttempt(THROTTLE.loginIp, ip)
     await recordAttempt(THROTTLE.loginEmail, email)
     throw createError({ statusCode: 401, message: 'E-mail ou mot de passe incorrect.' })

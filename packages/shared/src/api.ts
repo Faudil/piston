@@ -32,6 +32,24 @@ export const RegisterBody = z.object({
 })
 export type RegisterBody = z.infer<typeof RegisterBody>
 
+/** Sent from the public /demande page. */
+export const AccessRequestBody = z.object({
+  email: z.email('Adresse e-mail invalide.').toLowerCase(),
+  displayName: z.string().trim().min(1, 'Nom requis.').max(80),
+  password: z.string().min(10, 'Le mot de passe doit faire au moins 10 caractères.').max(200),
+  message: z
+    .string()
+    .trim()
+    .max(500, 'Le message ne doit pas dépasser 500 caractères.')
+    .optional()
+    .transform((value) => value || undefined),
+})
+export type AccessRequestBody = z.infer<typeof AccessRequestBody>
+
+/** PATCH /api/admin/users/:id */
+export const AdminUserPatchBody = z.object({ isAdmin: z.boolean() })
+export type AdminUserPatchBody = z.infer<typeof AdminUserPatchBody>
+
 // --- Resume profiles --------------------------------------------------------
 
 const profileName = z

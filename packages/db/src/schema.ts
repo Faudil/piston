@@ -14,6 +14,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import {
+  accessRequestStatuses,
   apiProviders,
   usageStatuses,
   applicationStatuses,
@@ -52,6 +53,7 @@ export const generationKind = pgEnum('generation_kind', generationKinds)
 export const applicationStatus = pgEnum('application_status', applicationStatuses)
 export const apiProvider = pgEnum('api_provider', apiProviders)
 export const usageStatus = pgEnum('usage_status', usageStatuses)
+export const accessRequestStatus = pgEnum('access_request_status', accessRequestStatuses)
 
 export const users = pgTable('users', {
   ...base,
@@ -63,7 +65,41 @@ export const users = pgTable('users', {
    * rejected (« log out everywhere »). See server/middleware/auth.ts.
    */
   sessionVersion: integer('session_version').notNull().default(0),
+  /**
+   * Can open /admin: review access requests, see totals, manage accounts.
+   * Granted from the command line only (`bun cli/user.js make-admin <email>`).
+   */
+  isAdmin: boolean('is_admin').notNull().default(false),
 })
+
+/**
+ * A request to join, sent from the public /demande page. The requester picks
+ * their password up front, so an approval creates the account directly and
+ * no e-mail has to be sent. The hash is erased once the request is reviewed.
+ */
+export const accessRequests = pgTable(
+  'access_requests',
+  {
+    ...base,
+    email: text('email').notNull(),
+    displayName: text('display_name').notNull(),
+    /** Optional note for the admin (« Je suis l'amie de Camille »). */
+    message: text('message'),
+    passwordHash: text('password_hash'),
+    status: accessRequestStatus('status').notNull().default('pending'),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    /** The account created by the approval. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    // At most one pending request per address.
+    uniqueIndex('access_requests_one_pending_per_email')
+      .on(t.email)
+      .where(sql`${t.status} = 'pending'`),
+    index('access_requests_status_created_idx').on(t.status, t.createdAt),
+  ],
+)
 
 /**
  * One row per throttled event (a failed login, a sign-up attempt, an invite

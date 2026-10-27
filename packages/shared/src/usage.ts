@@ -12,6 +12,10 @@ export type ApiProvider = (typeof apiProviders)[number]
 export const usageStatuses = ['reserved', 'done', 'failed', 'aborted'] as const
 export type UsageStatus = (typeof usageStatuses)[number]
 
+/** Life cycle of a request to join (see the access_requests table). */
+export const accessRequestStatuses = ['pending', 'approved', 'rejected'] as const
+export type AccessRequestStatus = (typeof accessRequestStatuses)[number]
+
 /** USD per million tokens. */
 export interface ModelPrice {
   input: number
