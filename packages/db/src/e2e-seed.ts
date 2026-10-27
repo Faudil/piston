@@ -15,6 +15,7 @@ import postgres from 'postgres'
 import { createDb } from './client'
 import { sampleResume } from './fixtures/sample-resume'
 import { runMigrations } from './migrate'
+import { onboardingHints } from '@piston/shared'
 import { resumeProfiles, resumes, users } from './schema'
 
 const E2E_EMAIL = 'e2e@example.com'
@@ -53,7 +54,14 @@ const db = createDb(url, { max: 1 })
 const passwordHash = await new Hash(new Scrypt({})).make(E2E_PASSWORD)
 const [user] = await db
   .insert(users)
-  .values({ email: E2E_EMAIL, displayName: 'Camille (e2e)', passwordHash })
+  // The welcome dialog and page tips are closed: the tests drive the features
+  // themselves (e2e/tests/onboarding.spec.ts reopens them on purpose).
+  .values({
+    email: E2E_EMAIL,
+    displayName: 'Camille (e2e)',
+    passwordHash,
+    dismissedHints: [...onboardingHints],
+  })
   .returning()
 const [profile] = await db
   .insert(resumeProfiles)

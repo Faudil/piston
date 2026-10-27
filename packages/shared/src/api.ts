@@ -5,6 +5,7 @@ import {
   CoverLetterTemplate,
   CoverLetterTone,
   GenerationKind,
+  OnboardingHint,
 } from './enums'
 import { LIMITS } from './limits'
 
@@ -45,6 +46,10 @@ export const AccessRequestBody = z.object({
     .transform((value) => value || undefined),
 })
 export type AccessRequestBody = z.infer<typeof AccessRequestBody>
+
+/** POST /api/onboarding/dismiss */
+export const DismissHintBody = z.object({ hint: OnboardingHint })
+export type DismissHintBody = z.infer<typeof DismissHintBody>
 
 /** PATCH /api/admin/users/:id */
 export const AdminUserPatchBody = z.object({ isAdmin: z.boolean() })

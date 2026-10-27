@@ -93,6 +93,7 @@ function onCreated(created: Application) {
 
 <template>
   <AppPage
+    tip="candidatures"
     title="Candidatures"
     description="Suis chaque candidature, de l'envoi à la réponse. Glisse une carte ou utilise ses flèches pour la changer de colonne."
     width="wide"

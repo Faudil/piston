@@ -99,6 +99,8 @@ The link appears in your menu at once. An admin can then grant the role to other
 
 ## 4. First steps in the app
 
+On their first visit, new members get a short welcome, a « Premiers pas » progress on the home page and a one-time tip on the main pages (« Mon compte › Revoir l'introduction » shows them again). The path they follow:
+
 1. **CV**: paste your resume or import a PDF (5 MB max, text-based PDFs only; the original file is kept and can be downloaded again), then click « Critiquer ». Versions can be renamed, downloaded and deleted. If you apply in several fields, create one profile per specialty (« Nouveau profil ») and pick the CV each offer uses on its page; the default profile is used otherwise. « Mon compte » (user menu) lets you export or delete your data.
 
    **Créer mon CV** (on the same page): build a structured CV from a version or from a short interview with Claude, pick a template, accept or reject Claude's suggested edits, download the PDF, and « Enregistrer comme version » so the other features use it.

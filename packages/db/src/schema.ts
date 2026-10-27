@@ -70,6 +70,14 @@ export const users = pgTable('users', {
    * Granted from the command line only (`bun cli/user.js make-admin <email>`).
    */
   isAdmin: boolean('is_admin').notNull().default(false),
+  /**
+   * Onboarding messages the user has closed (the welcome dialog, page tips),
+   * stored here rather than in the browser so they stay closed on every device.
+   */
+  dismissedHints: text('dismissed_hints')
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
 })
 
 /**

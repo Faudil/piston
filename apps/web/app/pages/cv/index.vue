@@ -128,6 +128,7 @@ async function review(resume: Resume) {
 
 <template>
   <AppPage
+    tip="cv"
     title="CV"
     description="Un profil par spécialité (« Communication », « Marketing digital »…), chacun avec ses propres versions et sa critique par Claude, sans langue de bois."
   >

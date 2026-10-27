@@ -14,8 +14,10 @@ const props = withDefaults(
     width?: 'default' | 'narrow' | 'wide'
     /** Phones: hides the logo and tightens the header, to leave room for dense pages. */
     compact?: boolean
+    /** One-time tip shown above the content (see AppTip). */
+    tip?: keyof typeof pageTips
   }>(),
-  { description: undefined, back: undefined, width: 'default', compact: false },
+  { description: undefined, back: undefined, width: 'default', compact: false, tip: undefined },
 )
 </script>
 
@@ -61,6 +63,7 @@ const props = withDefaults(
           </div>
         </header>
 
+        <AppTip v-if="tip" :hint="tip" />
         <slot />
       </div>
     </template>

@@ -62,6 +62,19 @@ export function useDashboardNextStep(source: {
         text: 'Claude la compare à ton CV, puis t’aide à écrire la lettre et à adapter ton CV.',
         action: { label: 'Nouvelle offre', to: '/offres?new=1', icon: 'i-lucide-plus' },
       }
+    if (!applications.value.length) {
+      const latest = [...offers.value].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!
+      return {
+        icon: 'i-lucide-kanban',
+        title: 'Passe à la candidature',
+        text: 'Sur la page de l’offre, « Ajouter aux candidatures » crée sa carte dans ton tableau de suivi.',
+        action: {
+          label: 'Ouvrir l’offre',
+          to: `/offres/${latest.id}`,
+          icon: 'i-lucide-arrow-right',
+        },
+      }
+    }
     const first = toSend.value[0]
     if (first) {
       const others = toSend.value.length - 1
@@ -106,5 +119,21 @@ export function useDashboardNextStep(source: {
     }
   })
 
-  return { nextStep }
+  /**
+   * « Premiers pas »: the four steps of the main flow, until all are done.
+   * Null afterwards, so the progress never shows again.
+   */
+  const progress = computed(() => {
+    const steps = [
+      !!currentResume.value,
+      !!lastReview.value,
+      offers.value.length > 0,
+      applications.value.length > 0,
+    ]
+    // The card shows the first step not done yet (see nextStep), whatever the order they were done in.
+    const current = steps.indexOf(false)
+    return current === -1 ? null : { steps, current: current + 1, total: steps.length }
+  })
+
+  return { nextStep, progress }
 }

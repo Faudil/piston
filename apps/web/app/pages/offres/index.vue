@@ -35,6 +35,7 @@ function closeForm() {
 
 <template>
   <AppPage
+    tip="offres"
     title="Offres"
     description="Les annonces qui t'intéressent. Claude analyse chacune et t'aide à écrire ta lettre."
   >

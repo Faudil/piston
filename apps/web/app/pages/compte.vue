@@ -47,6 +47,23 @@ async function savePassword(event: FormSubmitEvent<ChangePasswordBody>) {
   }
 }
 
+// --- Onboarding ----------------------------------------------------------------
+
+const onboarding = useOnboarding()
+const resettingHints = ref(false)
+
+async function replayOnboarding() {
+  resettingHints.value = true
+  try {
+    await onboarding.reset()
+    await navigateTo('/')
+  } catch (err) {
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
+  } finally {
+    resettingHints.value = false
+  }
+}
+
 // --- Danger zone ---------------------------------------------------------------
 
 const confirmEmail = ref('')
@@ -141,6 +158,23 @@ async function deleteAccount() {
             <UButton type="submit" label="Changer le mot de passe" :loading="savingPassword" />
           </UForm>
         </UCard>
+      </section>
+
+      <section aria-labelledby="account-onboarding">
+        <AppSectionHeading
+          id="account-onboarding"
+          title="Prise en main"
+          icon="i-lucide-lightbulb"
+          description="Le message d’accueil et les astuces des pages CV, Offres et Candidatures, comme au premier jour."
+        />
+        <UButton
+          label="Revoir l’introduction"
+          icon="i-lucide-rotate-ccw"
+          color="neutral"
+          variant="outline"
+          :loading="resettingHints"
+          @click="replayOnboarding"
+        />
       </section>
 
       <section aria-labelledby="account-data">

@@ -90,3 +90,8 @@ export const coverLetterWordTargets: Record<CoverLetterTemplate, { min: number; 
   reconversion: { min: 250, max: 350 },
   email: { min: 100, max: 180 },
 }
+
+/** First-use messages: the welcome dialog and one tip per main page. */
+export const onboardingHints = ['welcome', 'cv', 'offres', 'candidatures'] as const
+export const OnboardingHint = z.enum(onboardingHints)
+export type OnboardingHint = z.infer<typeof OnboardingHint>

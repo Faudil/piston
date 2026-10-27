@@ -13,6 +13,8 @@ const baseLinks: NavigationMenuItem[] = [
 
 const route = useRoute()
 const admin = useAdminBadge()
+// Which welcome dialog and page tips were already closed, known before the first render.
+await useOnboarding().load()
 // Admins get one more entry, with the number of access requests waiting.
 watch(() => route.path, admin.refresh)
 onMounted(admin.refresh)
@@ -78,5 +80,6 @@ const links = computed<NavigationMenuItem[][]>(() => [
     <slot />
 
     <AppBottomNav />
+    <AppWelcome />
   </UDashboardGroup>
 </template>

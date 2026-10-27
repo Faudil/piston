@@ -81,7 +81,7 @@ const stats = computed(() => [
   },
 ])
 
-const { nextStep } = useDashboardNextStep({
+const { nextStep, progress } = useDashboardNextStep({
   currentResume,
   lastReview,
   offers,
@@ -110,7 +110,21 @@ const { nextStep } = useDashboardNextStep({
             <UIcon :name="nextStep.icon" class="size-6 text-piston-300" />
           </span>
           <div class="min-w-0 flex-1 space-y-1">
-            <p class="text-xs font-semibold tracking-wider text-piston-300 uppercase">
+            <p
+              v-if="progress"
+              class="flex items-center gap-3 text-xs font-semibold tracking-wider text-piston-300 uppercase"
+            >
+              Premiers pas · {{ progress.current }} sur {{ progress.total }}
+              <span class="flex gap-1" aria-hidden="true">
+                <span
+                  v-for="(done, index) in progress.steps"
+                  :key="index"
+                  class="h-1 w-5 rounded-full"
+                  :class="done ? 'bg-piston-400' : 'bg-white/15'"
+                />
+              </span>
+            </p>
+            <p v-else class="text-xs font-semibold tracking-wider text-piston-300 uppercase">
               Prochaine étape
             </p>
             <h2 id="next-step" class="font-display text-2xl font-medium text-balance">
