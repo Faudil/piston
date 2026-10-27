@@ -2,8 +2,8 @@
 import type { ResumeProfile } from '@piston/shared'
 
 /**
- * Profile switcher of the CV page (one profile per specialty) with its
- * rename / default / delete actions. The page owns the data; this component
+ * Profile switcher of the CV page (one profile per specialty): one compact
+ * menu in the page header to switch, create, rename, set as default or delete. The page owns the data; this component
  * only calls the API and tells the page what happened.
  */
 const props = defineProps<{
@@ -21,22 +21,6 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const selectedId = computed(() => props.selected?.id)
-
-const profileTabs = computed(() =>
-  props.profiles.map((profile) => ({
-    label: profile.name,
-    value: profile.id,
-    badge: profile.isDefault ? { label: 'Par défaut', variant: 'subtle' as const } : undefined,
-  })),
-)
-const profileItems = computed(() =>
-  props.profiles.map((profile) => ({
-    label: profile.isDefault ? `${profile.name} (par défaut)` : profile.name,
-    value: profile.id,
-  })),
-)
-/** Tabs read well for a few short names; beyond that (and on phones) a select is used. */
-const useTabs = computed(() => props.profiles.length >= 2 && props.profiles.length <= 4)
 
 const nameModal = reactive({ open: false, mode: 'create' as 'create' | 'rename', name: '' })
 const deleteOpen = ref(false)
@@ -109,21 +93,41 @@ async function deleteSelected() {
 }
 
 // Items that open a dialog wait for the menu to close (see utils/menus.ts).
-const profileMenu = computed(() => [
+const menu = computed(() => [
   [
-    { label: 'Renommer', icon: 'i-lucide-pencil', onSelect: () => afterMenuCloses(openRename) },
-    ...(props.selected?.isDefault
-      ? []
-      : [{ label: 'Définir par défaut', icon: 'i-lucide-star', onSelect: makeDefault }]),
-  ],
-  [
+    { type: 'label' as const, label: 'Profils de CV' },
+    ...props.profiles.map((profile) => ({
+      label: profile.isDefault ? `${profile.name} · par défaut` : profile.name,
+      type: 'checkbox' as const,
+      checked: profile.id === selectedId.value,
+      onSelect: () => emit('select', profile.id),
+    })),
     {
-      label: 'Supprimer le profil',
-      icon: 'i-lucide-trash-2',
-      color: 'error' as const,
-      onSelect: () => afterMenuCloses(() => (deleteOpen.value = true)),
+      label: 'Nouveau profil',
+      icon: 'i-lucide-plus',
+      onSelect: () => afterMenuCloses(openCreate),
     },
   ],
+  ...(props.selected
+    ? [
+        [
+          {
+            label: `Renommer « ${props.selected.name} »`,
+            icon: 'i-lucide-pencil',
+            onSelect: () => afterMenuCloses(openRename),
+          },
+          ...(props.selected.isDefault
+            ? []
+            : [{ label: 'Définir par défaut', icon: 'i-lucide-star', onSelect: makeDefault }]),
+          {
+            label: 'Supprimer le profil',
+            icon: 'i-lucide-trash-2',
+            color: 'error' as const,
+            onSelect: () => afterMenuCloses(() => (deleteOpen.value = true)),
+          },
+        ],
+      ]
+    : []),
 ])
 
 const deleteDescription = computed(() => {
@@ -144,62 +148,24 @@ const deleteDescription = computed(() => {
 </script>
 
 <template>
-  <section aria-labelledby="cv-profiles" class="space-y-4">
-    <AppSectionHeading
-      id="cv-profiles"
-      title="Profils de CV"
-      icon="i-lucide-layers"
-      :description="
-        profiles.length
-          ? 'Le profil par défaut sert aux offres pour lesquelles tu n\'en choisis pas d\'autre.'
-          : 'Ton premier CV crée le profil « Principal ». Ajoute-en d\'autres si tu postules dans plusieurs domaines.'
-      "
+  <div v-if="profiles.length">
+    <UDropdownMenu
+      :items="menu"
+      :modal="false"
+      :content="{ align: 'end' }"
+      :ui="{ content: 'min-w-64' }"
     >
       <UButton
-        v-if="profiles.length"
-        label="Nouveau profil"
-        icon="i-lucide-plus"
+        :label="selected?.name ?? 'Profils'"
+        icon="i-lucide-layers"
+        trailing-icon="i-lucide-chevron-down"
         color="neutral"
         variant="outline"
-        @click="openCreate"
+        :aria-label="`Profil de CV : ${selected?.name}. Changer ou gérer les profils`"
+        class="max-w-64"
+        :ui="{ label: 'truncate' }"
       />
-    </AppSectionHeading>
-
-    <div v-if="profiles.length" class="flex items-end gap-2">
-      <div class="min-w-0 flex-1">
-        <UTabs
-          v-if="useTabs"
-          :model-value="selectedId"
-          :items="profileTabs"
-          :content="false"
-          variant="pill"
-          class="hidden w-full sm:flex"
-          aria-label="Profil de CV affiché"
-          @update:model-value="emit('select', String($event))"
-        />
-        <UFormField
-          label="Profil affiché"
-          :class="useTabs ? 'sm:hidden' : ''"
-          :ui="{ label: profiles.length === 1 ? 'sr-only' : undefined }"
-        >
-          <USelect
-            :model-value="selectedId"
-            :items="profileItems"
-            icon="i-lucide-layers"
-            class="w-full"
-            @update:model-value="emit('select', $event as string)"
-          />
-        </UFormField>
-      </div>
-      <UDropdownMenu :items="profileMenu" :modal="false" :content="{ align: 'end' }">
-        <UButton
-          icon="i-lucide-ellipsis"
-          color="neutral"
-          variant="outline"
-          :aria-label="`Actions du profil « ${selected?.name} »`"
-        />
-      </UDropdownMenu>
-    </div>
+    </UDropdownMenu>
 
     <UModal
       v-model:open="nameModal.open"
@@ -257,5 +223,5 @@ const deleteDescription = computed(() => {
         </div>
       </template>
     </UModal>
-  </section>
+  </div>
 </template>

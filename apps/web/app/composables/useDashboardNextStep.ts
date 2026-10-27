@@ -109,7 +109,7 @@ export function useDashboardNextStep(source: {
         icon: 'i-lucide-file-pen-line',
         title: 'Mets ton CV en page avec Piston',
         text: 'Des modèles lisibles par les logiciels de recrutement, et une copie adaptée à chaque offre en un clic.',
-        action: { label: 'Créer mon CV', to: '/cv#cv-builder', icon: 'i-lucide-plus' },
+        action: { label: 'Créer mon CV', to: '/cv?vue=mises-en-page', icon: 'i-lucide-plus' },
       }
     return {
       icon: 'i-lucide-target',

@@ -35,8 +35,8 @@ function selectProfile(id: string | undefined) {
 
 async function onProfileCreated(profile: ResumeProfile) {
   await refreshProfiles()
+  // A new profile has no version: the page shows the form to add its first one.
   selectProfile(profile.id)
-  formOpen.value = true
 }
 
 async function onProfileDeleted() {
@@ -71,12 +71,45 @@ async function setCurrent(resume: Resume) {
   }
 }
 
+/** « Nouvelle version » dialog (paste or PDF), from the summary card or the Versions tab. */
 const formOpen = ref(false)
 const documentList = useTemplateRef<{ openCreate: () => void }>('documentList')
+
+// --- Tabs ----------------------------------------------------------------------
+
+const tabs = ['critique', 'mises-en-page', 'versions'] as const
+type Tab = (typeof tabs)[number]
+
+// In the URL (?vue=versions) so links and reloads land on the same tab. The old
+// #cv-builder anchor still opens the layouts.
+const tab = computed<Tab>({
+  get: () => {
+    if (route.hash === '#cv-builder') return 'mises-en-page'
+    const value = route.query.vue
+    return tabs.includes(value as Tab) ? (value as Tab) : 'critique'
+  },
+  set: (value) => router.replace({ query: { ...route.query, vue: value }, hash: '' }),
+})
+
+const tabItems = computed(() => [
+  { label: 'Critique', icon: 'i-lucide-sparkles', value: 'critique' },
+  { label: 'Mises en page', icon: 'i-lucide-file-pen-line', value: 'mises-en-page' },
+  {
+    label: 'Versions',
+    icon: 'i-lucide-history',
+    value: 'versions',
+    badge: resumes.value.length > 1 ? String(resumes.value.length) : undefined,
+  },
+])
 
 async function onCreated(resume: Resume) {
   formOpen.value = false
   await refreshAll()
+  toast.add({
+    title: 'Version ajoutée',
+    description: `« ${resume.title} » est maintenant la version actuelle.`,
+    icon: 'i-lucide-check',
+  })
   // The first resume of a user creates « Principal »: show it.
   selectProfile(resume.profileId)
 }
@@ -122,17 +155,28 @@ const shownResume = computed(() => {
 
 async function review(resume: Resume) {
   reviewedResumeId.value = resume.id
+  tab.value = 'critique'
   await start({ resumeId: resume.id })
 }
+
+/** Average of the four scores of the last review, for the ring of the summary card. */
+const savedAverage = computed(() => {
+  const scores = saved.value?.output.scores
+  if (!scores) return null
+  const values = Object.values(scores).filter((v): v is number => typeof v === 'number')
+  return values.length
+    ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+    : null
+})
+/** Whether the last review is about an older version than the current one. */
+const reviewIsStale = computed(
+  () => !!saved.value && saved.value.inputRefs.resumeId !== currentResume.value?.id,
+)
 </script>
 
 <template>
-  <AppPage
-    tip="cv"
-    title="CV"
-    description="Un profil par spécialité (« Communication », « Marketing digital »…), chacun avec ses propres versions et sa critique par Claude, sans langue de bois."
-  >
-    <div class="space-y-12">
+  <AppPage tip="cv" title="CV" description="Ton CV, sa critique par Claude et ses mises en page.">
+    <template #actions>
       <ResumeProfileManager
         :profiles="profiles"
         :selected="selectedProfile"
@@ -141,69 +185,156 @@ async function review(resume: Resume) {
         @created="onProfileCreated"
         @deleted="onProfileDeleted"
       />
+    </template>
 
-      <section aria-labelledby="cv-versions">
-        <AppSectionHeading
-          id="cv-versions"
-          :title="selectedProfile ? `Versions de « ${selectedProfile.name} »` : 'Mes versions'"
-          icon="i-lucide-files"
-          description="Chaque profil a son propre historique. Sa version « actuelle » sert aux analyses qui utilisent ce profil."
-        >
-          <UButton
-            v-if="resumes.length"
-            :label="formOpen ? 'Fermer' : 'Ajouter une version'"
-            :icon="formOpen ? 'i-lucide-x' : 'i-lucide-plus'"
-            color="neutral"
-            variant="outline"
-            :aria-expanded="formOpen"
-            aria-controls="cv-form"
-            @click="formOpen = !formOpen"
-          />
-        </AppSectionHeading>
-
-        <div class="space-y-4">
-          <UCard v-if="formOpen || !resumes.length" id="cv-form">
-            <div v-if="!resumes.length" class="mb-5 flex items-start gap-3">
-              <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10">
-                <UIcon name="i-lucide-file-user" class="size-5 text-primary" />
-              </span>
-              <div v-if="selectedProfile">
-                <p class="font-semibold text-highlighted">
-                  Ajoute la première version de « {{ selectedProfile.name }} »
-                </p>
-                <p class="text-sm text-muted">
-                  Colle le texte de ce CV ou importe son PDF. Les autres profils ne changent pas.
-                </p>
-              </div>
-              <div v-else>
-                <p class="font-semibold text-highlighted">Commence par ton CV</p>
-                <p class="text-sm text-muted">
-                  Toutes les fonctionnalités de Piston s'appuient dessus. Colle son texte ou importe
-                  un PDF.
-                </p>
-              </div>
-            </div>
-            <ResumeForm :key="selectedId" :profile-id="selectedId" @created="onCreated" />
-          </UCard>
-
-          <ResumeVersionList
-            v-if="resumes.length"
-            :resumes="resumes"
-            :reviewing-id="pending ? reviewedResumeId : null"
-            @review="review"
-            @set-current="setCurrent"
-            @changed="refreshAll()"
-          />
+    <!-- No version yet: one thing to do, nothing else on the page. -->
+    <UCard v-if="!currentResume" id="cv-form" :ui="{ body: 'p-5 sm:p-8' }">
+      <div class="mb-6 flex items-start gap-3">
+        <span class="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10">
+          <UIcon name="i-lucide-file-user" class="size-5 text-primary" />
+        </span>
+        <div v-if="selectedProfile">
+          <p class="font-semibold text-highlighted">
+            Ajoute la première version de « {{ selectedProfile.name }} »
+          </p>
+          <p class="text-sm text-muted">
+            Colle le texte de ce CV ou importe son PDF. Les autres profils ne changent pas.
+          </p>
         </div>
-      </section>
+        <div v-else>
+          <p class="font-semibold text-highlighted">Commence par ton CV</p>
+          <p class="text-sm text-muted">
+            Toutes les fonctionnalités de Piston s'appuient dessus. Colle son texte ou importe un
+            PDF.
+          </p>
+        </div>
+      </div>
+      <ResumeForm :key="selectedId" :profile-id="selectedId" @created="onCreated" />
+    </UCard>
 
-      <section aria-labelledby="cv-builder">
-        <AppSectionHeading
-          id="cv-builder"
-          title="Créer mon CV"
-          icon="i-lucide-file-pen-line"
-          description="Un CV mis en page et structuré, que Claude t’aide à améliorer. Enregistre-le comme version pour que les critiques, analyses et lettres l’utilisent."
-        >
+    <div v-else class="space-y-6">
+      <!-- The CV in use, its last grade and the main action: where the eye lands first. -->
+      <UCard :ui="{ body: 'p-5 sm:p-6' }">
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div class="flex min-w-0 flex-1 items-center gap-4">
+            <ScoreRing
+              v-if="savedAverage !== null"
+              :value="savedAverage"
+              :max="10"
+              label="Note moyenne de la dernière critique"
+            />
+            <span
+              v-else
+              class="grid size-20 shrink-0 place-items-center rounded-full bg-elevated"
+              aria-hidden="true"
+            >
+              <UIcon name="i-lucide-file-user" class="size-7 text-muted" />
+            </span>
+            <div class="min-w-0 space-y-0.5">
+              <p class="text-xs font-semibold tracking-wider text-primary uppercase">
+                Version actuelle
+              </p>
+              <p class="truncate text-lg font-semibold text-highlighted">
+                {{ currentResume.title }}
+              </p>
+              <p class="truncate text-sm text-muted">
+                {{ formatDate(currentResume.createdAt, 'long') }}
+                <template v-if="currentResume.sourceFilename">
+                  · {{ currentResume.sourceFilename }}
+                </template>
+              </p>
+              <p class="text-sm text-muted">
+                <template v-if="!saved">Pas encore critiqué</template>
+                <template v-else-if="reviewIsStale">
+                  Dernière critique sur une version précédente
+                </template>
+                <template v-else>Critiqué le {{ formatDate(saved.createdAt, 'long') }}</template>
+              </p>
+            </div>
+          </div>
+          <div class="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+            <!-- Shorter labels on phones, where the two buttons share one row. -->
+            <UButton
+              icon="i-lucide-upload"
+              color="neutral"
+              variant="outline"
+              class="justify-center"
+              @click="formOpen = true"
+            >
+              <span class="sm:hidden">Remplacer</span>
+              <span class="hidden sm:inline">Nouvelle version</span>
+            </UButton>
+            <UButton
+              icon="i-lucide-sparkles"
+              class="justify-center"
+              :aria-label="`Critiquer « ${currentResume.title} »`"
+              :loading="pending && reviewedResumeId === currentResume.id"
+              :disabled="pending"
+              @click="review(currentResume)"
+            >
+              <span class="sm:hidden">Critiquer</span>
+              <span class="hidden sm:inline">
+                {{ saved && !reviewIsStale ? 'Nouvelle critique' : 'Critiquer' }}
+              </span>
+            </UButton>
+          </div>
+        </div>
+      </UCard>
+
+      <UTabs
+        v-model="tab"
+        :items="tabItems"
+        :content="false"
+        variant="link"
+        class="w-full"
+        :ui="{
+          list: 'overflow-x-auto overflow-y-hidden [scrollbar-width:none]',
+          trigger: 'shrink-0',
+        }"
+      />
+
+      <!-- Critique -->
+      <div v-if="tab === 'critique'" class="space-y-4" aria-live="polite">
+        <UAlert
+          v-if="error"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-circle-alert"
+          :title="error"
+        />
+        <div v-if="pending || (shown && shownResume)" class="flex flex-wrap items-center gap-3">
+          <StreamingIndicator v-if="pending" text="Claude critique ton CV…" @stop="abort" />
+          <p v-if="shown && shownResume" class="text-sm text-muted">
+            Critique de « {{ shownResume.title }} »
+            <template v-if="!pending && !generation && saved">
+              du {{ formatDate(saved.createdAt, 'long') }}
+            </template>
+          </p>
+        </div>
+        <ResumeReviewResult v-if="shown" :output="shown" />
+        <ResultSkeleton v-else-if="pending" />
+        <UEmpty
+          v-else
+          icon="i-lucide-file-search"
+          title="Pas encore de critique"
+          description="Quatre notes sur 10, un score ATS, ce qui coince et une réécriture prête à copier. Environ une minute."
+          :actions="[
+            {
+              label: 'Critiquer la version actuelle',
+              icon: 'i-lucide-sparkles',
+              onClick: () => review(currentResume!),
+            },
+          ]"
+        />
+      </div>
+
+      <!-- Mises en page -->
+      <div v-else-if="tab === 'mises-en-page'" class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <p class="max-w-prose text-sm text-muted">
+            Ton CV dans un modèle soigné, que Claude t’aide à améliorer. Enregistre-le comme version
+            pour que critiques, analyses et lettres l’utilisent.
+          </p>
           <UButton
             label="Nouveau CV"
             icon="i-lucide-plus"
@@ -211,83 +342,54 @@ async function review(resume: Resume) {
             variant="outline"
             @click="documentList?.openCreate()"
           />
-        </AppSectionHeading>
+        </div>
         <CvDocumentList
           ref="documentList"
           :key="selectedId"
           :profile-id="selectedId"
           :current-resume="currentResume"
         />
-      </section>
+      </div>
 
-      <section aria-labelledby="cv-review">
-        <AppSectionHeading
-          id="cv-review"
-          title="Critique"
-          icon="i-lucide-sparkles"
-          :description="
-            selectedProfile && profiles.length > 1
-              ? `Claude note la version actuelle de « ${selectedProfile.name} », cite ses points forts et ses faiblesses, puis propose une réécriture ligne par ligne.`
-              : 'Claude note ton CV, cite ses points forts et ses faiblesses, puis propose une réécriture ligne par ligne.'
-          "
-        >
+      <!-- Versions -->
+      <div v-else class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <p class="max-w-prose text-sm text-muted">
+            L’historique de
+            {{ selectedProfile ? `« ${selectedProfile.name} »` : 'ton CV' }}. La version actuelle
+            sert aux analyses d’offres et aux lettres.
+          </p>
           <UButton
-            v-if="currentResume && shown"
-            label="Nouvelle critique"
-            icon="i-lucide-refresh-cw"
+            label="Ajouter une version"
+            icon="i-lucide-plus"
             color="neutral"
             variant="outline"
-            :loading="pending"
-            @click="review(currentResume)"
+            @click="formOpen = true"
           />
-        </AppSectionHeading>
-
-        <div class="space-y-4">
-          <UAlert
-            v-if="error"
-            color="error"
-            variant="subtle"
-            icon="i-lucide-circle-alert"
-            :title="error"
-          />
-
-          <div class="flex flex-wrap items-center gap-3">
-            <StreamingIndicator v-if="pending" text="Claude critique ton CV…" @stop="abort" />
-            <p v-if="shown && shownResume" class="text-sm text-muted">
-              Critique de « {{ shownResume.title }} »
-              <template v-if="!pending && !generation && saved">
-                du {{ formatDate(saved.createdAt, 'long') }}
-              </template>
-            </p>
-          </div>
-
-          <div aria-live="polite">
-            <ResumeReviewResult v-if="shown" :output="shown" />
-            <ResultSkeleton v-else-if="pending" />
-            <UEmpty
-              v-else
-              icon="i-lucide-file-search"
-              title="Pas encore de critique"
-              :description="
-                currentResume
-                  ? 'Quatre notes sur 10, cinq points forts, cinq points à corriger et une réécriture prête à copier.'
-                  : 'Ajoute d\'abord une version ci-dessus, puis lance une critique.'
-              "
-              :actions="
-                currentResume
-                  ? [
-                      {
-                        label: 'Critiquer la version actuelle',
-                        icon: 'i-lucide-sparkles',
-                        onClick: () => review(currentResume!),
-                      },
-                    ]
-                  : []
-              "
-            />
-          </div>
         </div>
-      </section>
+        <ResumeVersionList
+          :resumes="resumes"
+          :reviewing-id="pending ? reviewedResumeId : null"
+          @review="review"
+          @set-current="setCurrent"
+          @changed="refreshAll()"
+        />
+      </div>
     </div>
+
+    <UModal
+      v-model:open="formOpen"
+      title="Nouvelle version"
+      :description="
+        selectedProfile
+          ? `Elle devient la version actuelle de « ${selectedProfile.name} ». Les précédentes restent dans l’onglet Versions.`
+          : undefined
+      "
+      :ui="{ content: 'sm:max-w-2xl' }"
+    >
+      <template #body>
+        <ResumeForm :key="selectedId" :profile-id="selectedId" @created="onCreated" />
+      </template>
+    </UModal>
   </AppPage>
 </template>

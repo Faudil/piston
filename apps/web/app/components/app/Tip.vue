@@ -16,7 +16,7 @@ const tip = computed(() => pageTips[props.hint])
   >
     <aside
       v-if="onboarding.isOpen(hint)"
-      class="mb-8 flex gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:items-center sm:gap-4 sm:p-5"
+      class="mb-8 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex sm:items-center sm:gap-4 sm:p-5"
       :aria-label="tip.title"
     >
       <span
@@ -34,7 +34,7 @@ const tip = computed(() => pageTips[props.hint])
         color="neutral"
         variant="ghost"
         size="sm"
-        class="shrink-0 self-start sm:self-center"
+        class="col-start-2 -ml-2.5 justify-self-start sm:ml-0 sm:shrink-0"
         @click="onboarding.dismiss(hint)"
       />
     </aside>
