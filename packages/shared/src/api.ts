@@ -155,15 +155,27 @@ export const CoverLetterBody = z
      */
     modelLetterId: z.uuid().optional(),
     /**
-     * When set, only this paragraph of an existing letter is rewritten.
+     * When set, only these paragraphs of an existing letter are rewritten.
      * `generationId` points at the letter being edited, `paragraphs` carries the
-     * current (possibly user-edited) text.
+     * current (possibly user-edited) text. Without `instructions`, Claude
+     * improves them on its own.
      */
-    regenerateParagraph: z
+    rewriteParagraphs: z
       .object({
         generationId: z.uuid(),
-        index: z.number().int().min(0),
+        indexes: z
+          .array(z.number().int().min(0))
+          .min(1)
+          .max(20)
+          .refine((indexes) => new Set(indexes).size === indexes.length, {
+            message: 'Un paragraphe ne peut être choisi qu’une fois.',
+          }),
         paragraphs: z.array(z.string().max(5000)).min(1).max(20),
+        instructions: z
+          .string()
+          .trim()
+          .max(1000, 'Les corrections ne doivent pas dépasser 1000 caractères.')
+          .optional(),
       })
       .optional(),
     /**
@@ -182,11 +194,11 @@ export const CoverLetterBody = z
       })
       .optional(),
   })
-  .refine((body) => !(body.regenerateParagraph && body.revision), {
-    message: 'Choisis soit un paragraphe à régénérer, soit des corrections, pas les deux.',
+  .refine((body) => !(body.rewriteParagraphs && body.revision), {
+    message: 'Choisis soit des paragraphes à réécrire, soit des corrections, pas les deux.',
     path: ['revision'],
   })
-  .refine((body) => !(body.modelLetterId && (body.regenerateParagraph || body.revision)), {
+  .refine((body) => !(body.modelLetterId && (body.rewriteParagraphs || body.revision)), {
     message: 'Une lettre modèle ne sert qu’à écrire une nouvelle lettre.',
     path: ['modelLetterId'],
   })

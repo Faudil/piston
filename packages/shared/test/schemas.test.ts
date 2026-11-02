@@ -78,9 +78,18 @@ describe('request schemas', () => {
       CoverLetterBody.safeParse({
         ...base,
         revision,
-        regenerateParagraph: { generationId, index: 0, paragraphs: ['A'] },
+        rewriteParagraphs: { generationId, indexes: [0], paragraphs: ['A'] },
       }).success,
     ).toBe(false)
+    // Corrections are optional on picked paragraphs, which must be distinct.
+    const rewrite = (indexes: number[]) =>
+      CoverLetterBody.safeParse({
+        ...base,
+        rewriteParagraphs: { generationId, indexes, paragraphs: ['A', 'B'] },
+      }).success
+    expect(rewrite([0, 1])).toBe(true)
+    expect(rewrite([])).toBe(false)
+    expect(rewrite([1, 1])).toBe(false)
   })
 
   it('rejects an empty application update', () => {

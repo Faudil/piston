@@ -97,6 +97,12 @@ describe('letterVersionLabel', () => {
     expect(letterVersionLabel(version({ paragraphIndex: 0 }, [body1, body2]))).toBe(
       'Paragraphe 1 réécrit',
     )
+    expect(letterVersionLabel(version({ paragraphIndexes: [1, 2] }))).toBe(
+      'Paragraphes 1 et 2 réécrits',
+    )
+    expect(
+      letterVersionLabel(version({ paragraphIndexes: [2], revisionInstructions: 'Plus court' })),
+    ).toBe('Paragraphe 2 : Plus court')
   })
 
   it('shortens long corrections', () => {

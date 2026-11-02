@@ -118,22 +118,28 @@ const EXCERPT_LENGTH = 80
 
 /**
  * What made a version, as shown in the version list: « Nouvelle lettre »,
- * « Corrections : plus court », « Paragraphe 2 réécrit ». The paragraph number
- * counts body paragraphs, like the editor; the stored index counts every
+ * « Corrections : plus court », « Paragraphe 2 réécrit », « Paragraphes 1 et 3 :
+ * plus court ». The paragraph number counts body paragraphs, like the editor; the stored index counts every
  * paragraph, so the version's own header is subtracted.
  */
 export function letterVersionLabel(letter: LetterVersion): string {
-  const { revisionInstructions, paragraphIndex } = letter.inputRefs
-  if (revisionInstructions) {
-    const text = revisionInstructions.replace(/\s+/g, ' ').trim()
-    const excerpt = text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH)}…` : text
-    return `Corrections : ${excerpt}`
-  }
-  if (paragraphIndex !== undefined) {
+  const { revisionInstructions, paragraphIndex, paragraphIndexes } = letter.inputRefs
+  const indexes = paragraphIndexes ?? (paragraphIndex === undefined ? [] : [paragraphIndex])
+  const text = revisionInstructions?.replace(/\s+/g, ' ').trim()
+  const excerpt =
+    text && (text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH)}…` : text)
+  if (indexes.length > 0) {
     const headerLength = splitLetter(letter.output.paragraphs).header.length
-    const number = paragraphIndex - headerLength + 1
-    return `Paragraphe ${number >= 1 ? number : paragraphIndex + 1} réécrit`
+    const numbers = indexes.map((index) => {
+      const number = index - headerLength + 1
+      return number >= 1 ? number : index + 1
+    })
+    const names = new Intl.ListFormat('fr', { type: 'conjunction' }).format(numbers.map(String))
+    const noun = indexes.length > 1 ? 'Paragraphes' : 'Paragraphe'
+    if (excerpt) return `${noun} ${names} : ${excerpt}`
+    return `${noun} ${names} ${indexes.length > 1 ? 'réécrits' : 'réécrit'}`
   }
+  if (excerpt) return `Corrections : ${excerpt}`
   return letter.inputRefs.modelLetterId
     ? 'Nouvelle lettre, d’après une lettre précédente'
     : 'Nouvelle lettre'

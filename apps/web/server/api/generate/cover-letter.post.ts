@@ -1,15 +1,15 @@
 import {
   buildUserMessage,
-  coverLetterParagraphPrompt,
+  coverLetterParagraphsPrompt,
   coverLetterPrompt,
   coverLetterRevisionPrompt,
 } from '@piston/prompts'
 import { CoverLetterBody, type CoverLetterOutput } from '@piston/shared'
 
 /**
- * Writes a cover letter for an offer, rewrites a single paragraph of an
- * existing one (`regenerateParagraph`), or revises a whole letter following
- * the user's corrections (`revision`). Every result is saved as a new
+ * Writes a cover letter for an offer, rewrites some paragraphs of an existing
+ * one (`rewriteParagraphs`), or revises a whole letter following the user's
+ * corrections (`revision`). Every result is saved as a new
  * generation: history is append-only, the parent is kept in inputRefs.
  *
  * With `applicationId`, the letter is written for that application and its
@@ -19,16 +19,19 @@ import { CoverLetterBody, type CoverLetterOutput } from '@piston/shared'
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const body = await readValidatedBody(event, zodValidator(CoverLetterBody))
-  const { offerId, tone, highlights, regenerateParagraph, revision, modelLetterId } = body
+  const { offerId, tone, highlights, rewriteParagraphs, revision, modelLetterId } = body
   let { template, applicationId } = body
   const offer = await getUserOffer(user.id, offerId)
 
-  if (regenerateParagraph) {
-    const parent = await getUserCoverLetter(user.id, regenerateParagraph.generationId)
-    if (regenerateParagraph.index >= regenerateParagraph.paragraphs.length) {
+  // In the order of the letter: Claude answers in that order.
+  const rewriteIndexes = rewriteParagraphs?.indexes.toSorted((a, b) => a - b) ?? []
+
+  if (rewriteParagraphs) {
+    const parent = await getUserCoverLetter(user.id, rewriteParagraphs.generationId)
+    if (rewriteIndexes.at(-1)! >= rewriteParagraphs.paragraphs.length) {
       throw createError({ statusCode: 400, message: "Ce paragraphe n'existe pas." })
     }
-    // A rewritten paragraph belongs to its letter: keep that letter's template
+    // Rewritten paragraphs belong to their letter: keep that letter's template
     // and application, whichever page the rewrite was asked from.
     template = parent.inputRefs.template ?? template
     applicationId ??= parent.inputRefs.applicationId
@@ -46,7 +49,7 @@ export default defineEventHandler(async (event) => {
   if (revision) await getUserCoverLetter(user.id, revision.generationId)
 
   const ctx = { displayName: user.displayName, tone, template }
-  const task = revision ? 'revision' : regenerateParagraph ? 'paragraph' : 'letter'
+  const task = revision ? 'revision' : rewriteParagraphs ? 'paragraph' : 'letter'
 
   const { resume: resumeBlock, request } = buildUserMessage({
     resume: resume.rawText,
@@ -60,11 +63,12 @@ export default defineEventHandler(async (event) => {
   })
 
   let system = coverLetterPrompt(ctx)
-  if (regenerateParagraph) {
-    system = coverLetterParagraphPrompt({
+  if (rewriteParagraphs) {
+    system = coverLetterParagraphsPrompt({
       ...ctx,
-      paragraphs: regenerateParagraph.paragraphs,
-      index: regenerateParagraph.index,
+      paragraphs: rewriteParagraphs.paragraphs,
+      indexes: rewriteIndexes,
+      instructions: rewriteParagraphs.instructions,
     })
   } else if (revision) {
     system = coverLetterRevisionPrompt({
@@ -89,9 +93,12 @@ export default defineEventHandler(async (event) => {
       highlights,
       ...(application && { applicationId: application.id }),
       ...(modelLetter && { modelLetterId: modelLetter.id }),
-      ...(regenerateParagraph && {
-        parentGenerationId: regenerateParagraph.generationId,
-        paragraphIndex: regenerateParagraph.index,
+      ...(rewriteParagraphs && {
+        parentGenerationId: rewriteParagraphs.generationId,
+        paragraphIndexes: rewriteIndexes,
+        ...(rewriteParagraphs.instructions && {
+          revisionInstructions: rewriteParagraphs.instructions,
+        }),
       }),
       ...(revision && {
         parentGenerationId: revision.generationId,
@@ -99,16 +106,12 @@ export default defineEventHandler(async (event) => {
       }),
     },
     output: {
-      // For a single paragraph Claude only writes the new one: merge it back
+      // For some paragraphs Claude only writes the new ones: merge them back
       // into the letter so every generation stores a complete letter. A
       // revision is a complete letter, parsed like a new one.
-      fromText: regenerateParagraph
+      fromText: rewriteParagraphs
         ? (text) => ({
-            paragraphs: replaceParagraph(
-              regenerateParagraph.paragraphs,
-              regenerateParagraph.index,
-              text,
-            ),
+            paragraphs: replaceParagraphs(rewriteParagraphs.paragraphs, rewriteIndexes, text),
           })
         : parseCoverLetter,
     },

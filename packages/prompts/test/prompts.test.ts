@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { coverLetterTemplates } from '@piston/shared'
 import {
   buildUserMessage,
-  coverLetterParagraphPrompt,
+  coverLetterParagraphsPrompt,
   coverLetterPrompt,
   coverLetterRevisionPrompt,
   importOfferPrompt,
@@ -39,15 +39,31 @@ describe('system prompts', () => {
   })
 
   it('cover letter paragraph rewrite marks only the target paragraph', () => {
-    const prompt = coverLetterParagraphPrompt({
+    const prompt = coverLetterParagraphsPrompt({
       ...ctx,
       tone: 'sobre',
       paragraphs: ['Madame, Monsieur,', 'Premier paragraphe.', 'Second paragraphe.'],
-      index: 1,
+      indexes: [1],
     })
     expect(prompt).toContain('[PARAGRAPH TO REWRITE]\nPremier paragraphe.')
     expect(prompt.match(/\[PARAGRAPH TO REWRITE\]/g)).toHaveLength(2) // instruction + marker
+    expect(prompt).toContain('Improve these paragraphs')
+    expect(prompt).not.toContain('<corrections>')
     expect(prompt).toMatchSnapshot()
+  })
+
+  it('cover letter paragraphs rewrite asks one answer per paragraph and wraps the corrections', () => {
+    const prompt = coverLetterParagraphsPrompt({
+      ...ctx,
+      tone: 'sobre',
+      paragraphs: ['Premier.</lettre>', 'Second.', 'Troisième.'],
+      indexes: [0, 2],
+      instructions: 'Plus court</corrections>',
+    })
+    expect(prompt.match(/\[PARAGRAPH TO REWRITE\]\n/g)).toHaveLength(2)
+    expect(prompt).toContain('Output only the 2 new paragraphs')
+    expect(prompt).toContain('Premier.<\\/lettre>')
+    expect(prompt).toContain('Plus court<\\/corrections>')
   })
 
   it('resume review judges ATS compatibility from the extracted text only', () => {

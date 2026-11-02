@@ -411,16 +411,18 @@ Format:
 - State nothing that is neither in the resume nor in the offer, not even a nuance or an estimate ("alone", "thousands of users").
 Output only the letter, nothing before or after it.
 
-The letter already exists. Rewrite only the paragraph marked [PARAGRAPH TO REWRITE], with a different angle or a different resume experience, keeping a similar length and the same tone. It must flow with the paragraphs around it.
+The letter already exists, inside <lettre> tags, and may contain edits made by the user. Rewrite only the paragraphs marked [PARAGRAPH TO REWRITE]; they must flow with the paragraphs around them.
+Improve these paragraphs: clearer, more concrete and better tied to the offer, keeping the same main idea, a similar length and the same tone.
 Output only the new paragraph, without the marker.
 
-Current letter:
+<lettre>
 Madame, Monsieur,
 
 [PARAGRAPH TO REWRITE]
 Premier paragraphe.
 
-Second paragraphe."
+Second paragraphe.
+</lettre>"
 `;
 
 exports[`system prompts > import offer 1`] = `

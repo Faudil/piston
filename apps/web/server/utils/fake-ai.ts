@@ -169,8 +169,9 @@ function answerFor(params: {
               : undefined
   if (json) return { text: JSON.stringify(json), json }
   const system = JSON.stringify(params.system ?? '')
-  // Only a paragraph rewrite is asked for a single paragraph.
-  return { text: system.includes('[PARAGRAPH TO REWRITE]') ? regeneratedParagraph : coverLetter }
+  // A rewrite answers one paragraph per marker; its instruction also names the marker.
+  const marked = system.split('[PARAGRAPH TO REWRITE]\\n').length - 1
+  return { text: marked ? Array(marked).fill(regeneratedParagraph).join('\n\n') : coverLetter }
 }
 
 /** Splits text in a few chunks so the browser sees a real stream. */

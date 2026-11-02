@@ -163,9 +163,9 @@ describe('POST /api/generate/cover-letter', () => {
           offerId: offer.id,
           tone: 'sobre',
           // The user edited paragraph A before asking to rewrite B.
-          regenerateParagraph: {
+          rewriteParagraphs: {
             generationId: parent.id,
-            index: 1,
+            indexes: [1],
             paragraphs: ['A édité', 'B', 'C'],
           },
         }),
@@ -182,12 +182,64 @@ describe('POST /api/generate/cover-letter', () => {
       expect(rows[0]!.inputRefs).toMatchObject({
         offerId: offer.id,
         parentGenerationId: parent.id,
-        paragraphIndex: 1,
+        paragraphIndexes: [1],
       })
       // The parent letter is untouched: history is append-only.
       expect(rows.find((r) => r.id === parent.id)!.output).toEqual({ paragraphs: ['A', 'B', 'C'] })
 
-      expect(JSON.stringify(claude.calls[0]!.system)).toContain('[PARAGRAPH TO REWRITE]')
+      expect(rows[0]!.inputRefs).not.toHaveProperty('revisionInstructions')
+      const system = JSON.stringify(claude.calls[0]!.system)
+      expect(system).toContain('[PARAGRAPH TO REWRITE]')
+      expect(system).toContain('Improve these paragraphs')
+    })
+
+    it('rewrites several paragraphs following corrections, whatever their order', async () => {
+      const { user } = await loginAsNewUser()
+      const offer = await insertOffer(user.id)
+      const parent = await insertLetter(user.id, offer.id, ['A', 'B', 'C'])
+      const claude = mockClaude({ text: 'Nouveau A.\n\nNouveau C.' })
+
+      const events = await readSse(
+        await call({
+          offerId: offer.id,
+          tone: 'sobre',
+          rewriteParagraphs: {
+            generationId: parent.id,
+            indexes: [2, 0],
+            paragraphs: ['A', 'B', 'C'],
+            instructions: 'Plus court',
+          },
+        }),
+      )
+      expect(events.find((e) => e.type === 'done')).toMatchObject({
+        generation: {
+          output: { paragraphs: ['Nouveau A.', 'B', 'Nouveau C.'] },
+          inputRefs: { paragraphIndexes: [0, 2], revisionInstructions: 'Plus court' },
+        },
+      })
+      expect(JSON.stringify(claude.calls[0]!.system)).toContain('<corrections>')
+    })
+
+    it('saves nothing when the answers do not match the picked paragraphs', async () => {
+      const { user } = await loginAsNewUser()
+      const offer = await insertOffer(user.id)
+      const parent = await insertLetter(user.id, offer.id, ['A', 'B', 'C'])
+      mockClaude({ text: 'Un seul paragraphe.' })
+
+      const events = await readSse(
+        await call({
+          offerId: offer.id,
+          tone: 'sobre',
+          rewriteParagraphs: {
+            generationId: parent.id,
+            indexes: [0, 2],
+            paragraphs: ['A', 'B', 'C'],
+          },
+        }),
+      )
+      expect(events.find((e) => e.type === 'done')).toBeUndefined()
+      expect(events.find((e) => e.type === 'error')).toBeDefined()
+      expect(await testState.db.select().from(generations)).toHaveLength(1)
     })
 
     it("keeps the parent letter's template when the request does not repeat it", async () => {
@@ -209,7 +261,7 @@ describe('POST /api/generate/cover-letter', () => {
         await call({
           offerId: offer.id,
           tone: 'sobre',
-          regenerateParagraph: { generationId: parent!.id, index: 1, paragraphs: ['A', 'B'] },
+          rewriteParagraphs: { generationId: parent!.id, indexes: [1], paragraphs: ['A', 'B'] },
         }),
       )
 
@@ -231,7 +283,7 @@ describe('POST /api/generate/cover-letter', () => {
       const res = await call({
         offerId: offer.id,
         tone: 'sobre',
-        regenerateParagraph: { generationId: parent.id, index: 2, paragraphs: ['A', 'B'] },
+        rewriteParagraphs: { generationId: parent.id, indexes: [2], paragraphs: ['A', 'B'] },
       })
       expect(res.status).toBe(400)
       expect(await res.json()).toMatchObject({ message: "Ce paragraphe n'existe pas." })
@@ -259,7 +311,7 @@ describe('POST /api/generate/cover-letter', () => {
         const res = await call({
           offerId: bobOffer.id,
           tone: 'sobre',
-          regenerateParagraph: { generationId, index: 0, paragraphs: ['A'] },
+          rewriteParagraphs: { generationId, indexes: [0], paragraphs: ['A'] },
         })
         expect(res.status).toBe(404)
       }

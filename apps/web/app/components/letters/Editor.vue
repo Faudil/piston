@@ -13,8 +13,8 @@ import {
  * The cover letter of an offer, used by the offer page and by the letter page
  * of its application: choose a template, a tone and points to highlight,
  * generate, edit (the body paragraph by paragraph, the salutation and the
- * closing inline), rewrite one paragraph, ask Claude for corrections, go back
- * to a previous version, copy, save and export.
+ * closing inline), ask Claude to rework the picked paragraphs or the whole
+ * letter, go back to a previous version, copy, save and export.
  *
  * An offer has one history of letters, whichever page they were written
  * from. Every Claude answer is a new version (history is append-only); manual
@@ -80,6 +80,11 @@ const optionsOpen = ref(!latest)
 
 // --- Version shown ------------------------------------------------------------------
 
+/** Body paragraphs picked for Claude to rework. None: corrections cover the whole letter. */
+const selectedParagraphs = ref<number[]>([])
+/** What Claude replaced in the last rewrite, by body paragraph: it can be put back. */
+const replacedParagraphs = ref(new Map<number, string>())
+const rewrittenParagraphs = computed(() => new Set(replacedParagraphs.value.keys()))
 /** The version shown in the editor; manual edits are saved onto it. */
 const current = shallowRef<Generation<'cover_letter'> | null>(latest ?? null)
 const parts = ref<LetterParts>(splitLetter(latest?.output.paragraphs ?? []))
@@ -101,6 +106,8 @@ const wordTarget = computed(
 function show(letter: Generation<'cover_letter'>) {
   current.value = letter
   parts.value = splitLetter(letter.output.paragraphs)
+  selectedParagraphs.value = []
+  replacedParagraphs.value = new Map()
 }
 
 watch(current, (letter) => emit('change', letter), { immediate: true })
@@ -117,7 +124,7 @@ async function onNewVersion(letter: Generation<'cover_letter'>) {
   await refreshLetters()
 }
 
-// --- Claude: new letter, one paragraph, corrections ----------------------------------
+// --- Claude: new letter, some paragraphs, corrections ----------------------------------
 
 // One instance per action, so each streams into its own place.
 const letterGen = useGeneration('cover_letter')
@@ -154,31 +161,48 @@ async function generate() {
   optionsOpen.value = false
 }
 
-const rewritingIndex = ref<number | null>(null)
-const rewriting = computed(() =>
-  rewritingIndex.value === null
-    ? null
-    : { index: rewritingIndex.value, text: paragraphGen.text.value.trim() },
-)
+const rewritingIndexes = ref<number[]>([])
+const rewriting = computed(() => {
+  if (rewritingIndexes.value.length === 0) return null
+  // Claude answers one paragraph per blank line, in the order of the letter.
+  // A single rewrite stays whole, like the answer the server merges.
+  const answer = paragraphGen.text.value.trim()
+  const texts = rewritingIndexes.value.length === 1 ? [answer] : answer.split(/\n\s*\n/)
+  return new Map(rewritingIndexes.value.map((index, i) => [index, texts[i] ?? '']))
+})
 
-async function rewrite(bodyIndex: number) {
+/** Rewrites the picked paragraphs; `instructions` is optional. */
+async function rewrite(instructions: string) {
   const letter = current.value
   if (!letter || busy.value) return
-  rewritingIndex.value = bodyIndex
+  const bodyIndexes = selectedParagraphs.value
+  rewritingIndexes.value = bodyIndexes
   // The server counts every stored paragraph: the header lines come first.
-  const index = parts.value.header.length + bodyIndex
+  const indexes = bodyIndexes.map((i) => parts.value.header.length + i)
   const result = await paragraphGen.start({
     ...currentOptions(letter),
-    regenerateParagraph: { generationId: letter.id, index, paragraphs: paragraphs.value },
+    rewriteParagraphs: {
+      generationId: letter.id,
+      indexes,
+      paragraphs: paragraphs.value,
+      ...(instructions && { instructions }),
+    },
   })
-  rewritingIndex.value = null
+  rewritingIndexes.value = []
   if (!result) return
-  // Only take the rewritten paragraph: the user may have edited others meanwhile.
+  // Only take the rewritten paragraphs: the user may have edited others meanwhile.
   const kept = parts.value
   current.value = result
   const body = [...kept.body]
-  body[bodyIndex] = result.output.paragraphs[index] ?? body[bodyIndex]!
+  const replaced = new Map<number, string>()
+  bodyIndexes.forEach((bodyIndex, i) => {
+    replaced.set(bodyIndex, body[bodyIndex]!)
+    body[bodyIndex] = result.output.paragraphs[indexes[i]!] ?? body[bodyIndex]!
+  })
   parts.value = { ...kept, body }
+  replacedParagraphs.value = replaced
+  selectedParagraphs.value = []
+  revisionForm.value?.reset()
   await refreshLetters()
 }
 
@@ -193,6 +217,28 @@ async function revise(instructions: string) {
   await onNewVersion(result)
   revisionForm.value?.reset()
   toast.add({ title: 'Corrections appliquées', icon: 'i-lucide-check' })
+}
+
+/** Puts back the text Claude replaced. It becomes an unsaved edit of the new version. */
+function undoRewrite(bodyIndex: number) {
+  const previous = replacedParagraphs.value.get(bodyIndex)
+  if (previous === undefined) return
+  const body = [...parts.value.body]
+  body[bodyIndex] = previous
+  parts.value = { ...parts.value, body }
+  forgetRewrite(bodyIndex)
+}
+
+function forgetRewrite(bodyIndex: number) {
+  if (!replacedParagraphs.value.has(bodyIndex)) return
+  const replaced = new Map(replacedParagraphs.value)
+  replaced.delete(bodyIndex)
+  replacedParagraphs.value = replaced
+}
+
+function rework(instructions: string) {
+  replacedParagraphs.value = new Map()
+  return selectedParagraphs.value.length > 0 ? rewrite(instructions) : revise(instructions)
 }
 
 function stop() {
@@ -344,85 +390,84 @@ const id = useId()
       "
     />
 
-    <!-- The letter: streamed while Claude writes it, then editable. -->
-    <UCard v-if="streaming" aria-live="polite">
-      <StreamingIndicator
-        :text="
-          revisionGen.pending.value ? 'Claude applique tes corrections…' : 'Claude écrit ta lettre…'
-        "
-        class="mb-5"
-        @stop="stop"
-      />
-      <LettersView v-if="streamingGen.text.value.trim()" :output="streamed" />
-      <div v-else class="space-y-2" aria-hidden="true">
-        <USkeleton class="h-4 w-1/3" />
-        <USkeleton class="h-4 w-full" />
-        <USkeleton class="h-4 w-11/12" />
-        <USkeleton class="h-4 w-4/5" />
-      </div>
-    </UCard>
-
-    <UCard v-else-if="current" :ui="{ footer: 'space-y-3' }">
-      <LettersTextEditor
-        v-model="parts"
-        :word-target="wordTarget"
-        :disabled="busy"
-        :rewriting="rewriting"
-        @rewrite="rewrite"
-        @stop-rewrite="paragraphGen.abort()"
-      />
-      <template #footer>
-        <div class="flex flex-wrap gap-2">
-          <UButton
-            label="Enregistrer"
-            icon="i-lucide-save"
-            :loading="saving"
-            :disabled="!dirty || busy"
-            @click="save"
-          />
-          <UButton
-            label="Copier"
-            icon="i-lucide-copy"
-            color="neutral"
-            variant="outline"
-            @click="copy"
-          />
-        </div>
-        <LettersExportActions
-          :paragraphs="paragraphs"
-          :filename="filename"
-          :generation-id="dirty ? null : current.id"
-          :offer-id="offerId"
+    <!-- The letter and its composer: the composer stays in view while the letter scrolls. -->
+    <div class="space-y-3">
+      <!-- The letter: streamed while Claude writes it, then editable. -->
+      <UCard v-if="streaming" aria-live="polite">
+        <StreamingIndicator
+          :text="
+            revisionGen.pending.value
+              ? 'Claude applique tes corrections…'
+              : 'Claude écrit ta lettre…'
+          "
+          class="mb-5"
+          @stop="stop"
         />
-        <p v-if="dirty" class="text-xs text-muted">
-          Enregistre tes modifications pour imprimer ou télécharger le PDF de cette version.
-        </p>
-      </template>
-    </UCard>
+        <LettersView v-if="streamingGen.text.value.trim()" :output="streamed" />
+        <div v-else class="space-y-2" aria-hidden="true">
+          <USkeleton class="h-4 w-1/3" />
+          <USkeleton class="h-4 w-full" />
+          <USkeleton class="h-4 w-11/12" />
+          <USkeleton class="h-4 w-4/5" />
+        </div>
+      </UCard>
 
-    <!-- Corrections asked to Claude in plain words. -->
-    <section v-if="current" :aria-labelledby="`${id}-corrections`" class="space-y-3">
-      <div class="space-y-1">
-        <component
-          :is="heading"
-          :id="`${id}-corrections`"
-          class="flex items-center gap-2 font-semibold text-highlighted"
-        >
-          <UIcon name="i-lucide-wand-sparkles" class="size-4 text-primary" />
-          Corrections
-        </component>
-        <p class="text-sm text-muted">
-          Dis à Claude ce qu'il faut changer : il garde le reste de la lettre tel quel, tes
-          modifications comprises.
-        </p>
-      </div>
-      <LettersRevisionForm
-        ref="revisionForm"
-        :pending="revisionGen.pending.value"
-        :disabled="busy && !revisionGen.pending.value"
-        @submit="revise"
-      />
-    </section>
+      <UCard v-else-if="current" :ui="{ footer: 'space-y-3' }">
+        <LettersTextEditor
+          v-model="parts"
+          v-model:selected="selectedParagraphs"
+          :word-target="wordTarget"
+          :disabled="busy"
+          :rewriting="rewriting"
+          :rewritten="rewrittenParagraphs"
+          @undo="undoRewrite"
+          @edited="forgetRewrite"
+        />
+        <template #footer>
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              label="Enregistrer"
+              icon="i-lucide-save"
+              :loading="saving"
+              :disabled="!dirty || busy"
+              @click="save"
+            />
+            <UButton
+              label="Copier"
+              icon="i-lucide-copy"
+              color="neutral"
+              variant="outline"
+              @click="copy"
+            />
+          </div>
+          <LettersExportActions
+            :paragraphs="paragraphs"
+            :filename="filename"
+            :generation-id="dirty ? null : current.id"
+            :offer-id="offerId"
+          />
+          <p v-if="dirty" class="text-xs text-muted">
+            Enregistre tes modifications pour imprimer ou télécharger le PDF de cette version.
+          </p>
+        </template>
+      </UCard>
+
+      <section
+        v-if="current"
+        aria-label="Retravailler avec Claude"
+        class="sticky bottom-[calc(var(--app-bottom-nav)+0.5rem)] z-20"
+      >
+        <LettersRevisionForm
+          ref="revisionForm"
+          :pending="revisionGen.pending.value || paragraphGen.pending.value"
+          :disabled="busy && !revisionGen.pending.value && !paragraphGen.pending.value"
+          :selected="selectedParagraphs.map((i) => i + 1)"
+          @submit="rework"
+          @clear-selection="selectedParagraphs = []"
+          @stop="stop"
+        />
+      </section>
+    </div>
 
     <!-- Versions -->
     <section v-if="letters.length" :aria-labelledby="`${id}-versions`" class="space-y-3">

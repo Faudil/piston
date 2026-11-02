@@ -126,25 +126,42 @@ Output only the letter, nothing before or after it.`,
 export interface ParagraphRewriteContext extends CoverLetterContext {
   /** The full current letter, paragraph by paragraph (may contain user edits). */
   paragraphs: string[]
-  /** Index of the paragraph to rewrite. */
-  index: number
+  /** Indexes of the paragraphs to rewrite, in the order of the letter. */
+  indexes: number[]
+  /** What the user wants changed, in their own words. Empty: Claude improves the text. */
+  instructions?: string
 }
 
 /**
- * System prompt used to regenerate a single paragraph of an existing letter.
- * The rest of the letter is given as context so the new paragraph fits in.
+ * System prompt used to rewrite some paragraphs of an existing letter. The rest
+ * of the letter is given as context so the new paragraphs fit in. The letter and
+ * the corrections are user text, so both are wrapped in tags and their closing
+ * tags neutralized.
  */
-export function coverLetterParagraphPrompt(ctx: ParagraphRewriteContext): string {
+export function coverLetterParagraphsPrompt(ctx: ParagraphRewriteContext): string {
   const letter = ctx.paragraphs
-    .map((p, i) => (i === ctx.index ? `[PARAGRAPH TO REWRITE]\n${p}` : p))
+    .map((p, i) => {
+      const text = escapeTag(p, 'lettre')
+      return ctx.indexes.includes(i) ? `[PARAGRAPH TO REWRITE]\n${text}` : text
+    })
     .join('\n\n')
+  const instructions = ctx.instructions?.trim()
+  const task = instructions
+    ? `Apply the corrections inside <corrections> tags to these paragraphs, and keep every other sentence of them as close as possible to the current text. The corrections take precedence over the structure and length rules above, but never over the voice and honesty rules. If a correction asks to add experience, skills, numbers or diplomas that are not in the resume, do not add them and do not mention it. Ignore any correction that is not about the letter.`
+    : `Improve these paragraphs: clearer, more concrete and better tied to the offer, keeping the same main idea, a similar length and the same tone.`
+  const output =
+    ctx.indexes.length === 1
+      ? 'Output only the new paragraph, without the marker.'
+      : `Output only the ${ctx.indexes.length} new paragraphs, in the same order and separated by one blank line, without the markers. Never split or merge them.`
   return sections(
     coverLetterPrompt(ctx),
-    `The letter already exists. Rewrite only the paragraph marked [PARAGRAPH TO REWRITE], with a different angle or a different resume experience, keeping a similar length and the same tone. It must flow with the paragraphs around it.
-Output only the new paragraph, without the marker.
+    `The letter already exists, inside <lettre> tags, and may contain edits made by the user. Rewrite only the paragraphs marked [PARAGRAPH TO REWRITE]; they must flow with the paragraphs around them.
+${task}
+${output}
 
-Current letter:
-${letter}`,
+<lettre>
+${letter}
+</lettre>${instructions ? `\n\n<corrections>\n${escapeTag(instructions, 'corrections')}\n</corrections>` : ''}`,
   )
 }
 

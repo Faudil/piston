@@ -205,7 +205,7 @@ describe('POST /api/generate/cover-letter — corrections', () => {
       parentGenerationId: parent.id,
       revisionInstructions: 'Plus court, enlève la phrase sur le télétravail',
     })
-    expect(rows[0]!.inputRefs).not.toHaveProperty('paragraphIndex')
+    expect(rows[0]!.inputRefs).not.toHaveProperty('paragraphIndexes')
     // The parent letter is untouched: history is append-only.
     expect(rows.find((r) => r.id === parent.id)!.output).toEqual({ paragraphs: ['A', 'B', 'C'] })
   })
@@ -236,7 +236,7 @@ describe('POST /api/generate/cover-letter — corrections', () => {
       offerId: offer.id,
       tone: 'sobre',
       revision: { generationId: parent.id, paragraphs: ['A'], instructions: 'Plus court' },
-      regenerateParagraph: { generationId: parent.id, index: 0, paragraphs: ['A'] },
+      rewriteParagraphs: { generationId: parent.id, indexes: [0], paragraphs: ['A'] },
     })
     expect(both.status).toBe(400)
 

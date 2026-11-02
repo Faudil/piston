@@ -79,8 +79,11 @@ export interface GenerationInputRefs {
   offerId?: string
   tone?: string
   highlights?: string[]
-  /** Set when the generation rewrote a single paragraph of another letter. */
+  /** Set when the generation rewrote paragraphs of another letter, or revised it. */
   parentGenerationId?: string
+  /** The paragraphs rewritten by this generation. */
+  paragraphIndexes?: number[]
+  /** Letters written when a rewrite covered a single paragraph. */
   paragraphIndex?: number
   /** Cover letters: the structure used (CoverLetterTemplate). Absent on older letters = classique. */
   template?: CoverLetterTemplate
@@ -88,7 +91,7 @@ export interface GenerationInputRefs {
   applicationId?: string
   /** Cover letters: the previous letter this one took its structure and style from. */
   modelLetterId?: string
-  /** Set when the generation revised another letter following the user's corrections. */
+  /** Set when the generation followed the user's corrections, on a letter or on some paragraphs. */
   revisionInstructions?: string
   /** CV builder: the document a proposal was made for (`cv_edit`). */
   cvDocumentId?: string

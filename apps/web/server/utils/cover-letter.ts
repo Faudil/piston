@@ -4,7 +4,7 @@ import type { CoverLetterOutput, Generation, LetterSummary } from '@piston/share
 
 /*
  * Cover letters are stored as a list of paragraphs (see CoverLetterOutput) so
- * that a single paragraph can be regenerated or edited.
+ * that some paragraphs can be rewritten or edited.
  */
 
 /** Splits Claude's free text on blank lines into trimmed, non-empty paragraphs. */
@@ -16,16 +16,21 @@ function splitParagraphs(text: string): string[] {
 }
 
 /**
- * Returns the letter with only paragraph `index` replaced by `text`. Claude is
- * asked for a single paragraph; if it still writes several, they are merged
- * into one so the other paragraphs keep their positions.
+ * Returns the letter with only the paragraphs at `indexes` (ascending) replaced
+ * by `text`. For one paragraph, several answers are merged into one so the
+ * others keep their positions. For several, the answers must match one to one:
+ * guessing which is which could overwrite the wrong paragraph.
  */
-export function replaceParagraph(paragraphs: string[], index: number, text: string): string[] {
-  const replacement = splitParagraphs(text).join('\n')
-  if (!replacement) {
-    throw new UnusableAnswerError("Claude n'a pas réécrit le paragraphe. Réessaie.")
+export function replaceParagraphs(paragraphs: string[], indexes: number[], text: string): string[] {
+  const parts = splitParagraphs(text)
+  const answers = indexes.length === 1 ? [parts.join('\n')] : parts
+  if (!answers[0] || answers.length !== indexes.length) {
+    throw new UnusableAnswerError("Claude n'a pas réécrit les paragraphes. Réessaie.")
   }
-  return paragraphs.map((paragraph, i) => (i === index ? replacement : paragraph))
+  return paragraphs.map((paragraph, i) => {
+    const position = indexes.indexOf(i)
+    return position === -1 ? paragraph : answers[position]!
+  })
 }
 
 /** Parses a full letter written by Claude. */
@@ -42,7 +47,7 @@ export type CoverLetterTask = 'letter' | 'paragraph' | 'revision'
 
 const TASKS: Record<CoverLetterTask, string> = {
   letter: 'Write the cover letter for this offer.',
-  paragraph: 'Rewrite the marked paragraph of the cover letter for this offer.',
+  paragraph: 'Rewrite the marked paragraphs of the cover letter for this offer.',
   revision: 'Revise the cover letter for this offer following the corrections.',
 }
 
