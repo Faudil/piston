@@ -86,6 +86,8 @@ export interface GenerationInputRefs {
   template?: CoverLetterTemplate
   /** Cover letters written from an application (candidature). */
   applicationId?: string
+  /** Cover letters: the previous letter this one took its structure and style from. */
+  modelLetterId?: string
   /** Set when the generation revised another letter following the user's corrections. */
   revisionInstructions?: string
   /** CV builder: the document a proposal was made for (`cv_edit`). */
@@ -187,6 +189,8 @@ export interface LetterSummary {
   /** The offer's application when it is tracked: the entry opens /candidatures/:id/lettre. */
   applicationId: string | null
   template: CoverLetterTemplate | null
+  /** The tone of the latest version (CoverLetterTone), absent from very old letters. */
+  tone: string | null
   versions: number
   /** Start of the first body paragraph, to recognize the letter. */
   excerpt: string

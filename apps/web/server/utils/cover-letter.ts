@@ -1,4 +1,4 @@
-import { wrapNotes } from '@piston/prompts'
+import { wrapModelLetter, wrapNotes } from '@piston/prompts'
 import { and, applications, desc, eq, generations, inArray, jobOffers, sql } from '@piston/db'
 import type { CoverLetterOutput, Generation, LetterSummary } from '@piston/shared'
 
@@ -49,12 +49,14 @@ const TASKS: Record<CoverLetterTask, string> = {
 /**
  * The instruction sent with the offer. Highlights and application notes stay
  * out of the system prompt so it can be cached; notes are user text, so they
- * are wrapped in <notes> tags like the resume and the offer.
+ * are wrapped in <notes> tags like the resume and the offer. So is a previous
+ * letter given as a model.
  */
 export function coverLetterInstruction(
   task: CoverLetterTask,
   highlights: string[],
   notes = '',
+  modelLetter?: string[],
 ): string {
   const parts = [TASKS[task]]
   if (highlights.length > 0) {
@@ -66,6 +68,9 @@ export function coverLetterInstruction(
   }
   if (notes.trim()) {
     parts.push(`The user's notes about this application:\n${wrapNotes(notes)}`)
+  }
+  if (modelLetter) {
+    parts.push(`The user's previous letter, as a model:\n${wrapModelLetter(modelLetter)}`)
   }
   return parts.join('\n')
 }
@@ -192,6 +197,7 @@ export async function listLetterSummaries(userId: string): Promise<LetterSummary
         offer,
         applicationId: applicationByOffer.get(offerId) ?? null,
         template: latest.inputRefs.template ?? null,
+        tone: latest.inputRefs.tone ?? null,
         versions,
         excerpt: body.slice(0, 160),
         updatedAt: latest.createdAt.toISOString(),

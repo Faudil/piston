@@ -6,6 +6,7 @@ import {
   type CoverLetterOutput,
   type CoverLetterTemplate,
   type Generation,
+  type LetterSummary,
 } from '@piston/shared'
 
 /**
@@ -56,6 +57,24 @@ const toneItems = CoverLetterTone.options.map((value) => ({
   value,
   label: coverLetterToneLabels[value],
 }))
+
+// A previous letter as a model: one per other offer, its latest version.
+const { data: otherLetters } = useFetch<LetterSummary[]>('/api/letters', {
+  lazy: true,
+  server: false,
+  default: () => [],
+  transform: (all) => all.filter((letter) => letter.offer.id !== props.offerId),
+})
+const modelLetterId = ref<string | null>(null)
+const modelLetter = computed(() =>
+  otherLetters.value.find((letter) => letter.generationId === modelLetterId.value),
+)
+// The model's tone is the likely wish; it can still be changed.
+watch(modelLetter, (letter) => {
+  if (letter?.tone && letter.tone in coverLetterToneLabels)
+    tone.value = letter.tone as CoverLetterTone
+})
+
 // Once a letter exists, the options of a new one fold away under the letter.
 const optionsOpen = ref(!latest)
 
@@ -128,6 +147,7 @@ async function generate() {
     template: template.value,
     tone: tone.value,
     highlights: highlights.value.map((h) => h.trim()).filter(Boolean),
+    ...(modelLetterId.value && { modelLetterId: modelLetterId.value }),
   })
   if (!letter) return
   await onNewVersion(letter)
@@ -262,7 +282,14 @@ const id = useId()
       />
       <template #content>
         <div class="space-y-5" :class="{ 'pt-5': current }">
-          <LettersTemplatePicker v-model="template" :disabled="busy" />
+          <LettersModelLetterSelect
+            v-if="otherLetters.length"
+            v-model="modelLetterId"
+            :letters="otherLetters"
+            :disabled="busy"
+          />
+          <!-- The model decides the structure of the letter. -->
+          <LettersTemplatePicker v-if="!modelLetter" v-model="template" :disabled="busy" />
           <URadioGroup
             v-model="tone"
             legend="Ton de la lettre"

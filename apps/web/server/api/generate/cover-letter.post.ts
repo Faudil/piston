@@ -4,7 +4,7 @@ import {
   coverLetterPrompt,
   coverLetterRevisionPrompt,
 } from '@piston/prompts'
-import { CoverLetterBody } from '@piston/shared'
+import { CoverLetterBody, type CoverLetterOutput } from '@piston/shared'
 
 /**
  * Writes a cover letter for an offer, rewrites a single paragraph of an
@@ -13,12 +13,13 @@ import { CoverLetterBody } from '@piston/shared'
  * generation: history is append-only, the parent is kept in inputRefs.
  *
  * With `applicationId`, the letter is written for that application and its
- * notes are given to Claude as context.
+ * notes are given to Claude as context. With `modelLetterId`, a new letter takes
+ * its structure and style from a previous letter of the user.
  */
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const body = await readValidatedBody(event, zodValidator(CoverLetterBody))
-  const { offerId, tone, highlights, regenerateParagraph, revision } = body
+  const { offerId, tone, highlights, regenerateParagraph, revision, modelLetterId } = body
   let { template, applicationId } = body
   const offer = await getUserOffer(user.id, offerId)
 
@@ -33,6 +34,10 @@ export default defineEventHandler(async (event) => {
     applicationId ??= parent.inputRefs.applicationId
   }
 
+  const modelLetter = modelLetterId ? await getUserCoverLetter(user.id, modelLetterId) : null
+  // The structure comes from the model: its letter is counted against its own template.
+  if (modelLetter) template = modelLetter.inputRefs.template ?? 'classique'
+
   const application = applicationId
     ? await getApplicationForLetter(user.id, applicationId, offer.id)
     : null
@@ -46,7 +51,12 @@ export default defineEventHandler(async (event) => {
   const { resume: resumeBlock, request } = buildUserMessage({
     resume: resume.rawText,
     offer: offerForPrompt(offer),
-    instruction: coverLetterInstruction(task, highlights, application?.notes),
+    instruction: coverLetterInstruction(
+      task,
+      highlights,
+      application?.notes,
+      modelLetter ? (modelLetter.output as CoverLetterOutput).paragraphs : undefined,
+    ),
   })
 
   let system = coverLetterPrompt(ctx)
@@ -78,6 +88,7 @@ export default defineEventHandler(async (event) => {
       template,
       highlights,
       ...(application && { applicationId: application.id }),
+      ...(modelLetter && { modelLetterId: modelLetter.id }),
       ...(regenerateParagraph && {
         parentGenerationId: regenerateParagraph.generationId,
         paragraphIndex: regenerateParagraph.index,

@@ -134,7 +134,9 @@ export function letterVersionLabel(letter: LetterVersion): string {
     const number = paragraphIndex - headerLength + 1
     return `Paragraphe ${number >= 1 ? number : paragraphIndex + 1} réécrit`
   }
-  return 'Nouvelle lettre'
+  return letter.inputRefs.modelLetterId
+    ? 'Nouvelle lettre, d’après une lettre précédente'
+    : 'Nouvelle lettre'
 }
 
 /** Letters written before templates existed used the classic structure. */

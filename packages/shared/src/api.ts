@@ -150,6 +150,11 @@ export const CoverLetterBody = z
      */
     applicationId: z.uuid().optional(),
     /**
+     * A previous letter of the user, for another offer, that a new letter takes
+     * its structure and style from. Its template replaces `template`.
+     */
+    modelLetterId: z.uuid().optional(),
+    /**
      * When set, only this paragraph of an existing letter is rewritten.
      * `generationId` points at the letter being edited, `paragraphs` carries the
      * current (possibly user-edited) text.
@@ -180,6 +185,10 @@ export const CoverLetterBody = z
   .refine((body) => !(body.regenerateParagraph && body.revision), {
     message: 'Choisis soit un paragraphe à régénérer, soit des corrections, pas les deux.',
     path: ['revision'],
+  })
+  .refine((body) => !(body.modelLetterId && (body.regenerateParagraph || body.revision)), {
+    message: 'Une lettre modèle ne sert qu’à écrire une nouvelle lettre.',
+    path: ['modelLetterId'],
   })
 export type CoverLetterBody = z.infer<typeof CoverLetterBody>
 
