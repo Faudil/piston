@@ -100,6 +100,35 @@ export function splitLetter(paragraphs: readonly string[]): LetterParts {
   return { header, body: blocks, footer }
 }
 
+/**
+ * The parts of a stored version. A letter written by hand that is still empty
+ * has its salutation and closing only: it keeps them apart, with one paragraph
+ * to write, where splitLetter would make them all body.
+ */
+export function letterParts(letter: LetterVersion): LetterParts {
+  const { paragraphs } = letter.output
+  if (letter.inputRefs.manual && paragraphs.length === 3) {
+    const [salutation, closing, signature] = paragraphs as [string, string, string]
+    if (isHeaderLine(salutation) && isClosing(closing) && isSignatureLine(signature)) {
+      return { header: [salutation], body: [''], footer: [closing, signature] }
+    }
+  }
+  return splitLetter(paragraphs)
+}
+
+/**
+ * A whole text pasted into a letter still empty: its own salutation and closing
+ * replace those already there, so they don't appear twice.
+ */
+export function fillEmptyLetter(parts: LetterParts, pieces: readonly string[]): LetterParts {
+  const pasted = splitLetter(pieces)
+  return {
+    header: pasted.header.length ? pasted.header : parts.header,
+    body: pasted.body,
+    footer: pasted.footer.length ? pasted.footer : parts.footer,
+  }
+}
+
 /** The paragraphs to store: one paragraph per header and footer line, then the body. */
 export function joinLetter(parts: LetterParts): string[] {
   return [...parts.header, ...parts.body, ...parts.footer]
@@ -140,6 +169,7 @@ export function letterVersionLabel(letter: LetterVersion): string {
     return `${noun} ${names} ${indexes.length > 1 ? 'réécrits' : 'réécrit'}`
   }
   if (excerpt) return `Corrections : ${excerpt}`
+  if (letter.inputRefs.manual) return 'Écrite par toi'
   return letter.inputRefs.modelLetterId
     ? 'Nouvelle lettre, d’après une lettre précédente'
     : 'Nouvelle lettre'

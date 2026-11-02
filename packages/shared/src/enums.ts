@@ -61,6 +61,7 @@ export const coverLetterTemplates = [
   'percutante',
   'reconversion',
   'email',
+  'personnalise',
 ] as const
 export const CoverLetterTemplate = z.enum(coverLetterTemplates)
 export type CoverLetterTemplate = z.infer<typeof CoverLetterTemplate>
@@ -71,6 +72,7 @@ export const coverLetterTemplateLabels: Record<CoverLetterTemplate, string> = {
   percutante: 'Percutante',
   reconversion: 'Reconversion',
   email: 'E-mail',
+  personnalise: 'Personnalisé',
 }
 
 /** One-line explanation shown under each label in the template picker. */
@@ -80,6 +82,7 @@ export const coverLetterTemplateDescriptions: Record<CoverLetterTemplate, string
   percutante: 'Courte (180 à 250 mots), avec une accroche chiffrée.',
   reconversion: 'Met en avant tes compétences transférables et explique ton changement de cap.',
   email: "Corps d'e-mail court prêt à coller, avec une ligne d'objet.",
+  personnalise: 'Décris la structure que tu veux, ou laisse Claude la choisir.',
 }
 
 /** Word-count range of each template. Used by the prompt and by the editor's counter. */
@@ -89,6 +92,7 @@ export const coverLetterWordTargets: Record<CoverLetterTemplate, { min: number; 
   percutante: { min: 180, max: 250 },
   reconversion: { min: 250, max: 350 },
   email: { min: 100, max: 180 },
+  personnalise: { min: 150, max: 400 },
 }
 
 /** First-use messages: the welcome dialog and one tip per main page. */

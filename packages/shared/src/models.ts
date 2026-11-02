@@ -87,6 +87,10 @@ export interface GenerationInputRefs {
   paragraphIndex?: number
   /** Cover letters: the structure used (CoverLetterTemplate). Absent on older letters = classique. */
   template?: CoverLetterTemplate
+  /** Cover letters: written by the user, without calling Claude. */
+  manual?: boolean
+  /** Cover letters with the `personnalise` template: the structure asked for, if any. */
+  customStructure?: string
   /** Cover letters written from an application (candidature). */
   applicationId?: string
   /** Cover letters: the previous letter this one took its structure and style from. */

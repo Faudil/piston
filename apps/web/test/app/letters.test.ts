@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Generation } from '@piston/shared'
 import {
+  fillEmptyLetter,
+  letterParts,
   changedTemplateLabel,
   countWords,
   joinLetter,
@@ -103,6 +105,38 @@ describe('letterVersionLabel', () => {
     expect(
       letterVersionLabel(version({ paragraphIndexes: [2], revisionInstructions: 'Plus court' })),
     ).toBe('Paragraphe 2 : Plus court')
+  })
+
+  it('names a letter written by hand and keeps its empty draft apart', () => {
+    const starter = ['Madame, Monsieur,', 'Cordialement,', 'Camille Dupont']
+    expect(letterVersionLabel(version({ manual: true }, starter))).toBe('Écrite par toi')
+    expect(letterParts(version({ manual: true }, starter))).toEqual({
+      header: ['Madame, Monsieur,'],
+      body: [''],
+      footer: ['Cordialement,', 'Camille Dupont'],
+    })
+    // Without the flag, or once written, it is a normal letter.
+    expect(letterParts(version({}, starter)).body).toEqual(starter)
+    expect(
+      letterParts(version({ manual: true }, [starter[0]!, body1, ...starter.slice(1)])).body,
+    ).toEqual([body1])
+  })
+
+  it('takes the salutation and the closing of a text pasted into an empty letter', () => {
+    const empty = {
+      header: ['Madame, Monsieur,'],
+      body: [''],
+      footer: ['Cordialement,', 'Camille'],
+    }
+    expect(
+      fillEmptyLetter(empty, ['Bonjour,', body1, body2, 'Bien à vous,', 'Camille Dupont']),
+    ).toEqual({
+      header: ['Bonjour,'],
+      body: [body1, body2],
+      footer: ['Bien à vous,', 'Camille Dupont'],
+    })
+    // Without its own, the letter keeps those it has.
+    expect(fillEmptyLetter(empty, [body1, body2])).toEqual({ ...empty, body: [body1, body2] })
   })
 
   it('shortens long corrections', () => {

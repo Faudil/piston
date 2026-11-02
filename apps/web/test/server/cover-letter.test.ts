@@ -1,5 +1,6 @@
+import manualLetterRoute from '../../server/api/offers/[id]/letters.post'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { desc, generations } from '@piston/db'
+import { apiUsage, desc, generations } from '@piston/db'
 import coverLetterRoute from '../../server/api/generate/cover-letter.post'
 import patchRoute from '../../server/api/generations/[id].patch'
 import {
@@ -242,6 +243,33 @@ describe('POST /api/generate/cover-letter', () => {
       expect(await testState.db.select().from(generations)).toHaveLength(1)
     })
 
+    it('writes a personalized letter with or without a structure', async () => {
+      const { user } = await loginAsNewUser()
+      const offer = await insertOffer(user.id)
+      const claude = mockClaude({ text: 'Madame,\n\nCorps.' })
+      const request = (index: number) => JSON.stringify(claude.calls[index]!.messages)
+
+      await readSse(await call({ offerId: offer.id, tone: 'sobre', template: 'personnalise' }))
+      expect(JSON.stringify(claude.calls[0]!.system)).toContain('No imposed structure')
+      expect(request(0)).not.toContain('<structure_souhaitee>')
+
+      const events = await readSse(
+        await call({
+          offerId: offer.id,
+          tone: 'sobre',
+          template: 'personnalise',
+          customStructure: 'Trois paragraphes courts',
+        }),
+      )
+      expect(request(1)).toContain('<structure_souhaitee>')
+      expect(request(1)).toContain('Trois paragraphes courts')
+      expect(events.find((e) => e.type === 'done')).toMatchObject({
+        generation: {
+          inputRefs: { template: 'personnalise', customStructure: 'Trois paragraphes courts' },
+        },
+      })
+    })
+
     it("keeps the parent letter's template when the request does not repeat it", async () => {
       const { user } = await loginAsNewUser()
       const offer = await insertOffer(user.id)
@@ -316,6 +344,40 @@ describe('POST /api/generate/cover-letter', () => {
         expect(res.status).toBe(404)
       }
     })
+  })
+})
+
+describe('POST /api/offers/:id/letters', () => {
+  const start = (offerId: string, body: object = {}) =>
+    callRoute(manualLetterRoute, {
+      method: 'POST',
+      path: `/api/offers/${offerId}/letters`,
+      route: '/api/offers/:id/letters',
+      body,
+    })
+
+  it('starts a letter without Claude, a resume or quota', async () => {
+    const { user } = await loginAsNewUser()
+    const offer = await insertOffer(user.id)
+    const claude = mockClaude({ text: 'X' })
+
+    const res = await start(offer.id)
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({
+      kind: 'cover_letter',
+      model: 'manual',
+      inputRefs: { offerId: offer.id, manual: true, template: 'personnalise' },
+      output: { paragraphs: ['Madame, Monsieur,', 'Cordialement,', user.displayName] },
+    })
+    expect(claude.stream).not.toHaveBeenCalled()
+    expect(await testState.db.select().from(apiUsage)).toHaveLength(0)
+  })
+
+  it("answers 404 for another user's offer", async () => {
+    const { user: alice } = await loginAsNewUser('alice@example.com')
+    const offer = await insertOffer(alice.id)
+    await loginAsNewUser('bob@example.com')
+    expect((await start(offer.id)).status).toBe(404)
   })
 })
 

@@ -145,6 +145,15 @@ export const CoverLetterBody = z
     template: CoverLetterTemplate.default('classique'),
     highlights: z.array(z.string().trim().min(1).max(300)).max(3).default([]),
     /**
+     * With the `personnalise` template, the structure the user wants, in their
+     * own words. Empty: Claude chooses.
+     */
+    customStructure: z
+      .string()
+      .trim()
+      .max(1000, 'La structure ne doit pas dépasser 1000 caractères.')
+      .optional(),
+    /**
      * The application the letter is written for. Its notes (recruiter's name,
      * referral...) are given to Claude as context. Its offer must be `offerId`.
      */
@@ -194,6 +203,18 @@ export const CoverLetterBody = z
       })
       .optional(),
   })
+  .refine(
+    (body) =>
+      !body.customStructure ||
+      (body.template === 'personnalise' &&
+        !body.modelLetterId &&
+        !body.rewriteParagraphs &&
+        !body.revision),
+    {
+      message: 'Une structure personnalisée ne sert qu’à écrire une nouvelle lettre personnalisée.',
+      path: ['customStructure'],
+    },
+  )
   .refine((body) => !(body.rewriteParagraphs && body.revision), {
     message: 'Choisis soit des paragraphes à réécrire, soit des corrections, pas les deux.',
     path: ['revision'],
@@ -203,6 +224,15 @@ export const CoverLetterBody = z
     path: ['modelLetterId'],
   })
 export type CoverLetterBody = z.infer<typeof CoverLetterBody>
+
+/** Starting a letter the user writes themselves. */
+export const ManualLetterBody = z
+  .object({
+    /** The application the letter is written for. Its offer must be the offer of the route. */
+    applicationId: z.uuid().optional(),
+  })
+  .strict()
+export type ManualLetterBody = z.infer<typeof ManualLetterBody>
 
 export const SearchLeadsBody = z
   .object({

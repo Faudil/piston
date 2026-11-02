@@ -19,7 +19,8 @@ import { CoverLetterBody, type CoverLetterOutput } from '@piston/shared'
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const body = await readValidatedBody(event, zodValidator(CoverLetterBody))
-  const { offerId, tone, highlights, rewriteParagraphs, revision, modelLetterId } = body
+  const { offerId, tone, highlights, customStructure, rewriteParagraphs, revision, modelLetterId } =
+    body
   let { template, applicationId } = body
   const offer = await getUserOffer(user.id, offerId)
 
@@ -59,6 +60,7 @@ export default defineEventHandler(async (event) => {
       highlights,
       application?.notes,
       modelLetter ? (modelLetter.output as CoverLetterOutput).paragraphs : undefined,
+      customStructure,
     ),
   })
 
@@ -91,6 +93,7 @@ export default defineEventHandler(async (event) => {
       tone,
       template,
       highlights,
+      ...(customStructure && { customStructure }),
       ...(application && { applicationId: application.id }),
       ...(modelLetter && { modelLetterId: modelLetter.id }),
       ...(rewriteParagraphs && {

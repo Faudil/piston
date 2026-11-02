@@ -92,6 +92,23 @@ describe('request schemas', () => {
     expect(rewrite([1, 1])).toBe(false)
   })
 
+  it('only accepts a custom structure on a new personalized letter', () => {
+    const generationId = '00000000-0000-4000-8000-000000000001'
+    const base = { offerId: generationId, tone: 'sobre', customStructure: 'Trois paragraphes' }
+    const valid = (body: object) => CoverLetterBody.safeParse({ ...base, ...body }).success
+    expect(valid({ template: 'personnalise' })).toBe(true)
+    expect(valid({ template: 'classique' })).toBe(false)
+    expect(valid({ template: 'personnalise', modelLetterId: generationId })).toBe(false)
+    expect(
+      valid({
+        template: 'personnalise',
+        rewriteParagraphs: { generationId, indexes: [0], paragraphs: ['A'] },
+      }),
+    ).toBe(false)
+    // Empty: Claude chooses.
+    expect(valid({ template: 'personnalise', customStructure: '  ' })).toBe(true)
+  })
+
   it('rejects an empty application update', () => {
     expect(UpdateApplicationBody.safeParse({}).success).toBe(false)
     expect(UpdateApplicationBody.safeParse({ status: 'sent' }).success).toBe(true)

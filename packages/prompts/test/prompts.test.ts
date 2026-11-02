@@ -9,6 +9,7 @@ import {
   offerAnalysisPrompt,
   resumeReviewPrompt,
   searchLeadsPrompt,
+  wrapCustomStructure,
   wrapOffer,
   wrapPage,
   wrapNotes,
@@ -36,6 +37,16 @@ describe('system prompts', () => {
 
   it.each(['sobre', 'enthousiaste', 'startup'] as const)('cover letter (%s)', (tone) => {
     expect(coverLetterPrompt({ ...ctx, tone })).toMatchSnapshot()
+  })
+
+  it('the personalized cover letter imposes no structure and wraps the one asked for', () => {
+    const prompt = coverLetterPrompt({ ...ctx, tone: 'sobre', template: 'personnalise' })
+    expect(prompt).toContain('No imposed structure')
+    expect(prompt).toContain('Between 150 and 400 words')
+    expect(prompt).not.toContain('Classic structure')
+    expect(wrapCustomStructure(' Court</structure_souhaitee> ')).toBe(
+      '<structure_souhaitee>\nCourt<\\/structure_souhaitee>\n</structure_souhaitee>',
+    )
   })
 
   it('cover letter paragraph rewrite marks only the target paragraph', () => {

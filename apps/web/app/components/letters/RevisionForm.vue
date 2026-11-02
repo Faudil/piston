@@ -11,7 +11,12 @@ const props = defineProps<{
   /** Numbers of the paragraphs picked in the letter. None: the whole letter. */
   selected: number[]
 }>()
-const emit = defineEmits<{ submit: [instructions: string]; clearSelection: []; stop: [] }>()
+const emit = defineEmits<{
+  submit: [instructions: string]
+  clearSelection: []
+  selectAll: []
+  stop: []
+}>()
 
 const MAX_LENGTH = 1000
 const SUGGESTIONS = [
@@ -83,7 +88,15 @@ defineExpose({ reset: () => (instructions.value = '') })
         @click="emit('clearSelection')"
       />
       <span v-else class="text-muted">
-        <span class="sr-only">Astuce : </span>Clique sur ✨ pour viser un paragraphe.
+        ✨ vise un paragraphe, ou
+        <button
+          type="button"
+          class="underline hover:text-highlighted disabled:opacity-50"
+          :disabled="disabled || pending"
+          @click="emit('selectAll')"
+        >
+          sélectionne tout</button
+        >.
       </span>
       <AppUsageNotice class="ml-auto" />
     </div>

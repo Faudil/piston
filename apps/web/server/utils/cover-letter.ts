@@ -1,4 +1,4 @@
-import { wrapModelLetter, wrapNotes } from '@piston/prompts'
+import { wrapCustomStructure, wrapModelLetter, wrapNotes } from '@piston/prompts'
 import { and, applications, desc, eq, generations, inArray, jobOffers, sql } from '@piston/db'
 import type { CoverLetterOutput, Generation, LetterSummary } from '@piston/shared'
 
@@ -62,8 +62,12 @@ export function coverLetterInstruction(
   highlights: string[],
   notes = '',
   modelLetter?: string[],
+  customStructure?: string,
 ): string {
   const parts = [TASKS[task]]
+  if (customStructure) {
+    parts.push(`The structure the user wants:\n${wrapCustomStructure(customStructure)}`)
+  }
   if (highlights.length > 0) {
     parts.push(
       `The user wants these points highlighted, each backed by the resume:\n${highlights

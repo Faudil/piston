@@ -49,6 +49,7 @@ const {
 const MAX_HIGHLIGHTS = 3
 const latest = letters.value[0]
 const template = ref<CoverLetterTemplate>(latest ? letterTemplate(latest) : 'classique')
+const customStructure = ref(latest?.inputRefs.customStructure ?? '')
 const tone = ref<CoverLetterTone>((latest?.inputRefs.tone as CoverLetterTone) ?? 'sobre')
 const highlights = ref<string[]>(
   Array.from({ length: MAX_HIGHLIGHTS }, (_, i) => latest?.inputRefs.highlights?.[i] ?? ''),
@@ -87,7 +88,7 @@ const replacedParagraphs = ref(new Map<number, string>())
 const rewrittenParagraphs = computed(() => new Set(replacedParagraphs.value.keys()))
 /** The version shown in the editor; manual edits are saved onto it. */
 const current = shallowRef<Generation<'cover_letter'> | null>(latest ?? null)
-const parts = ref<LetterParts>(splitLetter(latest?.output.paragraphs ?? []))
+const parts = ref<LetterParts>(latest ? letterParts(latest) : splitLetter([]))
 
 /** The letter as it will be stored: header and footer lines as their own paragraphs. */
 const paragraphs = computed(() => joinLetter(parts.value))
@@ -105,7 +106,7 @@ const wordTarget = computed(
 
 function show(letter: Generation<'cover_letter'>) {
   current.value = letter
-  parts.value = splitLetter(letter.output.paragraphs)
+  parts.value = letterParts(letter)
   selectedParagraphs.value = []
   replacedParagraphs.value = new Map()
 }
@@ -155,13 +156,45 @@ async function generate() {
     tone: tone.value,
     highlights: highlights.value.map((h) => h.trim()).filter(Boolean),
     ...(modelLetterId.value && { modelLetterId: modelLetterId.value }),
+    ...(template.value === 'personnalise' &&
+      !modelLetterId.value &&
+      customStructure.value.trim() && { customStructure: customStructure.value.trim() }),
   })
   if (!letter) return
   await onNewVersion(letter)
   optionsOpen.value = false
 }
 
+/** An empty paragraph has nothing to go over. */
+const pickedParagraphs = computed(() =>
+  selectedParagraphs.value.filter((i) => parts.value.body[i]?.trim()),
+)
+const hasText = computed(() => parts.value.body.some((paragraph) => paragraph.trim()))
 const rewritingIndexes = ref<number[]>([])
+const writingManually = ref(false)
+/** Starts a letter the user writes themselves: Claude only comes in when asked. */
+async function writeManually() {
+  if (!confirmDiscard()) return
+  writingManually.value = true
+  try {
+    const letter = await $fetch<Generation<'cover_letter'>>(
+      `/api/offers/${props.offerId}/letters`,
+      {
+        method: 'POST',
+        body: props.applicationId ? { applicationId: props.applicationId } : {},
+      },
+    )
+    await onNewVersion(letter)
+    optionsOpen.value = false
+    await nextTick()
+    document.getElementById('letter-paragraph-0')?.focus()
+  } catch (err) {
+    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
+  } finally {
+    writingManually.value = false
+  }
+}
+
 const rewriting = computed(() => {
   if (rewritingIndexes.value.length === 0) return null
   // Claude answers one paragraph per blank line, in the order of the letter.
@@ -175,10 +208,13 @@ const rewriting = computed(() => {
 async function rewrite(instructions: string) {
   const letter = current.value
   if (!letter || busy.value) return
-  const bodyIndexes = selectedParagraphs.value
+  const bodyIndexes = pickedParagraphs.value
   rewritingIndexes.value = bodyIndexes
-  // The server counts every stored paragraph: the header lines come first.
-  const indexes = bodyIndexes.map((i) => parts.value.header.length + i)
+  // The server counts every stored paragraph: the header lines come first, and
+  // paragraphs still empty are not stored.
+  const indexes = bodyIndexes.map(
+    (i) => parts.value.header.length + parts.value.body.slice(0, i).filter((p) => p.trim()).length,
+  )
   const result = await paragraphGen.start({
     ...currentOptions(letter),
     rewriteParagraphs: {
@@ -238,7 +274,7 @@ function forgetRewrite(bodyIndex: number) {
 
 function rework(instructions: string) {
   replacedParagraphs.value = new Map()
-  return selectedParagraphs.value.length > 0 ? rewrite(instructions) : revise(instructions)
+  return pickedParagraphs.value.length > 0 ? rewrite(instructions) : revise(instructions)
 }
 
 function stop() {
@@ -335,7 +371,12 @@ const id = useId()
             :disabled="busy"
           />
           <!-- The model decides the structure of the letter. -->
-          <LettersTemplatePicker v-if="!modelLetter" v-model="template" :disabled="busy" />
+          <LettersTemplatePicker
+            v-if="!modelLetter"
+            v-model="template"
+            v-model:custom-structure="customStructure"
+            :disabled="busy"
+          />
           <URadioGroup
             v-model="tone"
             legend="Ton de la lettre"
@@ -372,6 +413,17 @@ const id = useId()
             :disabled="busy && !letterGen.pending.value"
             class="w-full justify-center sm:w-auto"
             @click="generate"
+          />
+          <UButton
+            label="Écrire moi-même"
+            icon="i-lucide-pen-line"
+            size="lg"
+            color="neutral"
+            variant="outline"
+            :loading="writingManually"
+            :disabled="busy"
+            class="w-full justify-center sm:ml-2 sm:w-auto"
+            @click="writeManually"
           />
           <AppUsageNotice />
         </div>
@@ -423,6 +475,7 @@ const id = useId()
           :rewritten="rewrittenParagraphs"
           @undo="undoRewrite"
           @edited="forgetRewrite"
+          @reshaped="replacedParagraphs = new Map()"
         />
         <template #footer>
           <div class="flex flex-wrap gap-2">
@@ -461,10 +514,13 @@ const id = useId()
         <LettersRevisionForm
           ref="revisionForm"
           :pending="revisionGen.pending.value || paragraphGen.pending.value"
-          :disabled="busy && !revisionGen.pending.value && !paragraphGen.pending.value"
-          :selected="selectedParagraphs.map((i) => i + 1)"
+          :disabled="
+            (busy && !revisionGen.pending.value && !paragraphGen.pending.value) || !hasText
+          "
+          :selected="pickedParagraphs.map((i) => i + 1)"
           @submit="rework"
           @clear-selection="selectedParagraphs = []"
+          @select-all="selectedParagraphs = parts.body.flatMap((p, i) => (p.trim() ? [i] : []))"
           @stop="stop"
         />
       </section>

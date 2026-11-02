@@ -17,7 +17,12 @@ const props = defineProps<{
   /** Body paragraphs Claude just rewrote that can still be put back. */
   rewritten?: ReadonlySet<number>
 }>()
-const emit = defineEmits<{ undo: [bodyIndex: number]; edited: [bodyIndex: number] }>()
+const emit = defineEmits<{
+  undo: [bodyIndex: number]
+  edited: [bodyIndex: number]
+  /** Paragraphs were added or removed: their numbers changed. */
+  reshaped: []
+}>()
 
 const wordCount = computed(() => countWords(parts.value.body))
 const onTarget = computed(
@@ -37,11 +42,46 @@ function toggle(index: number) {
     : [...selected.value, index].toSorted((a, b) => a - b)
 }
 
+function focusParagraph(index: number) {
+  void nextTick(() => document.getElementById(`letter-paragraph-${index}`)?.focus())
+}
+
+/** Replaces paragraphs of the body; the numbers of the next ones change. */
+function reshape(body: string[]) {
+  selected.value = []
+  update('body', body)
+  emit('reshaped')
+}
+
 function setParagraph(index: number, text: string) {
+  // A blank line starts a new paragraph, when typing as when pasting.
+  const pieces = text.split(/\n\s*\n/)
+  if (pieces.length > 1) {
+    if (parts.value.body.every((paragraph) => !paragraph.trim())) {
+      selected.value = []
+      parts.value = fillEmptyLetter(parts.value, pieces)
+      emit('reshaped')
+      return
+    }
+    const body = [...parts.value.body]
+    body.splice(index, 1, ...pieces.map((piece, i) => (i === 0 ? piece : piece.trimStart())))
+    reshape(body)
+    focusParagraph(index + pieces.length - 1)
+    return
+  }
   const body = [...parts.value.body]
   body[index] = text
   update('body', body)
   emit('edited', index)
+}
+
+function addParagraph() {
+  reshape([...parts.value.body, ''])
+  focusParagraph(parts.value.body.length - 1)
+}
+
+function removeParagraph(index: number) {
+  reshape(parts.value.body.filter((_, i) => i !== index))
 }
 </script>
 
@@ -84,6 +124,7 @@ function setParagraph(index: number, text: string) {
             v-else
             :id="`letter-paragraph-${i}`"
             :model-value="paragraph"
+            placeholder="Écris ici. Une ligne vide commence un nouveau paragraphe."
             autoresize
             :rows="1"
             variant="none"
@@ -102,7 +143,19 @@ function setParagraph(index: number, text: string) {
             Remettre l’ancien texte
           </button>
         </div>
+        <UButton
+          v-if="!paragraph.trim() && parts.body.length > 1"
+          :aria-label="`Supprimer le paragraphe ${i + 1}`"
+          icon="i-lucide-x"
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          :disabled="disabled"
+          class="mt-1.5 mr-1.5 shrink-0 rounded-full"
+          @click="removeParagraph(i)"
+        />
         <UTooltip
+          v-else
           :text="selected.includes(i) ? 'Retirer de la sélection' : 'Retravailler avec Claude'"
         >
           <UButton
@@ -113,7 +166,7 @@ function setParagraph(index: number, text: string) {
             size="xs"
             :color="selected.includes(i) ? 'primary' : 'neutral'"
             :variant="selected.includes(i) ? 'solid' : 'ghost'"
-            :disabled="disabled"
+            :disabled="disabled || !paragraph.trim()"
             class="mt-1.5 mr-1.5 shrink-0 rounded-full transition-opacity"
             :class="
               selected.includes(i)
@@ -124,6 +177,16 @@ function setParagraph(index: number, text: string) {
           />
         </UTooltip>
       </div>
+      <UButton
+        label="Ajouter un paragraphe"
+        icon="i-lucide-plus"
+        size="xs"
+        color="neutral"
+        variant="ghost"
+        class="ml-1"
+        :disabled="disabled"
+        @click="addParagraph"
+      />
     </div>
 
     <LettersFixedLines
