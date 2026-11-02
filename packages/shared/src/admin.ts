@@ -26,6 +26,8 @@ export interface AdminUser {
   claude30d: { calls: number; costUsd: number }
   /** Tavily calls over the last 30 days. */
   web30d: { calls: number }
+  /** Claude quota over 24 hours, in USD: `custom` when an admin set this member's own. */
+  aiBudget: { usd: number; defaultUsd: number; custom: boolean }
 }
 
 export interface AdminInvite {

@@ -71,6 +71,11 @@ export const users = pgTable('users', {
    */
   isAdmin: boolean('is_admin').notNull().default(false),
   /**
+   * This user's Claude quota over 24 hours, in micro-dollars, when an admin set
+   * one. Null: the server's default (USER_DAILY_BUDGET_USD).
+   */
+  aiDailyBudgetMicros: integer('ai_daily_budget_micros'),
+  /**
    * Onboarding messages the user has closed (the welcome dialog, page tips),
    * stored here rather than in the browser so they stay closed on every device.
    */

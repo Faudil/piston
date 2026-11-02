@@ -85,6 +85,13 @@
       "when": 1793123228089,
       "tag": "0011_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793640894311,
+      "tag": "0012_user_ai_budget",
+      "breakpoints": true
     }
   ]
 }

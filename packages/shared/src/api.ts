@@ -52,7 +52,26 @@ export const DismissHintBody = z.object({ hint: OnboardingHint })
 export type DismissHintBody = z.infer<typeof DismissHintBody>
 
 /** PATCH /api/admin/users/:id */
-export const AdminUserPatchBody = z.object({ isAdmin: z.boolean() })
+export const AdminUserPatchBody = z
+  .object({
+    isAdmin: z.boolean().optional(),
+    /** This member's Claude quota over 24 hours, in USD. Null: the server's default. */
+    aiDailyBudgetUsd: z
+      .number()
+      .min(
+        LIMITS.aiDailyBudgetUsd.min,
+        `Le budget doit être d’au moins ${LIMITS.aiDailyBudgetUsd.min} $.`,
+      )
+      .max(
+        LIMITS.aiDailyBudgetUsd.max,
+        `Le budget ne peut pas dépasser ${LIMITS.aiDailyBudgetUsd.max} $.`,
+      )
+      .nullable()
+      .optional(),
+  })
+  .refine((body) => body.isAdmin !== undefined || body.aiDailyBudgetUsd !== undefined, {
+    message: 'Rien à modifier.',
+  })
 export type AdminUserPatchBody = z.infer<typeof AdminUserPatchBody>
 
 // --- Resume profiles --------------------------------------------------------

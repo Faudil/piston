@@ -1,5 +1,7 @@
 /** Input size limits enforced on every route that accepts user text or files. */
 export const LIMITS = {
+  /** What an admin can set as a member's Claude quota over 24 hours, in USD. */
+  aiDailyBudgetUsd: { min: 0.1, max: 100 },
   /** Maximum length of a resume or job offer, in characters. */
   maxTextLength: 20_000,
   /** Maximum size of an imported PDF, in bytes (5 MB). */

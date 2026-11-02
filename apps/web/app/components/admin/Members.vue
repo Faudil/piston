@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AdminUser } from '@piston/shared'
+import { LIMITS, type AdminUser } from '@piston/shared'
 
 /** Every member with their activity, and the account actions. */
 const props = defineProps<{ users: AdminUser[] }>()
@@ -39,6 +39,44 @@ async function toggleAdmin(member: AdminUser) {
         : `${member.displayName} est maintenant administrateur`,
       icon: 'i-lucide-shield-check',
     })
+    emit('changed')
+  } catch (error) {
+    toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
+  } finally {
+    busy.value = false
+  }
+}
+
+// --- AI budget -------------------------------------------------------------------
+
+const budgetMember = ref<AdminUser | null>(null)
+const budgetAmount = ref(0)
+const budgetPresets = [2, 5, 10]
+const budgetIsValid = computed(
+  () =>
+    budgetAmount.value >= LIMITS.aiDailyBudgetUsd.min &&
+    budgetAmount.value <= LIMITS.aiDailyBudgetUsd.max,
+)
+
+function editBudget(member: AdminUser) {
+  budgetAmount.value = member.aiBudget.usd
+  budgetMember.value = member
+}
+
+async function saveBudget(aiDailyBudgetUsd: number | null) {
+  const member = budgetMember.value
+  if (!member) return
+  busy.value = true
+  try {
+    await $fetch(`/api/admin/users/${member.id}`, {
+      method: 'PATCH',
+      body: { aiDailyBudgetUsd },
+    })
+    toast.add({
+      title: `Budget IA de ${member.displayName} : ${dollars.format(aiDailyBudgetUsd ?? member.aiBudget.defaultUsd)} par 24 h`,
+      icon: 'i-lucide-wallet',
+    })
+    budgetMember.value = null
     emit('changed')
   } catch (error) {
     toast.add({ title: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
@@ -96,6 +134,11 @@ function menuFor(member: AdminUser) {
         onSelect: () => toggleAdmin(member),
       },
       {
+        label: 'Modifier le budget IA',
+        icon: 'i-lucide-wallet',
+        onSelect: () => afterMenuCloses(() => editBudget(member)),
+      },
+      {
         label: 'Réinitialiser le mot de passe',
         icon: 'i-lucide-key-round',
         onSelect: () => resetPassword(member),
@@ -135,7 +178,7 @@ function menuFor(member: AdminUser) {
           class="relative flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-6 sm:px-5"
         >
           <div class="min-w-0 flex-1 pr-10 sm:pr-0">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span class="truncate font-medium text-highlighted">{{ member.displayName }}</span>
               <UBadge v-if="member.isAdmin" label="Admin" size="sm" variant="subtle" />
               <UBadge
@@ -143,6 +186,14 @@ function menuFor(member: AdminUser) {
                 label="Toi"
                 size="sm"
                 color="neutral"
+                variant="subtle"
+              />
+              <UBadge
+                v-if="member.aiBudget.custom"
+                :label="`IA : ${dollars.format(member.aiBudget.usd)} / 24 h`"
+                icon="i-lucide-wallet"
+                size="sm"
+                color="success"
                 variant="subtle"
               />
             </div>
@@ -223,6 +274,70 @@ function menuFor(member: AdminUser) {
             :loading="busy"
             :disabled="deleteConfirm.trim().toLowerCase() !== deleting?.email"
             @click="confirmDelete"
+          />
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      :open="budgetMember !== null"
+      :title="`Budget IA de ${budgetMember?.displayName}`"
+      description="Coût estimé de Claude autorisé par 24 heures glissantes. Le plafond d’appels suit la même proportion. Les plafonds du serveur s’appliquent toujours."
+      @update:open="(open) => !open && (budgetMember = null)"
+    >
+      <template #body>
+        <div class="space-y-4">
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-for="preset in budgetPresets"
+              :key="preset"
+              :label="dollars.format(preset)"
+              size="sm"
+              :color="budgetAmount === preset ? 'primary' : 'neutral'"
+              :variant="budgetAmount === preset ? 'soft' : 'outline'"
+              @click="budgetAmount = preset"
+            />
+          </div>
+          <UFormField
+            label="Montant par 24 h, en dollars"
+            :error="
+              budgetIsValid
+                ? undefined
+                : `Entre ${LIMITS.aiDailyBudgetUsd.min} et ${LIMITS.aiDailyBudgetUsd.max} $.`
+            "
+          >
+            <UInput
+              v-model.number="budgetAmount"
+              type="number"
+              :min="LIMITS.aiDailyBudgetUsd.min"
+              :max="LIMITS.aiDailyBudgetUsd.max"
+              step="0.5"
+              class="w-full"
+            />
+          </UFormField>
+          <p class="text-sm text-muted">
+            Budget par défaut : {{ dollars.format(budgetMember?.aiBudget.defaultUsd ?? 0) }}.
+          </p>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex w-full flex-wrap justify-end gap-2">
+          <UButton
+            v-if="budgetMember?.aiBudget.custom"
+            label="Revenir au défaut"
+            color="neutral"
+            variant="ghost"
+            :disabled="busy"
+            class="mr-auto"
+            @click="saveBudget(null)"
+          />
+          <UButton label="Annuler" color="neutral" variant="ghost" @click="budgetMember = null" />
+          <UButton
+            label="Enregistrer"
+            icon="i-lucide-check"
+            :loading="busy"
+            :disabled="!budgetIsValid"
+            @click="saveBudget(budgetAmount)"
           />
         </div>
       </template>

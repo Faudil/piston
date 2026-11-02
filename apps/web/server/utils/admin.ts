@@ -216,6 +216,7 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
           email: users.email,
           displayName: users.displayName,
           isAdmin: users.isAdmin,
+          aiDailyBudgetMicros: users.aiDailyBudgetMicros,
           createdAt: users.createdAt,
         })
         .from(users)
@@ -243,6 +244,7 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
   const usageOf = (userId: string, provider: 'anthropic' | 'tavily') =>
     usageRows.find((row) => row.userId === userId && row.provider === provider)
   const lastActiveOf = new Map(lastActive.map((row) => [row.userId, row.at]))
+  const defaultBudgetUsd = useRuntimeConfig().userDailyBudgetUsd
 
   return rows.map((row) => {
     const claude = usageOf(row.id, 'anthropic')
@@ -262,6 +264,11 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
       },
       claude30d: { calls: claude?.calls ?? 0, costUsd: usd(Number(claude?.costMicros ?? 0)) },
       web30d: { calls: usageOf(row.id, 'tavily')?.calls ?? 0 },
+      aiBudget: {
+        usd: row.aiDailyBudgetMicros === null ? defaultBudgetUsd : usd(row.aiDailyBudgetMicros),
+        defaultUsd: defaultBudgetUsd,
+        custom: row.aiDailyBudgetMicros !== null,
+      },
     }
   })
 }
@@ -274,6 +281,18 @@ export async function setAdmin(targetId: string, isAdmin: boolean, adminId: stri
   const updated = await useDb()
     .update(users)
     .set({ isAdmin })
+    .where(eq(users.id, targetId))
+    .returning({ id: users.id })
+  if (updated.length === 0) throw createError({ statusCode: 404, message: 'Membre introuvable.' })
+}
+
+/** Sets a member's Claude quota over 24 hours, or gives them the default again (null). */
+export async function setAiBudget(targetId: string, budgetUsd: number | null) {
+  const updated = await useDb()
+    .update(users)
+    .set({
+      aiDailyBudgetMicros: budgetUsd === null ? null : Math.round(budgetUsd * MICROS_PER_USD),
+    })
     .where(eq(users.id, targetId))
     .returning({ id: users.id })
   if (updated.length === 0) throw createError({ statusCode: 404, message: 'Membre introuvable.' })

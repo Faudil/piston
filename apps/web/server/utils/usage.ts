@@ -1,4 +1,4 @@
-import { and, apiUsage, asc, count, eq, gte, sql, sum } from '@piston/db'
+import { and, apiUsage, asc, count, eq, gte, sql, sum, users } from '@piston/db'
 import {
   LIMITS,
   RESERVATION_TOKENS,
@@ -121,8 +121,15 @@ async function claudeQuota(db: LedgerReader, userId: string, now: Date) {
   )
 
   const config = useRuntimeConfig()
-  const budget = Math.round(config.userDailyBudgetUsd * MICROS_PER_USD)
-  const limit = config.dailyGenerationLimit
+  const defaultBudget = Math.round(config.userDailyBudgetUsd * MICROS_PER_USD)
+  const [member] = await db
+    .select({ budget: users.aiDailyBudgetMicros })
+    .from(users)
+    .where(eq(users.id, userId))
+  const budget = member?.budget ?? defaultBudget
+  // A raised budget raises the cap on calls too, or it would stay out of reach.
+  const raise = defaultBudget > 0 ? Math.max(1, budget / defaultBudget) : 1
+  const limit = Math.ceil(config.dailyGenerationLimit * raise)
   const spent = charges.reduce((total, charge) => total + charge, 0)
   const exhausted = rows.length >= limit || spent >= budget
 

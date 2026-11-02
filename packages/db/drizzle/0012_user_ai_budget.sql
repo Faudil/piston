@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "ai_daily_budget_micros" integer;

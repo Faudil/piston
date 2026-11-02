@@ -258,6 +258,40 @@ describe('members', () => {
     )
   })
 
+  it('sets a member’s AI budget, within bounds, and back to the default', async () => {
+    const { user: member } = await loginAsNewUser('membre@example.com')
+    await loginAsAdmin()
+    const budget = async () => {
+      const list = (await (
+        await callRoute(usersRoute, { path: '/api/admin/users' })
+      ).json()) as AdminUser[]
+      return list.find((entry) => entry.id === member.id)!.aiBudget
+    }
+    expect(await budget()).toEqual({ usd: 1, defaultUsd: 1, custom: false })
+
+    expect(
+      (await memberRoute(patchUserRoute, 'PATCH', member.id, { aiDailyBudgetUsd: 5 })).status,
+    ).toBe(200)
+    expect(await budget()).toEqual({ usd: 5, defaultUsd: 1, custom: true })
+
+    expect(
+      (await memberRoute(patchUserRoute, 'PATCH', member.id, { aiDailyBudgetUsd: 500 })).status,
+    ).toBe(400)
+    expect((await memberRoute(patchUserRoute, 'PATCH', member.id, {})).status).toBe(400)
+
+    expect(
+      (await memberRoute(patchUserRoute, 'PATCH', member.id, { aiDailyBudgetUsd: null })).status,
+    ).toBe(200)
+    expect(await budget()).toEqual({ usd: 1, defaultUsd: 1, custom: false })
+  })
+
+  it('only lets an admin change a budget', async () => {
+    const { user: member } = await loginAsNewUser('membre@example.com')
+    expect(
+      (await memberRoute(patchUserRoute, 'PATCH', member.id, { aiDailyBudgetUsd: 50 })).status,
+    ).toBe(403)
+  })
+
   it('resets a password and closes the member’s sessions', async () => {
     const { user: member } = await loginAsNewUser('membre@example.com')
     await loginAsAdmin()

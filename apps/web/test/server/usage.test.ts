@@ -106,6 +106,34 @@ describe('reserveUsage', () => {
     })
   })
 
+  it('follows the budget an admin set for a user, and raises the cap on calls with it', async () => {
+    const { user } = await loginAsNewUser()
+    await seedUsage(user.id, 1, { status: 'done', estimatedCostMicros: 1_000_000 })
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).rejects.toMatchObject({
+      statusCode: 429,
+    })
+
+    await setAiBudget(user.id, 3)
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).resolves.toEqual(
+      expect.any(String),
+    )
+
+    // Three times the budget: three times the calls.
+    const { user: busy } = await loginAsNewUser('busy@example.com')
+    await setAiBudget(busy.id, 3)
+    await seedUsage(busy.id, testState.config.dailyGenerationLimit, {
+      status: 'done',
+      estimatedCostMicros: 1,
+    })
+    await expect(reserveUsage(busy.id, 'anthropic', 'cv_edit')).resolves.toEqual(expect.any(String))
+
+    // Back to the default.
+    await setAiBudget(user.id, null)
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).rejects.toMatchObject({
+      statusCode: 429,
+    })
+  })
+
   it('charges an aborted call a flat cost, not its reserved estimate', async () => {
     const { user } = await loginAsNewUser()
     await seedUsage(user.id, 20, { status: 'aborted', estimatedCostMicros: 140_000 })

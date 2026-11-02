@@ -109,7 +109,7 @@ On their first visit, new members get a short welcome, a « Premiers pas » prog
 3. **Candidatures**: add the offer to the kanban and move it from « À envoyer » to « Terminée ».
 4. **Pistes**: get adjacent job titles, job-board keywords and company types to target.
 
-Each user has a Claude quota over rolling 24 hours, measured in estimated cost (`USER_DAILY_BUDGET_USD`; offer imports count), and 50 web searches or imports, and can create 5 invitations per week. See [Limiting costs](#limiting-costs) for the server-wide caps.
+Each user has a Claude quota over rolling 24 hours, measured in estimated cost (`USER_DAILY_BUDGET_USD`; offer imports count; an admin can set a member's own from `/admin`), and 50 web searches or imports, and can create 5 invitations per week. See [Limiting costs](#limiting-costs) for the server-wide caps.
 
 ## Operations
 
