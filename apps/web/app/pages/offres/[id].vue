@@ -18,35 +18,6 @@ const application = computed(() => applications.value.find((a) => a.jobOfferId =
 
 useSeoMeta({ title: () => offer.value?.title ?? 'Offre' })
 
-// --- Resume profile ---------------------------------------------------------
-
-const { profiles, defaultProfile } = await useResumeProfiles()
-const profileName = (id: string | undefined) => profiles.value.find((p) => p.id === id)?.name
-
-/** The profile the next analysis or letter will use: the offer's, else the default one. */
-const effectiveProfileId = computed(() => offer.value?.profileId ?? defaultProfile.value?.id)
-const savingProfile = ref(false)
-
-async function changeProfile(profileId: string | null) {
-  if (!offer.value || profileId === offer.value.profileId) return
-  savingProfile.value = true
-  try {
-    offer.value = await $fetch<JobOffer>(`/api/offers/${offerId}`, {
-      method: 'PATCH',
-      body: { profileId },
-    })
-    toast.add({
-      title: 'CV utilisé modifié',
-      description: "La prochaine analyse et la prochaine lettre s'appuieront dessus.",
-      icon: 'i-lucide-check',
-    })
-  } catch (err) {
-    toast.add({ title: apiErrorMessage(err), color: 'error', icon: 'i-lucide-circle-alert' })
-  } finally {
-    savingProfile.value = false
-  }
-}
-
 // --- Analysis ---------------------------------------------------------------
 
 const analysis = useGeneration('offer_analysis')
@@ -58,18 +29,12 @@ const shownAnalysis = computed<Partial<OfferAnalysisOutput> | undefined>(() =>
     : previous.value?.analysis?.output,
 )
 
-/**
- * Set when the analysis shown was made with another profile than the one the
- * offer now uses. Older analyses (made before profiles) carry no profile.
- */
-const analysisProfileMismatch = computed(() => {
-  const shown = analysis.pending.value
+/** The profile of the saved analysis shown, to flag it once the offer uses another one. */
+const analysisProfileId = computed(() =>
+  analysis.pending.value
     ? undefined
-    : (analysis.generation.value ?? previous.value?.analysis)
-  const used = shown?.inputRefs.profileId
-  if (!used || profiles.value.length < 2 || used === effectiveProfileId.value) return null
-  return { used: profileName(used), next: profileName(effectiveProfileId.value) }
-})
+    : (analysis.generation.value ?? previous.value?.analysis)?.inputRefs.profileId,
+)
 
 function analyze() {
   void analysis.start({ offerId })
@@ -175,17 +140,24 @@ async function addToApplications() {
     />
 
     <div v-else class="space-y-12">
-      <OfferNextSteps
-        :offer="offer"
-        :application="application"
-        :has-analysis="hasAnalysis"
-        :letter-id="letter?.id ?? null"
-        :analyzing="analysis.pending.value"
-        :tracking="adding"
-        @analyze="analyze"
-        @write-letter="scrollToLetter"
-        @track="addToApplications"
-      />
+      <div class="space-y-4">
+        <OfferProfilePicker
+          :offer="offer"
+          :disabled="analysis.pending.value"
+          @updated="offer = $event"
+        />
+        <OfferNextSteps
+          :offer="offer"
+          :application="application"
+          :has-analysis="hasAnalysis"
+          :letter-id="letter?.id ?? null"
+          :analyzing="analysis.pending.value"
+          :tracking="adding"
+          @analyze="analyze"
+          @write-letter="scrollToLetter"
+          @track="addToApplications"
+        />
+      </div>
 
       <UCollapsible
         class="rounded-2xl border border-default bg-default"
@@ -227,27 +199,13 @@ async function addToApplications() {
         </AppSectionHeading>
 
         <div class="space-y-4">
-          <div v-if="profiles.length >= 2" class="max-w-sm">
-            <ResumeProfileSelect
-              :model-value="offer.profileId"
-              :profiles="profiles"
-              allow-default
-              :disabled="savingProfile || analysis.pending.value"
-              description="Le profil de CV comparé à l'offre et utilisé pour la lettre."
-              @update:model-value="changeProfile"
-            />
-          </div>
-          <UAlert
-            v-if="analysisProfileMismatch"
-            color="warning"
-            variant="subtle"
-            icon="i-lucide-info"
-            :title="
-              analysisProfileMismatch.used
-                ? `Cette analyse a été faite avec le profil « ${analysisProfileMismatch.used} ».`
-                : 'Cette analyse a été faite avec un autre profil de CV.'
-            "
-            :description="`Relance-la pour utiliser « ${analysisProfileMismatch.next ?? 'le profil choisi'} ».`"
+          <OfferProfileMismatch
+            subject="Cette analyse"
+            :used-profile-id="analysisProfileId"
+            :offer="offer"
+            hint="Relance-la pour utiliser"
+            action="Relancer l'analyse"
+            @action="analyze"
           />
           <UAlert
             v-if="analysis.error.value"
@@ -291,6 +249,13 @@ async function addToApplications() {
               ? 'Choisis un modèle et un ton, puis retouche chaque paragraphe. Les notes de ta candidature sont prises en compte.'
               : 'Choisis un modèle et un ton, ajoute jusqu\'à trois points à mettre en avant, puis retouche chaque paragraphe.'
           "
+        />
+        <OfferProfileMismatch
+          class="mb-4"
+          subject="Cette lettre"
+          :used-profile-id="letter?.inputRefs.profileId"
+          :offer="offer"
+          hint="Génère une nouvelle lettre pour utiliser"
         />
         <LettersEditor
           :offer-id="offerId"

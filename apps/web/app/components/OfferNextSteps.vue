@@ -40,13 +40,13 @@ const { data: documents, status } = useFetch<CvDocumentSummary[]>('/api/cv-docum
   lazy: true,
   default: () => [],
 })
-/** The most recent CV made for this offer. */
-const tailored = computed(
-  () =>
-    documents.value
-      .filter((document) => document.offer?.id === props.offer.id)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0],
-)
+/** The most recent CV made for this offer from the profile it uses now. */
+const tailored = computed(() => {
+  const profileId = props.offer.profileId ?? defaultProfile.value?.id
+  return documents.value
+    .filter((document) => document.offer?.id === props.offer.id && document.profileId === profileId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+})
 const { tailor, pending: tailoring } = useTailorCv()
 
 type StepKey = 'analysis' | 'letter' | 'application' | 'cv'

@@ -54,13 +54,15 @@ const history = computed(() => [...props.application.statusHistory].reverse())
       />
     </div>
 
-    <OfferNextSteps
-      v-if="offer"
-      :offer="offer"
-      :application="application"
-      :letter-id="letters[0]?.id ?? null"
-      :letter-to="`/candidatures/${application.id}/lettre`"
-    />
+    <div v-if="offer" class="space-y-4">
+      <OfferProfilePicker :offer="offer" @updated="offer = $event" />
+      <OfferNextSteps
+        :offer="offer"
+        :application="application"
+        :letter-id="letters[0]?.id ?? null"
+        :letter-to="`/candidatures/${application.id}/lettre`"
+      />
+    </div>
     <USkeleton v-else class="h-40 w-full rounded-2xl" />
 
     <div class="grid gap-2 sm:grid-cols-2">

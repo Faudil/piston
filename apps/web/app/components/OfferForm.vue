@@ -156,7 +156,9 @@ async function onSubmit(event: FormSubmitEvent<CreateOfferBody>) {
         v-model="state.profileId"
         :profiles="profiles"
         allow-default
-        description="Le profil de CV comparé à cette offre et utilisé pour la lettre."
+        require-resume
+        label="CV pour cette offre"
+        description="Celui que Claude compare à l'offre, et qui sert pour la lettre et le CV adapté."
       />
       <UFormField label="Texte de l'offre" name="rawText" required>
         <UTextarea v-model="state.rawText" :rows="10" autoresize :maxrows="20" class="w-full" />

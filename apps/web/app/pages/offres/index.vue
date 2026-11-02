@@ -8,6 +8,14 @@ const router = useRouter()
 
 const { data: offers, error } = await useFetch<JobOffer[]>('/api/offers')
 
+// With several CVs, each offer says which one it uses.
+const { profiles, defaultProfile } = await useResumeProfiles()
+const profileNameOf = (offer: JobOffer) =>
+  profiles.value.length < 2
+    ? undefined
+    : (profiles.value.find((profile) => profile.id === offer.profileId) ?? defaultProfile.value)
+        ?.name
+
 // The dashboard links to /offres?new=1 to open the form directly, and the job
 // search to /offres?new=1&url=... to import an ad.
 const formOpen = ref(route.query.new === '1')
@@ -85,6 +93,13 @@ function closeForm() {
                 <span class="block truncate text-sm text-muted">
                   <template v-if="offer.company">{{ offer.company }} · </template>
                   {{ formatDate(offer.createdAt) }}
+                </span>
+                <span
+                  v-if="profileNameOf(offer)"
+                  class="mt-1 flex items-center gap-1 text-xs text-muted"
+                >
+                  <UIcon name="i-lucide-file-user" class="size-3.5 shrink-0" />
+                  <span class="truncate">CV : {{ profileNameOf(offer) }}</span>
                 </span>
               </span>
               <UIcon

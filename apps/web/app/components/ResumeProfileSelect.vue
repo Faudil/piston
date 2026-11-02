@@ -4,7 +4,8 @@ import type { ResumeProfile } from '@piston/shared'
 /**
  * Picks a resume profile (« CV utilisé »). With `allowDefault`, the first
  * choice is « Profil par défaut (<name>) », i.e. `null`: the offer then follows
- * whichever profile is the default one.
+ * whichever profile is the default one. With `requireResume`, a profile without
+ * any CV can't be picked (analyses and letters need one).
  */
 const props = withDefaults(
   defineProps<{
@@ -12,6 +13,7 @@ const props = withDefaults(
     label?: string
     description?: string
     allowDefault?: boolean
+    requireResume?: boolean
     disabled?: boolean
   }>(),
   { label: 'CV utilisé', description: undefined, allowDefault: false },
@@ -35,11 +37,19 @@ const items = computed(() => {
           },
         ]
       : []),
-    ...props.profiles.map((profile) => ({
-      label:
-        profile.isDefault && !props.allowDefault ? `${profile.name} (par défaut)` : profile.name,
-      value: profile.id,
-    })),
+    // The default profile is already the first choice, unless the offer is pinned to it.
+    ...props.profiles
+      .filter((profile) => !props.allowDefault || !profile.isDefault || profile.id === model.value)
+      .map((profile) => {
+        const empty = props.requireResume && !profile.current
+        const name =
+          profile.isDefault && !props.allowDefault ? `${profile.name} (par défaut)` : profile.name
+        return {
+          label: empty ? `${name} — pas encore de CV` : name,
+          value: profile.id,
+          disabled: empty,
+        }
+      }),
   ]
 })
 

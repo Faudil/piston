@@ -14,13 +14,9 @@ const { data: application, error: applicationError } = await useFetch<Applicatio
 )
 
 // The letter uses the offer's resume profile (the default one if the offer has none).
-const { profiles, defaultProfile } = await useResumeProfiles()
 const { data: offer } = await useFetch<JobOffer>(
   () => `/api/offers/${application.value?.jobOfferId}`,
   { immediate: Boolean(application.value) },
-)
-const usedProfile = computed(
-  () => profiles.value.find((p) => p.id === offer.value?.profileId) ?? defaultProfile.value,
 )
 
 useSeoMeta({ title: () => `Lettre — ${application.value?.offer.title ?? 'Candidature'}` })
@@ -67,20 +63,14 @@ const letter = shallowRef<Generation<'cover_letter'> | null>(null)
     </template>
 
     <div class="space-y-8">
-      <p v-if="usedProfile" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
-        <UIcon name="i-lucide-file-user" class="size-4 text-primary" />
-        <span>
-          CV utilisé : <span class="font-medium text-highlighted">{{ usedProfile.name }}</span>
-          <template v-if="!offer?.profileId && profiles.length > 1"> (profil par défaut)</template>
-        </span>
-        <ULink
-          v-if="profiles.length > 1"
-          :to="`/offres/${application.jobOfferId}`"
-          class="text-primary underline"
-        >
-          Changer sur la page de l'offre
-        </ULink>
-      </p>
+      <OfferProfilePicker v-if="offer" :offer="offer" @updated="offer = $event" />
+      <OfferProfileMismatch
+        v-if="offer"
+        subject="Cette lettre"
+        :used-profile-id="letter?.inputRefs.profileId"
+        :offer="offer"
+        hint="Génère une nouvelle lettre pour utiliser"
+      />
 
       <LettersEditor
         :offer-id="application.jobOfferId"
