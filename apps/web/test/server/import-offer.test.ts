@@ -85,12 +85,14 @@ describe('POST /api/offers/import-url', () => {
 
     const [params] = claude.parseCalls as Array<{
       model: string
+      thinking: { type: string }
       output_config: { effort: string }
       messages: Array<{ content: string }>
     }>
     // Extraction is a light task: the fast model.
     expect(params.model).toBe('claude-haiku-5-5')
     expect(params.output_config.effort).toBe('low')
+    expect(params.thinking).toEqual({ type: 'disabled' })
     // The page is wrapped and capped at 60 000 characters.
     const sent = params.messages[0]!.content
     expect(sent.startsWith('<page>')).toBe(true)

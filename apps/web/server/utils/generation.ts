@@ -81,8 +81,9 @@ export async function streamGeneration<K extends GenerationKind>(
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default' as const,
       }),
+      ...lightThinking(model),
       output_config: {
-        effort: 'medium',
+        effort: 'low',
         ...(format && { format }),
       },
       // Cache breakpoints: the system prompt, then the resume. Only `request`

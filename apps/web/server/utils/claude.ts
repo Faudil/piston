@@ -54,6 +54,17 @@ export function supportsServerFallback(model: string): boolean {
 }
 
 /**
+ * The request fields that keep generations short and cheap: low effort, no
+ * extended thinking. Each model has its own way of turning thinking off and
+ * rejects the others'; any other model keeps its default thinking, at low effort.
+ */
+export function lightThinking(model: string) {
+  if (model === 'claude-sonnet-5-5') return { thinking: { type: 'between_tools' as const } }
+  if (model === 'claude-haiku-5-5') return { thinking: { type: 'disabled' as const } }
+  return {}
+}
+
+/**
  * Turns any error thrown while talking to Claude into a French message that
  * can be shown to the user, and logs the technical details (with the
  * request id, which Anthropic support asks for) on the server.

@@ -129,6 +129,9 @@ describe('POST /api/generate/cover-letter', () => {
     expect(JSON.stringify(params.system)).not.toContain('Mon side project Rust')
     expect(JSON.stringify(params.system)).toContain('Startup style')
     expect(params.output_config).not.toHaveProperty('format')
+    // Short and cheap: low effort, no extended thinking.
+    expect(params.output_config).toMatchObject({ effort: 'low' })
+    expect(params).toMatchObject({ thinking: { type: 'between_tools' } })
   })
 
   it("answers 404 for another user's offer", async () => {

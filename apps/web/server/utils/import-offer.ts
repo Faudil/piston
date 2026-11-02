@@ -63,9 +63,11 @@ export async function importOffer(userId: string, url: URL): Promise<ImportedOff
   }
   let output: ImportedOfferOutput | null
   try {
+    const model = claudeModelFor('import_offer')
     const message = await useClaude().messages.parse({
-      model: claudeModelFor('import_offer'),
+      model,
       max_tokens: 8000,
+      ...lightThinking(model),
       output_config: { effort: 'low', format: zodOutputFormat(ImportedOfferOutput) },
       system: importOfferPrompt(),
       messages: [{ role: 'user', content: wrapPage(page) }],
