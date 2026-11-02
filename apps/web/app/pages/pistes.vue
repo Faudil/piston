@@ -58,6 +58,7 @@ const hasResult = computed(() => Boolean(shown.value) || Boolean(saved.value))
 
       <section aria-labelledby="leads" class="space-y-4">
         <h2 id="leads" class="sr-only">Pistes de recherche</h2>
+        <AppUsageNotice />
 
         <div v-if="profiles.length >= 2" class="max-w-sm">
           <ResumeProfileSelect

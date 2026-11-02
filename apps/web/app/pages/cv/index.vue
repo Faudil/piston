@@ -279,6 +279,7 @@ const reviewIsStale = computed(
             </UButton>
           </div>
         </div>
+        <AppUsageNotice class="mt-3 sm:justify-end" />
       </UCard>
 
       <UTabs

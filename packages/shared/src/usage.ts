@@ -97,7 +97,15 @@ export const TAVILY_CREDITS_PER_CALL = 1
 
 /** `GET /api/usage`: the user's own 24 h counts and limits, plus the server's monthly budget as percentages. */
 export interface UsageSummary {
-  claude: { used: number; limit: number }
+  claude: {
+    /** Calls over the last 24 hours (failed ones don't count). */
+    used: number
+    limit: number
+    /** What is left of the user's own quota, 0 to 100. No amounts are exposed. */
+    remainingPercent: number
+    /** When the quota opens again, if it is used up. */
+    resetsAt: string | null
+  }
   web: { used: number; limit: number }
   /** Share of this month's server budget used, 0 to 100. No amounts are exposed. */
   monthlyPercent: { claude: number; web: number }

@@ -261,6 +261,7 @@ const canRun = computed(() =>
           :disabled="!canRun"
           @click="run"
         />
+        <AppUsageNotice />
         <p v-if="mode === 'interview' && interviewError && !pending" class="text-sm text-muted">
           {{ interviewError }}
         </p>

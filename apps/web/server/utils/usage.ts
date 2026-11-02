@@ -1,4 +1,4 @@
-import { and, apiUsage, count, eq, gte, sql, sum } from '@piston/db'
+import { and, apiUsage, asc, count, eq, gte, sql, sum } from '@piston/db'
 import {
   LIMITS,
   RESERVATION_TOKENS,
@@ -30,6 +30,12 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const MICROS_PER_USD = 1_000_000
 /** Share of the monthly budget at which a warning is logged. */
 const WARN_RATIO = 0.8
+/**
+ * What an aborted call takes from the user's own quota. Its real cost is
+ * unknown and the reserved estimate, right for the server's budget, would make
+ * « Arrêter » cost several real calls.
+ */
+const ABORTED_USER_COST_MICROS = 30_000
 
 /** One advisory-lock key per provider: the two budgets are independent. */
 const LOCK_KEYS: Record<ApiProvider, number> = { anthropic: 4_217_001, tavily: 4_217_002 }
@@ -46,8 +52,6 @@ interface ProviderLimits {
   globalDaily: number
   /** Monthly budget in the provider's unit: micro-dollars (anthropic) or credits (tavily). */
   monthlyBudget: number
-  /** Unit label for the per-user error message. */
-  userMessage: string
 }
 
 function limitsOf(provider: ApiProvider): ProviderLimits {
@@ -57,14 +61,12 @@ function limitsOf(provider: ApiProvider): ProviderLimits {
       perUserDaily: config.dailyGenerationLimit,
       globalDaily: config.claudeGlobalDailyLimit,
       monthlyBudget: Math.round(config.claudeMonthlyBudgetUsd * MICROS_PER_USD),
-      userMessage: `Tu as atteint la limite de ${config.dailyGenerationLimit} générations sur 24 heures. Reviens demain !`,
     }
   }
   return {
     perUserDaily: LIMITS.webCallsPerUserPerDay,
     globalDaily: config.tavilyGlobalDailyLimit,
     monthlyBudget: config.tavilyMonthlyCredits,
-    userMessage: `Tu as atteint la limite de ${LIMITS.webCallsPerUserPerDay} recherches web sur 24 heures. Reviens demain !`,
   }
 }
 
@@ -88,6 +90,75 @@ function reservationEstimate(provider: ApiProvider, operation: string) {
   }
 }
 
+/** Anything that can run the ledger queries: the database or an open transaction. */
+type LedgerReader = Pick<ReturnType<typeof useDb>, 'select'>
+
+/**
+ * A user's Claude quota over the last 24 hours. It is measured in estimated
+ * cost, so a light task weighs little and a full letter more; the cap on calls
+ * only stops abuse of the cheap tasks, which still count against the server's
+ * global daily limit. Failed calls don't count: they are not the user's doing.
+ */
+async function claudeQuota(db: LedgerReader, userId: string, now: Date) {
+  const rows = await db
+    .select({
+      createdAt: apiUsage.createdAt,
+      status: apiUsage.status,
+      cost: apiUsage.estimatedCostMicros,
+    })
+    .from(apiUsage)
+    .where(
+      and(
+        eq(apiUsage.userId, userId),
+        eq(apiUsage.provider, 'anthropic'),
+        gte(apiUsage.createdAt, new Date(now.getTime() - DAY_MS)),
+        sql`${apiUsage.status} <> 'failed'`,
+      ),
+    )
+    .orderBy(asc(apiUsage.createdAt))
+  const charges = rows.map((row) =>
+    row.status === 'aborted' ? Math.min(row.cost, ABORTED_USER_COST_MICROS) : row.cost,
+  )
+
+  const config = useRuntimeConfig()
+  const budget = Math.round(config.userDailyBudgetUsd * MICROS_PER_USD)
+  const limit = config.dailyGenerationLimit
+  const spent = charges.reduce((total, charge) => total + charge, 0)
+  const exhausted = rows.length >= limit || spent >= budget
+
+  // The window slides: the quota opens again once enough old calls have left it.
+  let resetsAt: Date | null = null
+  if (exhausted) {
+    let calls = rows.length
+    let left = spent
+    for (const [i, row] of rows.entries()) {
+      calls -= 1
+      left -= charges[i]!
+      if (calls < limit && left < budget) {
+        resetsAt = new Date(row.createdAt.getTime() + DAY_MS)
+        break
+      }
+    }
+  }
+
+  const remaining = budget > 0 ? Math.min(1 - spent / budget, 1 - rows.length / limit) : 0
+  return {
+    used: rows.length,
+    limit,
+    remainingPercent: Math.max(0, Math.floor(remaining * 100)),
+    exhausted,
+    resetsAt,
+  }
+}
+
+/** « 3 h 20 » or « 45 min », without a clock time: the server doesn't know the user's time zone. */
+function formatDelay(ms: number) {
+  const minutes = Math.max(1, Math.ceil(ms / 60_000))
+  if (minutes < 60) return `${minutes} min`
+  const rest = minutes % 60
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${String(rest).padStart(2, '0')}` : ''}`
+}
+
 /** Months (per provider) for which the 80 % warning was already logged by this process. */
 const warnedMonths = new Set<string>()
 
@@ -109,11 +180,11 @@ export function resetUsageWarnings() {
 /**
  * Checks every limit and records a `reserved` row; returns its id, to pass to
  * settleUsage once the call is over. Throws a French h3 error when:
- * - the user used their daily quota (429),
+ * - the user used their own quota over 24 hours (429, see claudeQuota),
  * - the server used its global daily quota (429),
  * - the call could push this month's estimated spend over the budget (503).
  *
- * Counts include every row of the window whatever its status.
+ * Global counts include every row of the window whatever its status.
  */
 export async function reserveUsage(
   userId: string,
@@ -131,18 +202,32 @@ export async function reserveUsage(
     // wait here, then see this row when they count.
     await tx.execute(sql`select pg_advisory_xact_lock(${LOCK_KEYS[provider]}::bigint)`)
 
-    const [userRow] = await tx
-      .select({ total: count() })
-      .from(apiUsage)
-      .where(
-        and(
-          eq(apiUsage.userId, userId),
-          eq(apiUsage.provider, provider),
-          gte(apiUsage.createdAt, since),
-        ),
-      )
-    if ((userRow?.total ?? 0) >= limits.perUserDaily) {
-      throw createError({ statusCode: 429, message: limits.userMessage })
+    if (provider === 'anthropic') {
+      const quota = await claudeQuota(tx, userId, now)
+      if (quota.exhausted) {
+        const delay = quota.resetsAt ? quota.resetsAt.getTime() - now.getTime() : DAY_MS
+        throw createError({
+          statusCode: 429,
+          message: `Tu as utilisé tout ton quota de génération. Il se libère dans environ ${formatDelay(delay)}.`,
+        })
+      }
+    } else {
+      const [userRow] = await tx
+        .select({ total: count() })
+        .from(apiUsage)
+        .where(
+          and(
+            eq(apiUsage.userId, userId),
+            eq(apiUsage.provider, provider),
+            gte(apiUsage.createdAt, since),
+          ),
+        )
+      if ((userRow?.total ?? 0) >= limits.perUserDaily) {
+        throw createError({
+          statusCode: 429,
+          message: `Tu as atteint la limite de ${limits.perUserDaily} recherches web sur 24 heures. Reviens demain !`,
+        })
+      }
     }
 
     const [globalRow] = await tx
@@ -252,8 +337,14 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
     return Math.min(100, Math.round((Number(row?.spent ?? 0) / budget) * 100))
   }
 
+  const quota = await claudeQuota(db, userId, new Date())
   return {
-    claude: { used: await dayCount('anthropic'), limit: limitsOf('anthropic').perUserDaily },
+    claude: {
+      used: quota.used,
+      limit: quota.limit,
+      remainingPercent: quota.remainingPercent,
+      resetsAt: quota.resetsAt?.toISOString() ?? null,
+    },
     web: { used: await dayCount('tavily'), limit: limitsOf('tavily').perUserDaily },
     monthlyPercent: { claude: await monthPercent('anthropic'), web: await monthPercent('tavily') },
   }

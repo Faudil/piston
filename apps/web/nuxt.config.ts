@@ -57,7 +57,8 @@ export default defineNuxtConfig({
     // Set CLAUDE_FAST_MODEL to the main model's id to run everything on it.
     claudeFastModel: process.env.CLAUDE_FAST_MODEL || 'claude-haiku-5-5',
     databaseUrl: process.env.DATABASE_URL ?? '',
-    dailyGenerationLimit: Number(process.env.DAILY_GENERATION_LIMIT || 30),
+    dailyGenerationLimit: Number(process.env.DAILY_GENERATION_LIMIT || 100),
+    userDailyBudgetUsd: Number(process.env.USER_DAILY_BUDGET_USD || 1),
     // Global caps over all users (see server/utils/usage.ts).
     claudeGlobalDailyLimit: Number(process.env.CLAUDE_GLOBAL_DAILY_LIMIT || 300),
     claudeMonthlyBudgetUsd: Number(process.env.CLAUDE_MONTHLY_BUDGET_USD || 25),

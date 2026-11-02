@@ -373,6 +373,7 @@ const id = useId()
             class="w-full justify-center sm:w-auto"
             @click="generate"
           />
+          <AppUsageNotice />
         </div>
       </template>
     </UCollapsible>

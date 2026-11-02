@@ -109,7 +109,7 @@ On their first visit, new members get a short welcome, a « Premiers pas » prog
 3. **Candidatures**: add the offer to the kanban and move it from « À envoyer » to « Terminée ».
 4. **Pistes**: get adjacent job titles, job-board keywords and company types to target.
 
-Each user can run 30 Claude calls per rolling 24 hours (`DAILY_GENERATION_LIMIT`; offer imports count) and 50 web searches or imports, and can create 5 invitations per week. See [Limiting costs](#limiting-costs) for the server-wide caps.
+Each user has a Claude quota over rolling 24 hours, measured in estimated cost (`USER_DAILY_BUDGET_USD`; offer imports count), and 50 web searches or imports, and can create 5 invitations per week. See [Limiting costs](#limiting-costs) for the server-wide caps.
 
 ## Operations
 
@@ -180,7 +180,8 @@ Piston calls two paid APIs on your account. Every call is recorded in a usage le
 
 | Variable                    | Default | Meaning                                                             |
 | --------------------------- | ------- | ------------------------------------------------------------------- |
-| `DAILY_GENERATION_LIMIT`    | 30      | Claude calls per user per rolling 24 hours                          |
+| `USER_DAILY_BUDGET_USD`     | 1       | Estimated Claude cost per user per rolling 24 hours                 |
+| `DAILY_GENERATION_LIMIT`    | 100     | Claude calls per user per rolling 24 hours, against abuse           |
 | `CLAUDE_GLOBAL_DAILY_LIMIT` | 300     | Claude calls per rolling 24 hours, all users together               |
 | `CLAUDE_MONTHLY_BUDGET_USD` | 25      | Estimated Claude spend per calendar month (UTC), in USD             |
 | `TAVILY_GLOBAL_DAILY_LIMIT` | 300     | Tavily calls (searches and imports) per rolling 24 hours, all users |

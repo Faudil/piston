@@ -66,23 +66,50 @@ describe('reserveUsage', () => {
     })
   })
 
-  it('limits each user to 30 Claude calls per rolling 24 hours, counting every status', async () => {
+  it('caps the Claude calls of each user over 24 hours, leaving out failed ones', async () => {
     const { user } = await loginAsNewUser()
-    await seedUsage(user.id, 10, { status: 'failed' })
-    await seedUsage(user.id, 10, { status: 'aborted' })
-    await seedUsage(user.id, 10, { status: 'reserved' })
+    await seedUsage(user.id, 29, { status: 'done', estimatedCostMicros: 0 })
+    await seedUsage(user.id, 10, { status: 'failed', estimatedCostMicros: 200_000 })
     // Old rows are outside the window.
     await seedUsage(user.id, 5, { createdAt: new Date(Date.now() - 25 * 3600_000) })
 
+    await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).resolves.toEqual(
+      expect.any(String),
+    )
     await expect(reserveUsage(user.id, 'anthropic', 'offer_analysis')).rejects.toMatchObject({
       statusCode: 429,
-      message: 'Tu as atteint la limite de 30 générations sur 24 heures. Reviens demain !',
+      message: expect.stringContaining('Tu as utilisé tout ton quota de génération'),
     })
     // Another user is unaffected.
     const other = await createUser('other@example.com')
     await expect(reserveUsage(other.id, 'anthropic', 'offer_analysis')).resolves.toEqual(
       expect.any(String),
     )
+  })
+
+  it('measures the quota of each user in cost, so light tasks weigh little', async () => {
+    const { user } = await loginAsNewUser()
+    await seedUsage(user.id, 20, { status: 'done', estimatedCostMicros: 1_000 })
+    await expect(reserveUsage(user.id, 'anthropic', 'cv_edit')).resolves.toEqual(expect.any(String))
+
+    const { user: heavy } = await loginAsNewUser('heavy@example.com')
+    const almostADayAgo = new Date(Date.now() - 22 * 3600_000)
+    await seedUsage(heavy.id, 1, {
+      status: 'done',
+      estimatedCostMicros: 500_000,
+      createdAt: almostADayAgo,
+    })
+    await seedUsage(heavy.id, 1, { status: 'done', estimatedCostMicros: 500_000 })
+    await expect(reserveUsage(heavy.id, 'anthropic', 'offer_analysis')).rejects.toMatchObject({
+      statusCode: 429,
+      message: 'Tu as utilisé tout ton quota de génération. Il se libère dans environ 2 h.',
+    })
+  })
+
+  it('charges an aborted call a flat cost, not its reserved estimate', async () => {
+    const { user } = await loginAsNewUser()
+    await seedUsage(user.id, 20, { status: 'aborted', estimatedCostMicros: 140_000 })
+    await expect(reserveUsage(user.id, 'anthropic', 'cv_edit')).resolves.toEqual(expect.any(String))
   })
 
   it('limits all users together per rolling 24 hours', async () => {
@@ -139,6 +166,7 @@ describe('reserveUsage', () => {
     const user = await createUser('a@example.com')
     const one = estimateCostMicros('claude-sonnet-5-5', RESERVATION_TOKENS.generation)
     testState.config.claudeMonthlyBudgetUsd = (one * 10) / 1_000_000
+    testState.config.userDailyBudgetUsd = 100
     for (let i = 0; i < 9; i++) await reserveUsage(user.id, 'anthropic', 'offer_analysis')
     expect(console.warn).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('anthropic monthly budget'))
@@ -383,7 +411,7 @@ describe('GET /api/usage', () => {
 
     const body = await (await callRoute(usageRoute, { path: '/api/usage' })).json()
     expect(body).toEqual({
-      claude: { used: 12, limit: 30 },
+      claude: { used: 12, limit: 30, remainingPercent: expect.any(Number), resetsAt: null },
       web: { used: 2, limit: 50 },
       monthlyPercent: { claude: 0, web: 25 },
     })

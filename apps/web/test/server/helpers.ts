@@ -28,6 +28,7 @@ export async function resetTestState() {
   testState.sessionVersion = 0
   testState.config.trustProxy = false
   testState.config.dailyGenerationLimit = 30
+  testState.config.userDailyBudgetUsd = 1
   testState.config.tavilyApiKey = 'test-tavily-key'
   testState.config.claudeGlobalDailyLimit = 300
   testState.config.claudeMonthlyBudgetUsd = 25

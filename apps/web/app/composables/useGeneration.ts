@@ -25,6 +25,7 @@ export function useGeneration<K extends GenerationKind>(kind: K) {
   const generation = shallowRef<Generation<K> | null>(null)
   const pending = ref(false)
   const error = ref<string | null>(null)
+  const { refresh: refreshUsage } = useUsage()
   let controller: AbortController | null = null
 
   const partial = computed(() =>
@@ -68,6 +69,7 @@ export function useGeneration<K extends GenerationKind>(kind: K) {
       if ((err as Error).name !== 'AbortError') error.value = (err as Error).message
     } finally {
       pending.value = false
+      void refreshUsage()
       controller = null
     }
     return generation.value

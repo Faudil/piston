@@ -157,7 +157,7 @@ describe('POST /api/offers/import-url', () => {
     for (let i = 0; i < 30; i++) expect((await importUrl()).status).toBe(200)
     const blocked = await importUrl()
     expect(blocked.status).toBe(429)
-    expect((await blocked.json()).message).toContain('30 générations')
+    expect((await blocked.json()).message).toContain('quota de génération')
     // The blocked import did not spend a Tavily credit.
     expect(fetchMock).toHaveBeenCalledTimes(30)
     expect(await testState.db.query.generations.findMany()).toHaveLength(0)

@@ -259,6 +259,7 @@ function discard() {
           :loading="pending && current?.body.mode === 'instruction'"
           :disabled="pending || instruction.trim().length < 3"
         />
+        <AppUsageNotice />
       </form>
     </section>
 

@@ -15,6 +15,7 @@ export const testState = {
     databaseUrl: '',
     trustProxy: false,
     dailyGenerationLimit: 30,
+    userDailyBudgetUsd: 1,
     claudeGlobalDailyLimit: 300,
     claudeMonthlyBudgetUsd: 25,
     tavilyGlobalDailyLimit: 300,

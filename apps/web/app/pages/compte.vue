@@ -9,7 +9,8 @@ const { user, fetch: refreshSession, clear } = useUserSession()
 
 // --- Usage ---------------------------------------------------------------------
 
-const { data: usage } = useFetch('/api/usage', { server: false })
+const { usage, refresh: refreshUsage } = useUsage()
+onMounted(refreshUsage)
 
 // --- Profile -------------------------------------------------------------------
 
@@ -116,7 +117,7 @@ async function deleteAccount() {
         <AppSectionHeading id="account-usage" title="Utilisation" icon="i-lucide-gauge" />
         <UCard>
           <ul class="space-y-1 text-sm">
-            <li>{{ usage.claude.used }}/{{ usage.claude.limit }} générations aujourd'hui</li>
+            <li><AppUsageNotice class="text-sm" /></li>
             <li>{{ usage.web.used }}/{{ usage.web.limit }} recherches web aujourd'hui</li>
             <li class="text-muted">
               Budget IA mensuel du serveur : {{ usage.monthlyPercent.claude }} % utilisé

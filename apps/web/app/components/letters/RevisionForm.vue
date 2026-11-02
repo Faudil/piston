@@ -85,6 +85,7 @@ defineExpose({ reset: () => (instructions.value = '') })
       <span v-else class="text-muted">
         <span class="sr-only">Astuce : </span>Clique sur ✨ pour viser un paragraphe.
       </span>
+      <AppUsageNotice class="ml-auto" />
     </div>
 
     <UTextarea

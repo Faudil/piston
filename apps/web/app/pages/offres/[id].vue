@@ -199,6 +199,7 @@ async function addToApplications() {
         </AppSectionHeading>
 
         <div class="space-y-4">
+          <AppUsageNotice />
           <OfferProfileMismatch
             subject="Cette analyse"
             :used-profile-id="analysisProfileId"
