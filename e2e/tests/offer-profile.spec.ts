@@ -45,7 +45,7 @@ test('choosing which CV profile an offer uses', async ({ page }) => {
     'true',
   )
   await page.getByRole('option', { name: profileName }).click()
-  await expect(page.getByText('CV modifié pour cette offre')).toBeVisible()
+  await expect(page.getByText('CV modifié pour cette offre', { exact: true })).toBeVisible()
 
   // The choice is saved and shows on the list of offers.
   await page.reload()
